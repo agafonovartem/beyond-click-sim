@@ -1,0 +1,21 @@
+[project]
+name = "beyond-click-sim"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Artem Agafonov", email = "agafonov.artem98@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=3.0.3",
+    "pyarrow>=24.0.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.0,<0.9"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

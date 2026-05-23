@@ -1,0 +1,149 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pandas as pd
+
+from beyond_click_sim.data.canonical import (
+    SCHEMA_VERSION,
+    CanonicalDataset,
+    file_record,
+    write_manifest,
+)
+
+
+class MovieLens1MAdapter:
+    """Canonicalize raw MovieLens-1M files.
+
+    This adapter preserves all observed ratings. Positive/negative definitions
+    belong to later scenario and task builders.
+    """
+
+    name = "movielens-1m"
+    version = "v1"
+
+    def materialize(self, raw_dir: Path, out_dir: Path) -> CanonicalDataset:
+        raw_dir = raw_dir.expanduser().resolve()
+        out_dir = out_dir.expanduser().resolve()
+        movies_path = raw_dir / "movies.dat"
+        ratings_path = raw_dir / "ratings.dat"
+        users_path = raw_dir / "users.dat"
+        for path in (movies_path, ratings_path, users_path):
+            if not path.exists():
+                raise FileNotFoundError(path)
+
+        users = self._read_users(users_path)
+        items = self._read_items(movies_path)
+        interactions = self._read_interactions(ratings_path)
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        users_path_out = out_dir / "users.parquet"
+        items_path_out = out_dir / "items.parquet"
+        interactions_path_out = out_dir / "interactions.parquet"
+        manifest_path = out_dir / "manifest.json"
+
+        users.to_parquet(users_path_out, index=False)
+        items.to_parquet(items_path_out, index=False)
+        interactions.to_parquet(interactions_path_out, index=False)
+
+        manifest = {
+            "dataset": "ml-1m",
+            "adapter": self.name,
+            "version": self.version,
+            "schema_version": SCHEMA_VERSION,
+            "raw_sources": [
+                file_record(movies_path),
+                file_record(ratings_path),
+                file_record(users_path),
+            ],
+            "tables": {
+                "users": {"path": users_path_out.name, "rows": int(len(users))},
+                "items": {"path": items_path_out.name, "rows": int(len(items))},
+                "interactions": {
+                    "path": interactions_path_out.name,
+                    "rows": int(len(interactions)),
+                },
+            },
+            "id_policy": {
+                "user_id": "MovieLens raw user id as string",
+                "item_id": "MovieLens raw movie id as string",
+                "interaction_id": "ml-1m:row:{1-based row number in ratings.dat}",
+            },
+            "caveats": [
+                "All observed ratings are preserved; no train/test split or positive threshold is applied.",
+                "MovieLens-1M users may rate the same movie at most once in the canonical raw files.",
+            ],
+        }
+        write_manifest(manifest_path, manifest)
+
+        return CanonicalDataset(
+            name="ml-1m",
+            version=self.version,
+            root=out_dir,
+            users_path=users_path_out,
+            items_path=items_path_out,
+            interactions_path=interactions_path_out,
+            manifest_path=manifest_path,
+        )
+
+    @staticmethod
+    def _read_users(path: Path) -> pd.DataFrame:
+        users = pd.read_csv(
+            path,
+            sep="::",
+            engine="python",
+            header=None,
+            names=["raw_user_id", "gender", "age", "occupation", "zip_code"],
+            encoding="latin-1",
+            dtype={
+                "raw_user_id": "string",
+                "gender": "string",
+                "age": "Int64",
+                "occupation": "Int64",
+                "zip_code": "string",
+            },
+        )
+        users.insert(0, "user_id", users["raw_user_id"].astype("string"))
+        return users[
+            ["user_id", "raw_user_id", "gender", "age", "occupation", "zip_code"]
+        ]
+
+    @staticmethod
+    def _read_items(path: Path) -> pd.DataFrame:
+        items = pd.read_csv(
+            path,
+            sep="::",
+            engine="python",
+            header=None,
+            names=["raw_item_id", "title", "genres"],
+            encoding="latin-1",
+            dtype={"raw_item_id": "string", "title": "string", "genres": "string"},
+        )
+        items.insert(0, "item_id", items["raw_item_id"].astype("string"))
+        return items[["item_id", "raw_item_id", "title", "genres"]]
+
+    @staticmethod
+    def _read_interactions(path: Path) -> pd.DataFrame:
+        interactions = pd.read_csv(
+            path,
+            sep="::",
+            engine="python",
+            header=None,
+            names=["user_id", "item_id", "rating", "timestamp"],
+            encoding="latin-1",
+            dtype={
+                "user_id": "string",
+                "item_id": "string",
+                "rating": "Int64",
+                "timestamp": "Int64",
+            },
+        )
+        interactions.insert(
+            0,
+            "interaction_id",
+            [f"ml-1m:row:{row_number:010d}" for row_number in range(1, len(interactions) + 1)],
+        )
+        interactions["event_type"] = "rating"
+        return interactions[
+            ["interaction_id", "user_id", "item_id", "event_type", "rating", "timestamp"]
+        ]
