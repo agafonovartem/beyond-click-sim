@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -38,6 +38,64 @@ class CanonicalDataset:
         return json.loads(self.manifest_path.read_text(encoding="utf-8"))
 
 
+@dataclass(frozen=True)
+class ManifestTable:
+    """One materialized table entry in a canonical dataset manifest."""
+
+    path: str
+    rows: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"path": self.path, "rows": int(self.rows)}
+
+
+@dataclass(frozen=True)
+class CanonicalManifest:
+    """Common manifest shape shared by all canonical dataset adapters."""
+
+    dataset: str
+    adapter: str
+    version: str
+    raw_sources: list[dict[str, Any]]
+    tables: dict[str, ManifestTable]
+    id_policy: dict[str, str]
+    caveats: list[str] = field(default_factory=list)
+    schema_version: str = SCHEMA_VERSION
+    extra_sections: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        common_keys = {
+            "dataset",
+            "adapter",
+            "version",
+            "schema_version",
+            "raw_sources",
+            "tables",
+            "id_policy",
+            "caveats",
+        }
+        extra_conflicts = common_keys & set(self.extra_sections)
+        if extra_conflicts:
+            raise ValueError(
+                f"Manifest extra_sections override common keys: {sorted(extra_conflicts)}"
+            )
+
+        payload: dict[str, Any] = {
+            "dataset": self.dataset,
+            "adapter": self.adapter,
+            "version": self.version,
+            "schema_version": self.schema_version,
+            "raw_sources": self.raw_sources,
+            "tables": {
+                name: table.to_dict() for name, table in self.tables.items()
+            },
+            "id_policy": self.id_policy,
+            "caveats": self.caveats,
+        }
+        payload.update(self.extra_sections)
+        return payload
+
+
 def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
     # Streaming fingerprint to track raw files; this does not load the full file.
     digest = hashlib.sha256()
@@ -55,9 +113,10 @@ def file_record(path: Path) -> dict[str, Any]:
     }
 
 
-def write_manifest(path: Path, manifest: dict[str, Any]) -> None:
+def write_manifest(path: Path, manifest: CanonicalManifest | dict[str, Any]) -> None:
+    manifest_dict = manifest.to_dict() if isinstance(manifest, CanonicalManifest) else manifest
     payload = {
         "created_at": datetime.now(UTC).isoformat(),
-        **manifest,
+        **manifest_dict,
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

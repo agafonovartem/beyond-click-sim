@@ -5,8 +5,9 @@ from pathlib import Path
 import pandas as pd
 
 from beyond_click_sim.data.canonical import (
-    SCHEMA_VERSION,
     CanonicalDataset,
+    CanonicalManifest,
+    ManifestTable,
     file_record,
     write_manifest,
 )
@@ -46,34 +47,33 @@ class MovieLens1MAdapter:
         items.to_parquet(items_path_out, index=False)
         interactions.to_parquet(interactions_path_out, index=False)
 
-        manifest = {
-            "dataset": "ml-1m",
-            "adapter": self.name,
-            "version": self.version,
-            "schema_version": SCHEMA_VERSION,
-            "raw_sources": [
+        manifest = CanonicalManifest(
+            dataset="ml-1m",
+            adapter=self.name,
+            version=self.version,
+            raw_sources=[
                 file_record(movies_path),
                 file_record(ratings_path),
                 file_record(users_path),
             ],
-            "tables": {
-                "users": {"path": users_path_out.name, "rows": int(len(users))},
-                "items": {"path": items_path_out.name, "rows": int(len(items))},
-                "interactions": {
-                    "path": interactions_path_out.name,
-                    "rows": int(len(interactions)),
-                },
+            tables={
+                "users": ManifestTable(path=users_path_out.name, rows=len(users)),
+                "items": ManifestTable(path=items_path_out.name, rows=len(items)),
+                "interactions": ManifestTable(
+                    path=interactions_path_out.name,
+                    rows=len(interactions),
+                ),
             },
-            "id_policy": {
+            id_policy={
                 "user_id": "MovieLens raw user id as string",
                 "item_id": "MovieLens raw movie id as string",
                 "interaction_id": "ml-1m:row:{1-based row number in ratings.dat}",
             },
-            "caveats": [
+            caveats=[
                 "All observed ratings are preserved; no train/test split or positive threshold is applied.",
                 "MovieLens-1M users may rate the same movie at most once in the canonical raw files.",
             ],
-        }
+        )
         write_manifest(manifest_path, manifest)
 
         return CanonicalDataset(
