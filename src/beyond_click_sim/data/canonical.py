@@ -59,6 +59,7 @@ class CanonicalManifest:
     raw_sources: list[dict[str, Any]]
     tables: dict[str, ManifestTable]
     id_policy: dict[str, str]
+    standard_targets: dict[str, str] = field(default_factory=dict)
     caveats: list[str] = field(default_factory=list)
     schema_version: str = SCHEMA_VERSION
     extra_sections: dict[str, Any] = field(default_factory=dict)
@@ -72,6 +73,7 @@ class CanonicalManifest:
             "raw_sources",
             "tables",
             "id_policy",
+            "standard_targets",
             "caveats",
         }
         extra_conflicts = common_keys & set(self.extra_sections)
@@ -90,6 +92,7 @@ class CanonicalManifest:
                 name: table.to_dict() for name, table in self.tables.items()
             },
             "id_policy": self.id_policy,
+            "standard_targets": self.standard_targets,
             "caveats": self.caveats,
         }
         payload.update(self.extra_sections)

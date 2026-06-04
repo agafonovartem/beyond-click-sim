@@ -75,6 +75,9 @@ def test_movielens_adapter_materializes_canonical_tables(tmp_path: Path) -> None
         "event_type",
         "rating",
         "timestamp",
+        "target_interact",
+        "target_like_ge4",
+        "target_rating",
     ]
     assert len(users) == 2
     assert len(items) == 2
@@ -86,6 +89,9 @@ def test_movielens_adapter_materializes_canonical_tables(tmp_path: Path) -> None
     ]
     assert set(interactions["rating"]) == {2, 4, 5}
     assert set(interactions["event_type"]) == {"rating"}
+    assert interactions["target_interact"].tolist() == [1, 1, 1]
+    assert interactions["target_like_ge4"].tolist() == [1, 0, 1]
+    assert interactions["target_rating"].tolist() == [5, 2, 4]
     assert "part" not in interactions.columns
     assert "feedback_label" not in interactions.columns
 
@@ -95,4 +101,9 @@ def test_movielens_adapter_materializes_canonical_tables(tmp_path: Path) -> None
     assert manifest["tables"]["users"]["rows"] == 2
     assert manifest["tables"]["items"]["rows"] == 2
     assert manifest["tables"]["interactions"]["rows"] == 3
+    assert manifest["standard_targets"] == {
+        "target_interact": "1 for every observed rating row in interactions.parquet.",
+        "target_like_ge4": "1 if rating >= 4 else 0.",
+        "target_rating": "Raw MovieLens rating on the 1-5 scale.",
+    }
     assert len(manifest["raw_sources"]) == 3

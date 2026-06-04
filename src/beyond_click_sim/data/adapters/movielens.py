@@ -16,8 +16,9 @@ from beyond_click_sim.data.canonical import (
 class MovieLens1MAdapter:
     """Canonicalize raw MovieLens-1M files.
 
-    This adapter preserves all observed ratings. Positive/negative definitions
-    belong to later scenario and task builders.
+    This adapter preserves all observed ratings and appends deterministic
+    target columns. Filters, splits, and candidate sets belong to later task
+    builders.
     """
 
     name = "movielens-1m"
@@ -69,8 +70,13 @@ class MovieLens1MAdapter:
                 "item_id": "MovieLens raw movie id as string",
                 "interaction_id": "ml-1m:row:{1-based row number in ratings.dat}",
             },
+            standard_targets={
+                "target_interact": "1 for every observed rating row in interactions.parquet.",
+                "target_like_ge4": "1 if rating >= 4 else 0.",
+                "target_rating": "Raw MovieLens rating on the 1-5 scale.",
+            },
             caveats=[
-                "All observed ratings are preserved; no train/test split or positive threshold is applied.",
+                "All observed ratings are preserved; no train/test split, candidate set, or row filter is applied.",
                 "MovieLens-1M users may rate the same movie at most once in the canonical raw files.",
             ],
         )
@@ -144,6 +150,21 @@ class MovieLens1MAdapter:
             [f"ml-1m:row:{row_number:010d}" for row_number in range(1, len(interactions) + 1)],
         )
         interactions["event_type"] = "rating"
+        interactions["target_interact"] = pd.Series(
+            1, index=interactions.index, dtype="int8"
+        )
+        interactions["target_like_ge4"] = interactions["rating"].ge(4).astype("int8")
+        interactions["target_rating"] = interactions["rating"]
         return interactions[
-            ["interaction_id", "user_id", "item_id", "event_type", "rating", "timestamp"]
+            [
+                "interaction_id",
+                "user_id",
+                "item_id",
+                "event_type",
+                "rating",
+                "timestamp",
+                "target_interact",
+                "target_like_ge4",
+                "target_rating",
+            ]
         ]

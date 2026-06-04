@@ -29,6 +29,9 @@ _INTERACTIONS_SCHEMA = pa.schema(
         ("playtime_forever", pa.int64()),  # Raw total playtime in minutes.
         ("playtime_2weeks", pa.int64()),  # Raw recent playtime in minutes.
         ("source_user_line", pa.int64()),  # 1-based line in australian_users_items.json.
+        ("target_interact", pa.int8()),  # 1 for every observed ownership row.
+        ("target_played_120", pa.int8()),  # 1 if total playtime is at least 120 minutes.
+        ("target_playtime", pa.int64()),  # Raw total playtime target in minutes.
     ]
 )
 
@@ -94,11 +97,16 @@ class SteamAdapter:
                 "item_id": "Steam raw item_id as string",
                 "interaction_id": "steam:line:{source user line}:item:{item_id}",
             },
+            standard_targets={
+                "target_interact": "1 for every observed owned-library row in interactions.parquet.",
+                "target_played_120": "1 if playtime_forever >= 120 minutes else 0.",
+                "target_playtime": "Raw playtime_forever in minutes.",
+            },
             caveats=[
                 "Steam raw data is a user-library snapshot dataset, not a chronological event log.",
                 "Canonical interactions represent observed ownership/library entries.",
                 "Zero-playtime owned items are preserved.",
-                "No train/test split, target label, candidate set, or positive threshold is applied.",
+                "No train/test split, candidate set, or row filter is applied.",
                 "Some library items have no matching row in steam_games.json.gz metadata.",
             ],
             extra_sections={
@@ -260,6 +268,9 @@ class SteamAdapter:
                             "playtime_forever": playtime_forever,
                             "playtime_2weeks": playtime_2weeks,
                             "source_user_line": line_no,
+                            "target_interact": 1,
+                            "target_played_120": int(playtime_forever >= 120),
+                            "target_playtime": playtime_forever,
                         }
                     )
                     interactions_rows += 1

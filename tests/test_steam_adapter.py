@@ -61,7 +61,7 @@ def write_fixture(raw_dir: Path) -> None:
                 {
                     "item_id": "30",
                     "item_name": "Library Game C",
-                    "playtime_forever": 5,
+                    "playtime_forever": 130,
                     "playtime_2weeks": 1,
                 }
             ],
@@ -156,6 +156,9 @@ def test_steam_adapter_materializes_canonical_tables(tmp_path: Path) -> None:
         "playtime_forever",
         "playtime_2weeks",
         "source_user_line",
+        "target_interact",
+        "target_played_120",
+        "target_playtime",
     ]
 
     assert len(users) == 3
@@ -173,7 +176,10 @@ def test_steam_adapter_materializes_canonical_tables(tmp_path: Path) -> None:
         "steam:line:00000003:item:30",
     ]
     assert set(interactions["event_type"]) == {"owned"}
-    assert set(interactions["playtime_forever"]) == {0, 5, 10}
+    assert set(interactions["playtime_forever"]) == {0, 10, 130}
+    assert interactions["target_interact"].tolist() == [1, 1, 1]
+    assert interactions["target_played_120"].tolist() == [0, 0, 1]
+    assert interactions["target_playtime"].tolist() == [10, 0, 130]
     assert "part" not in interactions.columns
     assert "feedback_label" not in interactions.columns
 
@@ -191,6 +197,11 @@ def test_steam_adapter_materializes_canonical_tables(tmp_path: Path) -> None:
     assert manifest["tables"]["users"]["rows"] == 3
     assert manifest["tables"]["items"]["rows"] == 3
     assert manifest["tables"]["interactions"]["rows"] == 3
+    assert manifest["standard_targets"] == {
+        "target_interact": "1 for every observed owned-library row in interactions.parquet.",
+        "target_played_120": "1 if playtime_forever >= 120 minutes else 0.",
+        "target_playtime": "Raw playtime_forever in minutes.",
+    }
     assert manifest["deduplication"]["duplicate_steam_id_groups"] == 2
     assert manifest["deduplication"]["duplicate_steam_id_surplus_rows"] == 2
     assert manifest["deduplication"]["duplicate_steam_id_group_size_counts"] == {"2": 2}

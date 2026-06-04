@@ -34,6 +34,10 @@ def main() -> None:
     print(f"Wrote canonical {manifest['dataset']} {manifest['version']} to {dataset.root}")
     for table, info in manifest["tables"].items():
         print(f"- {table}: {info['rows']} rows -> {info['path']}")
+    if manifest["standard_targets"]:
+        print("Standard targets:")
+        for target, definition in manifest["standard_targets"].items():
+            print(f"- {target}: {definition}")
 
 
 if __name__ == "__main__":

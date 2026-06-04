@@ -6,7 +6,7 @@ This is a short implementation note for Codex. The goal is to explain the projec
 
 We build the project in this order:
 1. First implement **offline LLM predicts interaction**.
-2. Build the reusable layer: `DatasetAdapter` + `ScenarioBuilder` + `TaskBuilder` + `CandidateSampler` + `ResponsePredictor`.
+2. Build the reusable layer: `DatasetAdapter` + `TaskBuilder` + `ResponsePredictor`.
 3. Reuse this layer later for static recommender policy ranking and, if needed, full trajectory simulation: `policy ranks -> user responds -> state updates -> repeat`.
 
 The first paper should not start by building a full Agent4Rec-like simulator. Most existing alignment tables in Agent4Rec, SimUSER, and AgentRecBench are one-step candidate evaluation tasks, not true trajectory simulations. Therefore the first implementation target is an offline response prediction benchmark.
@@ -47,7 +47,7 @@ Do not implement this first. Design offline components so they can be reused lat
 
 ### Stage 1: Offline response prediction benchmark
 
-Implement: `DatasetAdapter`, `ScenarioBuilder`, `TaskBuilder`, `CandidateSampler`, `ResponsePredictor`, `OfflineEvaluator`.
+Implement: `DatasetAdapter`, `TaskBuilder`, `ResponsePredictor`, `OfflineEvaluator`.
 
 Main tasks: interaction prediction, positive preference prediction, intensity regression.
 
@@ -75,11 +75,11 @@ Avoid starting with a large framework, complex inheritance, a full Agent4Rec clo
 
 ### Goal
 
-Convert each dataset into one common representation so that the same scenario builders, task builders, samplers, predictors, and evaluators work across datasets.
-
-Start with three logical entities: users, items, and interactions. They are rows in validated tables, not Python objects for every row.
+Convert each dataset into one common representation. Start with three logical entities: users, items, and interactions. They are rows in validated tables, not Python objects for every row.
 
 The canonical data layer should answer: who are the users; what are the items; what interactions happened; what raw signals and metadata are available.
+
+We also include standard deterministic target columns in this layer, as targets are usually finite and pre-defined for each dataset. 
 
 Materialize canonical datasets on disk:
 
@@ -97,23 +97,15 @@ data/canonical/{dataset}/{version}/
 
 Each adapter should convert one raw/source dataset into canonical tables with minimal cleaning and a manifest.
 
-The adapter should not build splits, candidates, targets, train models, or run metrics.
+The adapter should not build splits, candidates, train models, or run metrics.
 
 ---
 
-## 4. Scenario and split layer
-
-A scenario defines the evaluation setting: eligibility, support/held-out visibility, train/validation/test split policy, user/domain partitions, and seed. The split is part of the scenario.
-
-A scenario may use event filters to define eligible users/items/interactions or domains. However, the final prediction label belongs to TaskBuilder, not ScenarioBuilder.
-
----
-
-## 5. Task construction layer
+## 4. Task construction layer
 
 A dataset is not a task. The same dataset can produce multiple tasks: interaction prediction, positive preference prediction, intensity regression, candidate ranking, policy evaluation, OOD split evaluation.
 
-`TaskBuilder` defines the target and label for each task instance within a scenario. General behavior: get user context; get held-out interactions; define target label; ask `CandidateSampler` to produce candidates; return task instances for predictors/evaluators.
+`TaskBuilder` applies dataset filters, a splitter, target definition, and optional candidate sampling, then returns train/validation/test datasets.
 
 ### Core tasks
 
@@ -123,27 +115,19 @@ A dataset is not a task. The same dataset can produce multiple tasks: interactio
 
 **Task III: intensity regression.** Question: how much will the user like or consume this item? Examples: rating, playtime, dwell time, watch time.
 
-`TaskBuilder` must be model-agnostic. It should not care whether the downstream model is LLM, CatBoost, BPR, LightGCN, SASRec, popularity, hybrid, or a future simulator.
+`TaskBuilder` must be model-agnostic. It should not care whether the downstream model is LLM, CatBoost, BPR, LightGCN, SASRec, popularity, hybrid, or a future simulator. Some scenarios and examples for `TaskBuilder` are presented in `in_distribution_scenarios.md`.
+
+`TaskBuilder` consists of the main attributes, which we will represent as classes:
+- `DatasetFilter` -- a class that allows to filter dataset. It can be custom for each dataset.
+- `Splitter` -- train/test/val splitter. May include:
+  - Random splitter -- classical sklearn-like train/val/test by fractions, e.g. 70/10/20.
+  - Stratified random splitter -- again classical sklearn-like train/val/test with class label stratification -- can be a part of the previous splitter mechanism.
+  - Global temporal splitter: shared time cutoffs across users.
+- `CandidateSampler` -- used when a task needs candidate sets or unobserved negatives. Possible modes: `1:1`, `1:5`, `1:20`, random negatives, popularity-matched negatives, category/genre-matched negatives, hard negatives, observed-only candidates, observed + unobserved candidates, full-catalog ranking.
 
 ---
 
-## 6. Candidate sampling layer
-
-Evaluation depends heavily on candidate construction. A model does not perform well or badly on a dataset in isolation. It performs well or badly under a specific target, candidate set, and negative sampling strategy.
-
-Candidate sampling modes must be explicit, configurable, deterministic by seed, and logged.
-
-Possible modes: `1:1`, `1:5`, `1:20`, random negatives, popularity-matched negatives, category/genre-matched negatives, hard negatives, observed-only candidates, observed + unobserved candidates, full-catalog ranking.
-
-Start with a small subset and extend later.
-
-Leakage rules: exclude train interactions when needed; exclude validation/test leakage; exclude future interactions for temporal splits; exclude target user's held-out positives from negatives; log negative sampling strategy in metadata.
-
-`CandidateSampler` is universal. In Stage 1, it creates candidate sets for offline response prediction. In Stage 2, it can create candidate pools for static policy ranking. In Stage 3, it may support candidate pools for rollout simulation. Do not implement rollout-specific behavior now.
-
----
-
-## 7. Response prediction layer
+## 5. Response prediction layer
 
 This is the main modeling layer for Stage 1.
 
@@ -175,7 +159,7 @@ Candidate-free LLM recommenders from the prototype are closer to `Policy` or ful
 
 ---
 
-## 8. Offline evaluation layer
+## 6. Offline evaluation layer
 
 The first evaluator checks whether predictors recover held-out real user outcomes.
 
@@ -189,7 +173,7 @@ This logging is essential because the paper argues that results depend on target
 
 ---
 
-## 9. Static policy ranking extension
+## 7. Static policy ranking extension
 
 Stage 2 question:
 
@@ -207,7 +191,7 @@ Start with static policy ranking. Add trajectory-aware ranking only if useful.
 
 ---
 
-## 10. Trajectory simulation extension
+## 8. Trajectory simulation extension
 
 Stage 3. Do not implement first.
 
@@ -225,15 +209,7 @@ Future experiment: **same items, different order**. Take the same set of items f
 
 ---
 
-## 11. Minimal first milestone
-
-First milestone: one dataset adapter; one task type, interaction prediction; two candidate samplers, `1:1` and `1:20`; two baselines, random and popularity; one LLM predictor; one offline evaluator; one reproducible experiment script.
-
-Then extend: more datasets, more targets, more candidate samplers, more baselines, memorization controls, OOD splits, static policy ranking, trajectory simulation.
-
----
-
-## 12. Research principle
+## 9. Research principle
 
 The implementation should make the paper argument easy to test:
 
