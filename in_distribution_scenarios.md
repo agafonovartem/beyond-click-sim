@@ -1,3 +1,5 @@
+### TaskBuilder for in-distribution
+
 Preprocessing after canonization should have 3 steps:
 1. **Filtering.** I can filter any dataset by any rules I like. It should be simply `DatasetFilter` class with method `filter`. That's it. It does not care about target. For `DatasetFilter` it is just filtering condition.
 2. **Splitters:**
@@ -28,8 +30,43 @@ Examples:
 5. *Split*: RandomFractionSplitter. *Target*: Regression.
     - Filter: just want to ensure that the user has at least $n$ interactions
     - Split: $x \%$ on train, $y \%$ on test, $(100 - x - y)\%$ on val.  
-    - Sampler: no need for regression. 
+    - Sampler: no need for regression.
 6. *Split*: GlobalTemporalSplitter. *Target*: Regression.
     - Filter: want to do proper timesplit, to ensure that many users user has enough interactions before and after cutoff.
     - Split: by timestamp cutoff
-    - Sampler: no need for regression. 
+    - Sampler: no need for regression.
+
+### Problem Formulation for Multi-Target In-Distribution User Outcome Prediction
+When we simulate users in recommender systems, or build recommender systems in general, we have many datasets and can define many tasks on them:
+1. **Interaction:** will the user interact with this item?
+2. **Positive preference:** will the user like it enough?
+3. **Intensity regression:** how much will the user like or consume this item?
+
+Note, that all of these problems are user-level.
+
+The first two targets can be evaluated from two perspectives: pointwise outcome prediction, similar to alignment-style tables in Agent4Rec and SimUSER, and candidate ranking, similar to AgentRecBench-style recommendation evaluation.
+
+From the model perspective, both settings reduce to scoring. The model assigns a numeric score to each user-item row. Then we can treat them in different ways according to evaluation protocol.
+
+- Pointwise / Alignment / Classification (Tasks 1 and 2):
+    - input: test set (candidates list)
+    - model: calculates scores. They could be different: LLM just says yes/no, while classical ML methods may give probabilities, ratings, logits.
+    - evaluation: convert scores into binary predictions using a threshold or another protocol, then compute accuracy, precision, recall, F1, AUC / PR-AUC, ...
+
+    This setting asks whether the model can distinguish positive and negative user outcomes.
+
+- Ranking / Recommendation (Tasks 1 and 2)
+    - input: candidates list
+    - model: assigns one score to each candidate row
+    - evaluation: sort candidates by score within each candidate group, then compute HR@K, NDCG@K, MRR, and related ranking metrics.
+
+    In this setting, the model does not directly output ranks. It outputs relevance scores; ranks are derived by the evaluator.
+
+- Regression / Intensity Prediction (Task 3)
+    - input: test set
+    - model: calculates scores
+    - evaluation: computes mse, mae
+
+This leads to the core Stage-1 abstraction: every user simulator or response model is a `Scorer`. Conceptually, a scorer estimates `score_target(user, item, ...)`.
+
+The score is not necessarily a calibrated probability. For binary tasks, it is a positive-class score. For ranking tasks, it is a relevance or utility score, and ranks are obtained by sorting scores inside candidate groups. For regression tasks, the score is the predicted numeric value. Therefore the minimal `Scorer` interface should have two methods: `fit()` and `score()`.

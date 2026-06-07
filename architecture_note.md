@@ -6,7 +6,7 @@ This is a short implementation note for Codex. The goal is to explain the projec
 
 We build the project in this order:
 1. First implement **offline LLM predicts interaction**.
-2. Build the reusable layer: `DatasetAdapter` + `TaskBuilder` + `ResponsePredictor`.
+2. Build the reusable layer: `DatasetAdapter` + `TaskBuilder` + `Scorer` + `OfflineEvaluator`.
 3. Reuse this layer later for static recommender policy ranking and, if needed, full trajectory simulation: `policy ranks -> user responds -> state updates -> repeat`.
 
 The first paper should not start by building a full Agent4Rec-like simulator. Most existing alignment tables in Agent4Rec, SimUSER, and AgentRecBench are one-step candidate evaluation tasks, not true trajectory simulations. Therefore the first implementation target is an offline response prediction benchmark.
@@ -22,10 +22,11 @@ The code will eventually be public. We want clean research code: simple, readabl
 First-stage scope:
 
 ```text
-user history + item/candidate set -> predicted response or ranking
+user history + user-item rows / candidate set -> numeric scores
 ```
 
 Examples: will the user interact with this item; will the user like it enough; what rating/playtime/dwell time will the user produce; which candidate items will the user choose.
+Labels, binary decisions, ranks, and metrics are derived later by the evaluation protocol.
 
 This does **not** require a simulator loop. It only requires a one-step response model.
 
@@ -47,7 +48,7 @@ Do not implement this first. Design offline components so they can be reused lat
 
 ### Stage 1: Offline response prediction benchmark
 
-Implement: `DatasetAdapter`, `TaskBuilder`, `ResponsePredictor`, `OfflineEvaluator`.
+Implement: `DatasetAdapter`, `TaskBuilder`, `Scorer`, `OfflineEvaluator`.
 
 Main tasks: interaction prediction, positive preference prediction, intensity regression.
 
@@ -55,7 +56,7 @@ Main tasks: interaction prediction, positive preference prediction, intensity re
 
 Add later: `Policy`, `StaticPolicyEvaluator`, `PolicyRankingAgreementMetrics`.
 
-No simulator loop yet. Process: policy recommends fixed top-k/slates; response predictor estimates outcomes; aggregate value per policy; compare simulated policy ranking with real held-out policy ranking.
+No simulator loop yet. Process: policy recommends fixed top-k/slates; scorer-based response model estimates outcomes; aggregate value per policy; compare simulated policy ranking with real held-out policy ranking.
 
 ### Stage 3: Optional trajectory simulation
 
@@ -105,7 +106,7 @@ The adapter should not build splits, candidates, train models, or run metrics.
 
 A dataset is not a task. The same dataset can produce multiple tasks: interaction prediction, positive preference prediction, intensity regression, candidate ranking, policy evaluation, OOD split evaluation.
 
-`TaskBuilder` applies dataset filters, a splitter, target definition, and optional candidate sampling, then returns train/validation/test datasets.
+`TaskBuilder` applies dataset filters, a splitter, target selection, and optional candidate sampling, then returns train/validation/test datasets.
 
 ### Core tasks
 
@@ -127,47 +128,51 @@ A dataset is not a task. The same dataset can produce multiple tasks: interactio
 
 ---
 
-## 5. Response prediction layer
+## 5. Scoring layer
 
 This is the main modeling layer for Stage 1.
 
-A `ResponsePredictor` takes a task and returns scores, labels, ratings, or rankings for candidate items.
+A `Scorer` takes materialized task rows and returns one numeric score per row.
 
 Conceptually:
 
 ```text
-user history + candidate item(s) -> predicted response
+score_target(user, item, context)
 ```
+where `target` is interaction, positive preference, or intensity. The score is not necessarily a calibrated probability. For binary tasks, it is a positive-class score. It may be a probability, logit, binary LLM judgment, LLM confidence, popularity score, similarity score, latent-factor score, or any other compatibility score. For ranking tasks, it is a relevance or utility score; ranks are obtained later by sorting scores inside candidate groups. For regression tasks, the score is the predicted numeric value.
 
-The response predictor can be random baseline, popularity baseline, classical recommender model, supervised ML model, LLM prompt, Agent4Rec-style prompt, or hybrid model.
+The minimal interface is:
+```
+class Scorer:
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
+        ...
 
-This is why we do not start with a full simulator. Most current alignment experiments can be tested through a one-step predictor.
+    def score(self, X: pd.DataFrame) -> pd.Series:
+        ...
+```
+Possible scorers: popularity baseline, simple similarity baseline, supervised ML model, classical recommender model, LLM prompt, Agent4Rec-style prompt, or hybrid model. Random scorers can be useful for smoke tests, but they are not a meaningful baseline.
 
-First predictors: random baseline, popularity baseline, simple similarity baseline, LLM response predictor.
+### LLM scorer
 
-Later predictors: BPR/MF, LightGCN, SASRec, CatBoost/XGBoost, text embedding baselines, hybrid models.
-
-### LLM predictor
-
-The LLM predictor is just another `ResponsePredictor`. It receives user history, candidate item(s), task instruction, and available metadata. It outputs something comparable to other models: candidate scores, candidate ranking, yes/no labels, rating or intensity prediction.
+The LLM scorer is just another `Scorer` when it receives explicit user-item rows or candidate sets. It may build user histories from `X_train` during `fit()`, then assign numeric scores to rows in `score(X)`.
 
 Prompt variants should be configurable: history length, positive-only history vs positive+negative history, with/without item summaries, with/without popularity/average rating, with/without dataset name, with/without user/item ids.
 
-Important distinction: `ResponsePredictor` answers how the user would respond; `Policy` answers what to show. Do not mix these roles in the code.
-
-Candidate-free LLM recommenders from the prototype are closer to `Policy` or full-catalog ranking baselines: they produce a top-k list without seeing an explicit candidate set, then evaluation maps generated titles back to catalog items and logs match diagnostics.
+Important distinction: `Scorer` answers how the user would respond; `Policy` answers what to show. Do not mix these roles in the code.
 
 ---
 
 ## 6. Offline evaluation layer
 
-The first evaluator checks whether predictors recover held-out real user outcomes.
+The first evaluator checks whether scorers recover held-out real user outcomes.
 
-For interaction / positive preference: accuracy, precision, recall, F1, AUC, HR@K, NDCG@K, MRR, calibration if probabilities are available.
+For pointwise interaction / positive preference prediction: threshold scores or apply another binary decision protocol, then compute accuracy, precision, recall, F1, AUC, PR-AUC, and calibration if scores are probability-like.
 
-For intensity regression: MAE, RMSE, correlation, ranking metrics after sorting by predicted intensity.
+For candidate ranking interaction / positive preference prediction: sort candidates by score within each candidate group, then compute HR@K, NDCG@K, MRR, and related ranking metrics.
 
-Every result should log dataset, task type, target definition, candidate sampling strategy, negative sampling strategy, predictor name, LLM prompt/config if applicable, random seed, metrics.
+For intensity regression: compute MAE, MSE/RMSE, and correlation. Ranking metrics after sorting by predicted intensity are optional and should be treated as a separate ranking protocol.
+
+Every result should log dataset, task type, target definition, candidate sampling strategy, negative sampling strategy, scorer name, scorer config, LLM prompt/config if applicable, random seed, metrics.
 
 This logging is essential because the paper argues that results depend on target, candidate construction, and negative sampling.
 
@@ -178,10 +183,10 @@ This logging is essential because the paper argues that results depend on target
 Stage 2 question:
 
 ```text
-Can a response predictor rank recommender policies in the same order as real held-out data?
+Can a scorer-based response model rank recommender policies in the same order as real held-out data?
 ```
 
-Process: train or define several recommender policies; for each user, each policy recommends fixed top-k items/slates; response predictor estimates outcomes for those recommendations; aggregate predicted value for each policy; compare simulated policy ranking with real held-out policy ranking.
+Process: train or define several recommender policies; for each user, each policy recommends fixed top-k items/slates; scorer-based response model estimates outcomes for those recommendations; aggregate predicted value for each policy; compare simulated policy ranking with real held-out policy ranking.
 
 This still does not require a simulator loop.
 
@@ -216,7 +221,7 @@ The implementation should make the paper argument easy to test:
 ```text
 Most existing LLM user-simulator alignment evaluations are one-step candidate evaluation tasks.
 They do not require a full simulator loop.
-Therefore we first evaluate LLMs as offline response predictors across many targets and candidate settings.
+Therefore we first evaluate LLMs as offline user-response scorers across many targets and candidate settings.
 Only after that do we ask when trajectory simulation is necessary.
 ```
 
