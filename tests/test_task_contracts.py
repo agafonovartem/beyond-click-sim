@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
-from beyond_click_sim.tasks import SplitFrames, Task, TaskSchema
+from beyond_click_sim.tasks import SplitFrames, Task, TaskSchema, split_xy
 
 
 def test_split_frames_names_train_val_test_frames() -> None:
@@ -56,3 +57,29 @@ def test_task_stores_split_dataframes_and_schema() -> None:
     assert task.train.equals(train)
     assert task.val.equals(val)
     assert task.test.equals(test)
+
+
+def test_split_xy_separates_target_from_inputs() -> None:
+    frame = pd.DataFrame(
+        {
+            "user_id": ["u1", "u2"],
+            "item_id": ["i1", "i2"],
+            "feature": [10, 20],
+            "target": [1, 0],
+        },
+        index=["a", "b"],
+    )
+
+    X, y = split_xy(frame, target_column="target")
+
+    assert list(X.columns) == ["user_id", "item_id", "feature"]
+    assert list(X.index) == ["a", "b"]
+    assert y.name == "target"
+    assert y.tolist() == [1, 0]
+
+
+def test_split_xy_requires_target_column() -> None:
+    frame = pd.DataFrame({"user_id": ["u1"], "item_id": ["i1"]})
+
+    with pytest.raises(ValueError, match="Missing target column"):
+        split_xy(frame, target_column="target")

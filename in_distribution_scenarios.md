@@ -51,7 +51,7 @@ From the model perspective, both settings reduce to scoring. The model assigns a
 - Pointwise / Alignment / Classification (Tasks 1 and 2):
     - input: test set (candidates list)
     - model: calculates scores. They could be different: LLM just says yes/no, while classical ML methods may give probabilities, ratings, logits.
-    - evaluation: convert scores into binary predictions using a threshold or another protocol, then compute accuracy, precision, recall, F1, AUC / PR-AUC, ...
+    - evaluation: convert scores into binary predictions (per candidate group if needed) using a threshold or another protocol, then compute accuracy, precision, recall, F1, AUC / PR-AUC, ...
 
     This setting asks whether the model can distinguish positive and negative user outcomes.
 
@@ -70,3 +70,14 @@ From the model perspective, both settings reduce to scoring. The model assigns a
 This leads to the core Stage-1 abstraction: every user simulator or response model is a `Scorer`. Conceptually, a scorer estimates `score_target(user, item, ...)`.
 
 The score is not necessarily a calibrated probability. For binary tasks, it is a positive-class score. For ranking tasks, it is a relevance or utility score, and ranks are obtained by sorting scores inside candidate groups. For regression tasks, the score is the predicted numeric value. Therefore the minimal `Scorer` interface should have two methods: `fit()` and `score()`.
+
+### Pointwise Decision Protocol
+For pointwise alignment/classification, scorers may output arbitrary real-valued scores, so binary metrics require an explicit decision rule.
+
+For score-based methods (Popularity, ItemKNN, MF/BPR, tabular ML), choose the threshold on validation and keep it fixed on test. Do not tune thresholds on test.
+
+For direct LLM yes/no protocols, no threshold is needed: the prompt/parser already defines binary predictions. Prompt and parser choices should still be fixed before test evaluation.
+
+For pointwise threshold selection, validation should use the same candidate construction as test.
+
+Ranking is a separate protocol: sorting candidates within `candidate_group` and reporting HR@K/NDCG@K/MRR should not be silently mixed with pointwise alignment metrics.

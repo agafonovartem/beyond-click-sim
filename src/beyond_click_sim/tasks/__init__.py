@@ -10,6 +10,7 @@ from beyond_click_sim.tasks.base import (
     TaskBuilder,
     TaskSchema,
     TaskSplit,
+    split_xy,
 )
 from beyond_click_sim.tasks.filters import MinUserInteractionsFilter
 from beyond_click_sim.tasks.samplers import NonInteractionCandidateSampler
@@ -28,4 +29,5 @@ __all__ = [
     "TaskBuilder",
     "TaskSchema",
     "TaskSplit",
+    "split_xy",
 ]

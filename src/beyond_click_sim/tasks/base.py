@@ -60,6 +60,18 @@ class Task:
     manifest: dict[str, Any] = field(default_factory=dict)
 
 
+def split_xy(
+    frame: pd.DataFrame,
+    *,
+    target_column: str,
+) -> tuple[pd.DataFrame, pd.Series]:
+    """Split a task dataframe into model inputs and target values."""
+
+    if target_column not in frame.columns:
+        raise ValueError(f"Missing target column: {target_column!r}")
+    return frame.drop(columns=[target_column]), frame[target_column]
+
+
 class DatasetFilter(ABC):
     """Dataset-level row/user/item filter used before splitting."""
 
