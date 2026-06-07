@@ -51,7 +51,7 @@ From the model perspective, both settings reduce to scoring. The model assigns a
 - Pointwise / Alignment / Classification (Tasks 1 and 2):
     - input: test set (candidates list)
     - model: calculates scores. They could be different: LLM just says yes/no, while classical ML methods may give probabilities, ratings, logits.
-    - evaluation: convert scores into binary predictions (per candidate group if needed) using a threshold or another protocol, then compute accuracy, precision, recall, F1, AUC / PR-AUC, ...
+    - evaluation: convert scores into binary predictions (per candidate group if needed) using a decision rule, such as a validation-selected threshold, then compute accuracy, precision, recall, F1, AUC / PR-AUC, ...
 
     This setting asks whether the model can distinguish positive and negative user outcomes.
 
@@ -60,7 +60,7 @@ From the model perspective, both settings reduce to scoring. The model assigns a
     - model: assigns one score to each candidate row
     - evaluation: sort candidates by score within each candidate group, then compute HR@K, NDCG@K, MRR, and related ranking metrics.
 
-    In this setting, the model does not directly output ranks. It outputs relevance scores; ranks are derived by the evaluator.
+    In this setting, the model does not directly output ranks. It outputs relevance scores; ranks are derived by the evaluation protocol.
 
 - Regression / Intensity Prediction (Task 3)
     - input: test set
@@ -79,5 +79,7 @@ For score-based methods (Popularity, ItemKNN, MF/BPR, tabular ML), choose the th
 For direct LLM yes/no protocols, no threshold is needed: the prompt/parser already defines binary predictions. Prompt and parser choices should still be fixed before test evaluation.
 
 For pointwise threshold selection, validation should use the same candidate construction as test.
+
+Threshold and hyperparameter selection belongs to the experiment loop, not to metric functions.
 
 Ranking is a separate protocol: sorting candidates within `candidate_group` and reporting HR@K/NDCG@K/MRR should not be silently mixed with pointwise alignment metrics.

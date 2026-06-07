@@ -6,7 +6,7 @@ This is a short implementation note for Codex. The goal is to explain the projec
 
 We build the project in this order:
 1. First implement **offline LLM predicts interaction**.
-2. Build the reusable layer: `DatasetAdapter` + `TaskBuilder` + `Scorer` + `OfflineEvaluator`.
+2. Build the reusable layer: `DatasetAdapter` + `TaskBuilder` + `Scorer` + metrics/decision-rule utilities.
 3. Reuse this layer later for static recommender policy ranking and, if needed, full trajectory simulation: `policy ranks -> user responds -> state updates -> repeat`.
 
 The first paper should not start by building a full Agent4Rec-like simulator. Most existing alignment tables in Agent4Rec, SimUSER, and AgentRecBench are one-step candidate evaluation tasks, not true trajectory simulations. Therefore the first implementation target is an offline response prediction benchmark.
@@ -48,7 +48,7 @@ Do not implement this first. Design offline components so they can be reused lat
 
 ### Stage 1: Offline response prediction benchmark
 
-Implement: `DatasetAdapter`, `TaskBuilder`, `Scorer`, `OfflineEvaluator`.
+Implement: `DatasetAdapter`, `TaskBuilder`, `Scorer`, stateless metric functions, and simple decision-rule utilities.
 
 Main tasks: interaction prediction, positive preference prediction, intensity regression.
 
@@ -162,17 +162,17 @@ Important distinction: `Scorer` answers how the user would respond; `Policy` ans
 
 ---
 
-## 6. Offline evaluation layer
+## 6. Metrics and decision protocols
 
-The first evaluator checks whether scorers recover held-out real user outcomes.
+Stage 1 does not need a stateful evaluator class. Metrics should be stateless functions. Threshold selection, hyperparameter selection, and prompt selection belong to the experiment loop and must use validation only.
 
-For pointwise interaction / positive preference prediction: threshold scores or apply another binary decision protocol, then compute accuracy, precision, recall, F1, AUC, PR-AUC, and calibration if scores are probability-like.
+For pointwise interaction / positive preference prediction: `apply_threshold(scores, threshold)` converts scores into binary predictions, `find_best_threshold(y_val, val_scores, metric)` can be used by the experiment loop on validation, and `binary_classification_metrics(y_true, y_pred)` computes accuracy, precision, recall, and F1.
 
-For candidate ranking interaction / positive preference prediction: sort candidates by score within each candidate group, then compute HR@K, NDCG@K, MRR, and related ranking metrics.
+For candidate ranking interaction / positive preference prediction: `ranking_metrics(y_true, scores, candidate_group, ks)` sorts rows within each candidate group and computes HR@K, NDCG@K, MRR, and related ranking metrics.
 
-For intensity regression: compute MAE, MSE/RMSE, and correlation. Ranking metrics after sorting by predicted intensity are optional and should be treated as a separate ranking protocol.
+For intensity regression: `regression_metrics(y_true, scores)` computes MAE, MSE/RMSE, and correlation. Ranking metrics after sorting by predicted intensity are optional and should be treated as a separate ranking protocol.
 
-Every result should log dataset, task type, target definition, candidate sampling strategy, negative sampling strategy, scorer name, scorer config, LLM prompt/config if applicable, random seed, metrics.
+Every result should log dataset, task type, target definition, candidate sampling strategy, negative sampling strategy, scorer name, scorer config, decision rule, selected threshold if any, validation metric used for selection, LLM prompt/config if applicable, random seed, and final metrics.
 
 This logging is essential because the paper argues that results depend on target, candidate construction, and negative sampling.
 
