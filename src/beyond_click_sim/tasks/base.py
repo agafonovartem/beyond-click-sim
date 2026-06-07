@@ -44,8 +44,10 @@ class TaskSchema:
     id_columns: tuple[str, ...] = ("user_id", "item_id")
     candidate_group_column: str | None = None  # for cases where we have candidate sets
     sampled_column: str | None = None  # for cases where we sampled negatives for training, but for an LLM we still need only real history (positives)
-    # TODO: may be needed for LLM history (to include e.g. ratings or other metadata)
-    # meta_columns: tuple[str, ...] = () 
+    # Interaction-side columns visible only for observed train-history rows.
+    # Examples: rating, playtime_forever, target_like_ge4. Task builders should
+    # set these columns to missing in val/test candidates to avoid feedback leakage.
+    history_context_columns: tuple[str, ...] = ()
 
 
 @dataclass
@@ -65,11 +67,11 @@ def split_xy(
     *,
     target_column: str,
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """Split a task dataframe into model inputs and target values."""
+    """Split a task dataframe into independent model inputs and targets."""
 
     if target_column not in frame.columns:
         raise ValueError(f"Missing target column: {target_column!r}")
-    return frame.drop(columns=[target_column]), frame[target_column]
+    return frame.drop(columns=[target_column]).copy(), frame[target_column].copy()
 
 
 class DatasetFilter(ABC):
@@ -100,7 +102,12 @@ class Splitter(ABC):
 
 
 class CandidateSampler(ABC):
-    """Build ranking candidates from held-out positive rows."""
+    """Build candidate rows from held-out observed interactions.
+
+    Candidate sets can be used for pointwise alignment/classification or for
+    ranking metrics. A sampler may add unobserved negatives, produce full-catalog
+    candidates, or construct any other explicit candidate table needed by a task.
+    """
 
     def __init__(self, seed: int = 0) -> None:
         self.seed = seed
@@ -132,6 +139,9 @@ class TaskBuilder(ABC):
         item_column: str = "item_id",
         sampled_column: str | None = None,  # Boolean column. False = real observed row, True = synthetic sampled row.
         candidate_group_column: str | None = None,
+        # Extra interaction columns available to history-aware models only for
+        # observed train rows. They are not generic item/user features.
+        history_context_columns: tuple[str, ...] = (),
     ) -> None:
         self.name = name
         self.target_source_column = target_source_column
@@ -143,6 +153,7 @@ class TaskBuilder(ABC):
         self.item_column = item_column
         self.sampled_column = sampled_column
         self.candidate_group_column = candidate_group_column
+        self.history_context_columns = history_context_columns
 
     @abstractmethod
     def build(self, dataset: CanonicalDataset) -> Task:

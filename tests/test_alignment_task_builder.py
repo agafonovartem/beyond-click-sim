@@ -75,6 +75,7 @@ def test_alignment_interaction_task_builder_creates_candidate_sets(
     assert task.schema.target_column == "target"
     assert task.schema.sampled_column == "sampled"
     assert task.schema.candidate_group_column == "candidate_group"
+    assert task.schema.history_context_columns == ()
     assert task.schema.feature_columns == (
         "user_age",
         "user_segment",
@@ -82,11 +83,53 @@ def test_alignment_interaction_task_builder_creates_candidate_sets(
         "item_genre",
     )
     assert task.manifest["target_source_column"] == "target_interact"
+    assert task.manifest["history_context_columns"] == []
     assert task.manifest["filter"]["min_interactions"] == 4
     assert task.manifest["splitter"]["train_fraction"] == 0.75
     assert task.manifest["splitter"]["test_fraction"] == 0.25
     assert task.manifest["sampler"]["negative_ratio"] == 2
     assert task.manifest["rows"] == {"train": 6, "val": 0, "test": 6}
+
+
+def test_alignment_interaction_task_builder_keeps_history_context_train_only(
+    tmp_path: Path,
+) -> None:
+    dataset = _write_toy_canonical_dataset(tmp_path)
+
+    task = AlignmentInteractionTaskBuilder(
+        name="toy-interaction-alignment-with-history-ratings",
+        dataset_filter=MinUserInteractionsFilter(min_interactions=4),
+        splitter=RandomFractionSplitter(
+            train_fraction=0.75,
+            val_fraction=0.0,
+            test_fraction=0.25,
+            seed=0,
+        ),
+        sampler=NonInteractionCandidateSampler(negative_ratio=2, seed=0),
+        history_context_columns=("rating",),
+    ).build(dataset)
+
+    expected_columns = [
+        "user_id",
+        "item_id",
+        "user_age",
+        "user_segment",
+        "item_title",
+        "item_genre",
+        "rating",
+        "target",
+        "sampled",
+        "candidate_group",
+    ]
+    assert list(task.train.columns) == expected_columns
+    assert list(task.val.columns) == expected_columns
+    assert list(task.test.columns) == expected_columns
+
+    assert task.train["rating"].notna().all()
+    assert task.val["rating"].isna().all()
+    assert task.test["rating"].isna().all()
+    assert task.schema.history_context_columns == ("rating",)
+    assert task.manifest["history_context_columns"] == ["rating"]
 
 
 def test_non_interaction_sampler_is_stable_per_candidate_group() -> None:
@@ -163,6 +206,7 @@ def _write_toy_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
                 "i1",
                 "i2",
             ],
+            "rating": [5, 4, 3, 2, 5, 4, 3, 2, 5, 4],
             "target_interact": [1] * 10,
         }
     )

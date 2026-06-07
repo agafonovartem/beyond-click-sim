@@ -19,7 +19,9 @@ def test_popularity_scorer_scores_items_by_train_target_sum() -> None:
         index=["a", "b", "c", "d"],
     )
 
-    scores = PopularityScorer().fit(X_train, y_train).score(X_test)
+    scorer = PopularityScorer()
+    scorer.fit(X_train, y_train)
+    scores = scorer.score(X_test)
 
     assert scores.tolist() == [2.0, 1.5, 0.0, 0.0]
     assert list(scores.index) == ["a", "b", "c", "d"]
@@ -31,7 +33,9 @@ def test_popularity_scorer_supports_custom_item_column() -> None:
     y_train = pd.Series([1, 1, 1], name="target")
     X_test = pd.DataFrame({"movie_id": [20, 30, 10]})
 
-    scores = PopularityScorer(item_column="movie_id").fit(X_train, y_train).score(X_test)
+    scorer = PopularityScorer(item_column="movie_id")
+    scorer.fit(X_train, y_train)
+    scores = scorer.score(X_test)
 
     assert scores.tolist() == [1.0, 0.0, 2.0]
 

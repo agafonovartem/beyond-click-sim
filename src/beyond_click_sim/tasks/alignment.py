@@ -21,6 +21,11 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
     Train contains only observed interactions as user history. Validation/test
     contain held-out observed interactions plus sampled non-interactions grouped
     into candidate sets. The selected target is `target_interact`.
+
+    `history_context_columns` are copied from observed train interactions only.
+    They are useful for LLM/user-history prompts, e.g. previous ratings or
+    playtime, and are set to missing for validation/test candidates to avoid
+    leaking held-out feedback into scorer inputs.
     """
 
     def __init__(
@@ -36,6 +41,7 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
         item_column: str = "item_id",
         sampled_column: str = "sampled",
         candidate_group_column: str = "candidate_group",
+        history_context_columns: tuple[str, ...] = (),
     ) -> None:
         super().__init__(
             name=name,
@@ -48,7 +54,9 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
             item_column=item_column,
             sampled_column=sampled_column,
             candidate_group_column=candidate_group_column,
+            history_context_columns=history_context_columns,
         )
+        self._validate_history_context_columns()
         if self.dataset_filter is None:
             raise ValueError(
                 "AlignmentInteractionTaskBuilder requires dataset_filter."
@@ -70,7 +78,10 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
         interactions = dataset.load_interactions()
 
         self._require_columns(interactions, [self.user_column, self.item_column])
-        self._require_columns(interactions, [self.target_source_column])
+        self._require_columns(
+            interactions,
+            [self.target_source_column, *self.history_context_columns],
+        )
         self._require_columns(users, [self.user_column])
         self._require_columns(items, [self.item_column])
 
@@ -100,10 +111,12 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
             item_column=self.item_column,
         )
         val = self._with_features(
-            rows=self.sampler.sample(
-                split.val,
-                interactions=interactions,
-                items=items,
+            rows=self._without_history_context(
+                self.sampler.sample(
+                    split.val,
+                    interactions=interactions,
+                    items=items,
+                )
             ),
             user_features=user_features,
             item_features=item_features,
@@ -112,10 +125,12 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
             item_column=self.item_column,
         )
         test = self._with_features(
-            rows=self.sampler.sample(
-                split.test,
-                interactions=interactions,
-                items=items,
+            rows=self._without_history_context(
+                self.sampler.sample(
+                    split.test,
+                    interactions=interactions,
+                    items=items,
+                )
             ),
             user_features=user_features,
             item_features=item_features,
@@ -130,6 +145,7 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
             id_columns=(self.user_column, self.item_column),
             candidate_group_column=self.candidate_group_column,
             sampled_column=self.sampled_column,
+            history_context_columns=self.history_context_columns,
         )
 
         return Task(
@@ -144,6 +160,7 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
                 "target_source_column": self.target_source_column,
                 "target_column": self.target_column,
                 "feature_columns": list(feature_columns),
+                "history_context_columns": list(self.history_context_columns),
                 "sampled_column": self.sampled_column,
                 "candidate_group_column": self.candidate_group_column,
                 "filter": self._component_manifest(self.dataset_filter),
@@ -167,10 +184,20 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
     ) -> pd.DataFrame:
         """Convert observed interaction rows into unsampled target rows."""
 
-        rows = interactions[[self.user_column, self.item_column]].copy()
+        rows = interactions[
+            [self.user_column, self.item_column, *self.history_context_columns]
+        ].copy()
         rows[self.target_column] = interactions[self.target_source_column]
         rows[self.sampled_column] = False
         rows[self.candidate_group_column] = candidate_group
+        return rows
+
+    def _without_history_context(self, rows: pd.DataFrame) -> pd.DataFrame:
+        """Add history-only columns as missing values for candidate rows."""
+
+        rows = rows.copy()
+        for column in self.history_context_columns:
+            rows[column] = pd.NA
         return rows
 
     def _task_columns(
@@ -179,12 +206,33 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
     ) -> list[str]:
         """Return the stable column order for this task."""
 
-        # TODO: for LLM history we might need ratings as well. 
         return [
             self.user_column,
             self.item_column,
             *feature_columns,
+            *self.history_context_columns,
             self.target_column,
             self.sampled_column,
             self.candidate_group_column,
         ]
+
+    def _validate_history_context_columns(self) -> None:
+        """Keep history-only columns separate from task control columns."""
+
+        reserved = {
+            self.user_column,
+            self.item_column,
+            self.target_column,
+            self.sampled_column,
+            self.candidate_group_column,
+        }
+        overlaps = [
+            column
+            for column in self.history_context_columns
+            if column in reserved
+        ]
+        if overlaps:
+            raise ValueError(
+                "history_context_columns cannot include task control columns: "
+                f"{overlaps}"
+            )

@@ -39,6 +39,7 @@ def test_task_stores_split_dataframes_and_schema() -> None:
         target_column="target",
         feature_columns=("user_id", "item_id"),
         candidate_group_column="candidate_set_id",
+        history_context_columns=("rating",),
     )
 
     task = Task(
@@ -53,6 +54,7 @@ def test_task_stores_split_dataframes_and_schema() -> None:
     assert task.schema.target_column == "target"
     assert task.schema.feature_columns == ("user_id", "item_id")
     assert task.schema.candidate_group_column == "candidate_set_id"
+    assert task.schema.history_context_columns == ("rating",)
     assert task.manifest["seed"] == 0
     assert task.train.equals(train)
     assert task.val.equals(val)
@@ -76,6 +78,11 @@ def test_split_xy_separates_target_from_inputs() -> None:
     assert list(X.index) == ["a", "b"]
     assert y.name == "target"
     assert y.tolist() == [1, 0]
+
+    X.loc["a", "feature"] = 999
+    y.loc["a"] = 999
+    assert frame.loc["a", "feature"] == 10
+    assert frame.loc["a", "target"] == 1
 
 
 def test_split_xy_requires_target_column() -> None:
