@@ -156,6 +156,7 @@ dependencies = [
     { name = "pyarrow" },
     { name = "python-dotenv" },
     { name = "scikit-learn" },
+    { name = "tqdm" },
 ]
 
 [package.dev-dependencies]
@@ -172,6 +173,7 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=24.0.0" },
     { name = "python-dotenv", specifier = ">=1.2.0" },
     { name = "scikit-learn", specifier = ">=1.7.0" },
+    { name = "tqdm", specifier = ">=4.67.0" },
 ]
 
 [package.metadata.requires-dev]
