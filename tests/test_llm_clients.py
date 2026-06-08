@@ -14,8 +14,8 @@ class FakeOpenAI:
 def patch_client_dependencies(monkeypatch) -> list[bool]:
     dotenv_calls: list[bool] = []
     FakeOpenAI.calls = []
-    monkeypatch.setattr(llm_clients, "_openai_client_class", lambda: FakeOpenAI)
-    monkeypatch.setattr(llm_clients, "_load_dotenv", lambda: dotenv_calls.append(True))
+    monkeypatch.setattr(llm_clients, "OpenAI", FakeOpenAI)
+    monkeypatch.setattr(llm_clients, "load_dotenv", lambda: dotenv_calls.append(True))
     return dotenv_calls
 
 
@@ -34,7 +34,7 @@ def test_vllm_client_passes_base_url_and_api_key(monkeypatch) -> None:
 
     llm_clients.vllm_client("http://127.0.0.1:8000/v1")
 
-    assert dotenv_calls == [True]
+    assert dotenv_calls == []
     assert FakeOpenAI.calls == [
         {"base_url": "http://127.0.0.1:8000/v1", "api_key": "EMPTY"}
     ]
@@ -45,7 +45,20 @@ def test_ollama_client_uses_openai_compatible_defaults(monkeypatch) -> None:
 
     llm_clients.ollama_client()
 
-    assert dotenv_calls == [True]
+    assert dotenv_calls == []
     assert FakeOpenAI.calls == [
         {"base_url": "http://localhost:11434/v1", "api_key": "ollama"}
+    ]
+
+
+def test_make_llm_client_uses_fixed_named_clients(monkeypatch) -> None:
+    dotenv_calls = patch_client_dependencies(monkeypatch)
+
+    llm_clients.make_llm_client("ollama_local")
+    llm_clients.make_llm_client("vllm_local")
+
+    assert dotenv_calls == []
+    assert FakeOpenAI.calls == [
+        {"base_url": "http://localhost:11434/v1", "api_key": "ollama"},
+        {"base_url": "http://127.0.0.1:8000/v1", "api_key": "EMPTY"},
     ]
