@@ -8,6 +8,7 @@ import pandas as pd
 from beyond_click_sim.data.canonical import CanonicalDataset
 from beyond_click_sim.tasks import (
     AlignmentInteractionTaskBuilder,
+    FixedSizeUserInteractionCandidateSampler,
     MinUserInteractionsFilter,
     NonInteractionCandidateSampler,
     RandomFractionSplitter,
@@ -159,6 +160,51 @@ def test_non_interaction_sampler_is_stable_per_candidate_group() -> None:
         }
 
     assert negatives_by_group(first) == negatives_by_group(second)
+
+
+def test_fixed_size_user_candidate_sampler_creates_one_group_per_user() -> None:
+    positives = pd.DataFrame(
+        {
+            "interaction_id": [f"r{idx}" for idx in range(1, 7)],
+            "user_id": ["u1", "u1", "u1", "u1", "u2", "u2"],
+            "item_id": ["i1", "i2", "i3", "i4", "i1", "i5"],
+        }
+    )
+    interactions = positives[["interaction_id", "user_id", "item_id"]].copy()
+    items = pd.DataFrame({"item_id": [f"i{idx}" for idx in range(1, 16)]})
+    sampler = FixedSizeUserInteractionCandidateSampler(
+        negative_ratio=3,
+        total_items=8,
+        seed=0,
+    )
+
+    sampled = sampler.sample(positives, interactions=interactions, items=items)
+
+    group_sizes = sampled.groupby("candidate_group").size().to_dict()
+    assert group_sizes == {
+        "candidate:user:u1": 8,
+        "candidate:user:u2": 8,
+    }
+
+    targets_per_group = sampled.groupby("candidate_group")["target"].sum().to_dict()
+    assert targets_per_group == {
+        "candidate:user:u1": 2,
+        "candidate:user:u2": 2,
+    }
+
+    sampled_per_group = sampled.groupby("candidate_group")["sampled"].sum().to_dict()
+    assert sampled_per_group == {
+        "candidate:user:u1": 6,
+        "candidate:user:u2": 6,
+    }
+
+    observed_items = {
+        user_id: set(rows["item_id"])
+        for user_id, rows in interactions.groupby("user_id")
+    }
+    negatives = sampled[sampled["sampled"]]
+    for row in negatives.itertuples(index=False):
+        assert row.item_id not in observed_items[row.user_id]
 
 
 def _write_toy_canonical_dataset(tmp_path: Path) -> CanonicalDataset:

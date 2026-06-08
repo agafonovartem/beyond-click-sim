@@ -13,13 +13,17 @@ from beyond_click_sim.tasks.base import (
     split_xy,
 )
 from beyond_click_sim.tasks.filters import MinUserInteractionsFilter
-from beyond_click_sim.tasks.samplers import NonInteractionCandidateSampler
+from beyond_click_sim.tasks.samplers import (
+    FixedSizeUserInteractionCandidateSampler,
+    NonInteractionCandidateSampler,
+)
 from beyond_click_sim.tasks.splitters import RandomFractionSplitter
 
 __all__ = [
     "AlignmentInteractionTaskBuilder",
     "CandidateSampler",
     "DatasetFilter",
+    "FixedSizeUserInteractionCandidateSampler",
     "MinUserInteractionsFilter",
     "NonInteractionCandidateSampler",
     "RandomFractionSplitter",
