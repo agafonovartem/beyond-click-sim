@@ -1,40 +1,34 @@
-### TaskBuilder for in-distribution
+### TaskBuilder for In-Distribution Tasks
 
 Preprocessing after canonization should have 3 steps:
 1. **Filtering.** I can filter any dataset by any rules I like. It should be simply `DatasetFilter` class with method `filter`. That's it. It does not care about target. For `DatasetFilter` it is just filtering condition.
-2. **Splitters:**
+2. **Splitters:** A splitter creates train/validation/test interaction splits. Examples:
     - RandomFractionSplitter: train/val/test by fractions, e.g. 70/10/20
     - StratifiedRandomSplitter: random split preserving label proportions.
     - GlobalTemporalSplitter: shared time cutoffs across users.
-    - LeaveNOutSplitter: hold out fixed counts per user, e.g. val_n=1, test_n=1. [MAYBE LATER]
-    - TemporalLeaveNOutSplitter: hold out last n interactions per user, only when timestamps are meaningful. [MAYBE LATER]
-3. **CandidateSampler.**  
+    - leave-n-out variants may be added later.
+3. **CandidateSampler.**  It constructs explicit candidate rows when the task needs them. This is independent of whether we later compute pointwise metrics or ranking metrics. The same candidate table can be flattened for binary classification metrics or grouped by candidate group for ranking metrics.
+While canonicalization creates standard target columns, candidate samplers may add rows that are not canonical interactions such as sampled non-interactions; in that case the sampler is responsible for assigning `target` and documenting the assumption.
 
-Examples:
-1. *Split*: RandomFractionSplitter. *Target*: Interaction.
-    - Filter: just want to ensure that the user has at least $n$ interactions
-    - Split: $x \%$ on train, $y \%$ on test, $(100 - x - y)\%$ on val. 
-    - Sampler: randomly sample negatives from non-interactions. It could be different strategies: $1:1$, $1:5$, $1:20$, full ranking, or zero-shot LLM suggestions. 
-2. *Split*: GlobalTemporalSplitter. *Target*: Interaction.
-    - Filter: want to do proper timesplit, to ensure that many users user has enough interactions before and after cutoff.
-    - Split: by timestamp cutoff. 
-    - Sampler: randomly sample negatives from non-interactions. It could be different strategies: $1:1$, $1:5$, $1:20$, full ranking, or zero-shot LLM suggestions. 
-3. *Split*: StratifiedRandomSplitter. *Target*: Preference.
-    - Filter: choose users with at least $x$ positives, $y$ negatives.
-    - Split: train-test-val split for classification with stratification by preference. 
-    - Sampler: no need for classification metrics. For ranking metrics we then want to combine test pos/neg in groups like $1:1$, $1:5$, $1:20$.
-4. *Split*: GlobalTemporalSplitter. *Target*: Preference.
-    - Filter: want to do proper timesplit, to ensure that many users user has enough interactions before and after cutoff.
-    - Split: by timestamp cutoff + maybe check stratification. 
-    - Sampler: no need for classification metrics. For ranking metrics we then want to combine test pos/neg in groups like $1:1$, $1:5$, $1:20$.
-5. *Split*: RandomFractionSplitter. *Target*: Regression.
-    - Filter: just want to ensure that the user has at least $n$ interactions
-    - Split: $x \%$ on train, $y \%$ on test, $(100 - x - y)\%$ on val.  
-    - Sampler: no need for regression.
-6. *Split*: GlobalTemporalSplitter. *Target*: Regression.
-    - Filter: want to do proper timesplit, to ensure that many users user has enough interactions before and after cutoff.
-    - Split: by timestamp cutoff
-    - Sampler: no need for regression.
+Task families:
+
+1. **Interaction task.**
+    Question: will the user interact with this item?
+    - Filter: usually ensure each user has enough observed interactions before splitting.
+    - Split: random or temporal split over observed interactions.
+    - Sampler: required for explicit negative examples. We sample unobserved items to provide negative candidates for positive observed interactions. For sampled non-interactions, `target=0` is part of the interaction-task assumption.
+
+2. **Preference task.**
+    Question: will the user like this interacted item enough?
+    - Filter: usually ensure each user has enough observed positives and observed negatives under the selected preference target.
+    - Split: random, stratified random, or temporal split over observed interactions.
+    - Sampler: optional for observed-only pointwise classification, but required for candidate-set evaluation. When sampling candidates, we should usually sample observed unliked items to provide negative candidates for positive liked items. This keeps preference labels grounded in observed feedback.
+
+3. **Regression task.**
+    Question: what numeric intensity will the user produce?
+    - Filter: usually ensure enough observed interactions with valid numeric target values.
+    - Split: random or temporal split over observed interactions.
+    - Sampler: no negative sampling is needed. For standard RMSE/MAE, evaluate on observed held-out rows with known numeric labels. In the SimUSER paper, rating prediction uses an 80/10/10 time-based split without stratification or fixed-size candidate sets.  
 
 ### Problem Formulation for Multi-Target In-Distribution User Outcome Prediction
 When we simulate users in recommender systems, or build recommender systems in general, we have many datasets and can define many tasks on them:
