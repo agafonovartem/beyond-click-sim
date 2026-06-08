@@ -6,3 +6,5 @@
     **Answer:** For pointwise alignment, score-based methods require a validation-calibrated decision rule. Direct yes/no LLM protocols do not need threshold calibration, but prompt/parser choices must be fixed before test and should be developed on validation only. *We need to carefully choose the size of val set!*
 
 3. Think about creating a separate base class for LLMScorers. `client`, `model`, `max_tokens`, `temperature`, `max_history_items` are their common attributes.
+
+4. Current Agent4Rec-style candidate construction is `cap20`, not always `fixed20`. For `m=9` and `m=19`, candidate groups are effectively fixed at 20 items. For `m=1` and `m=3`, group size may be smaller when a user has too few held-out positives; for `m=2`, strict `1:2` ratio means the maximum group size is 18. Compare scorers within the same `m`; comparisons across different `m` also change candidate-group size and positive prevalence.
