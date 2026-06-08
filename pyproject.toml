@@ -12,6 +12,7 @@ dependencies = [
     "pyarrow>=24.0.0",
     "python-dotenv>=1.2.0",
     "scikit-learn>=1.7.0",
+    "tqdm>=4.67.0",
 ]
 
 [build-system]

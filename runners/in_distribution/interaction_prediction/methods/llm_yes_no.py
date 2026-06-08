@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+from tqdm import tqdm
 
 from beyond_click_sim.evaluation import (
     binary_classification_metrics,
@@ -261,10 +262,12 @@ def _score_groups(
     groups = list(X.groupby(candidate_group_column, sort=False))
 
     if max_workers == 1:
-        for group_id, group in groups:
+        progress = tqdm(groups, desc="llm groups", unit="group")
+        for group_id, group in progress:
             group_scores, error = _score_one_group(scorer, group_id, group)
             if error is not None:
                 errors.append(error)
+                progress.set_postfix(errors=len(errors))
                 if len(errors) >= max_errors:
                     break
             else:
@@ -276,10 +279,17 @@ def _score_groups(
             executor.submit(_score_one_group, scorer, group_id, group)
             for group_id, group in groups
         ]
-        for future in as_completed(futures):
+        progress = tqdm(
+            as_completed(futures),
+            total=len(futures),
+            desc="llm groups",
+            unit="group",
+        )
+        for future in progress:
             group_scores, error = future.result()
             if error is not None:
                 errors.append(error)
+                progress.set_postfix(errors=len(errors))
                 if len(errors) >= max_errors:
                     for pending in futures:
                         pending.cancel()

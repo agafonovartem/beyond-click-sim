@@ -35,6 +35,8 @@ def main() -> None:
     tasks = parse_names(args.tasks, default=DEFAULT_TASKS, choices=TASK_BUILDERS)
     methods = parse_names(args.methods, default=DEFAULT_METHODS, choices=METHOD_RUNNERS)
     output_root = Path(args.output_dir).expanduser().resolve()
+    total_runs = len(tasks) * len(methods)
+    run_index = 0
 
     for task_name in tasks:
         task_start = perf_counter()
@@ -42,6 +44,8 @@ def main() -> None:
         task = TASK_BUILDERS[task_name]()
         print(f"Built task: {task_name} in {_elapsed(task_start)}s", flush=True)
         for method_name in methods:
+            run_index += 1
+            print(f"Run {run_index}/{total_runs}: task={task_name}, method={method_name}", flush=True)
             output_dir = make_output_dir(
                 output_root,
                 task_name=task_name,

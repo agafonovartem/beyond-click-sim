@@ -8,3 +8,11 @@
 3. Think about creating a separate base class for LLMScorers. `client`, `model`, `max_tokens`, `temperature`, `max_history_items` are their common attributes.
 
 4. Current Agent4Rec-style candidate construction is `cap20`, not always `fixed20`. For `m=9` and `m=19`, candidate groups are effectively fixed at 20 items. For `m=1` and `m=3`, group size may be smaller when a user has too few held-out positives; for `m=2`, strict `1:2` ratio means the maximum group size is 18. Compare scorers within the same `m`; comparisons across different `m` also change candidate-group size and positive prevalence.
+
+5.
+    LLM simulator vs classic RS baselines is an asymmetric information regime by design. LLM sees one user's history and item metadata, but also has a pretrained world prior and possible memorized knowledge. Classic RS methods use train interactions from many users as their natural population-level signal. Therefore, limiting evaluation to 1000 users can mean two different questions:
+
+    - **Simulator question:** train classic RS on full train, let LLM use per-user history, and evaluate all methods on the same deterministic 1000-user candidate subset. Here 1000 users is an evaluation budget, not a dataset filter.
+    - **Agent4Rec/SimUSER-style reproduction:** sample 1000 eligible users before split and build the whole task only on them. This is closer to the "1000 agents" setup, but it intentionally limits classic RS training signal.
+
+    We should not silently mix these protocols. If both are useful, name them explicitly, e.g. `full_train_eval1000` and `sampled_users_train_eval1000`.
