@@ -26,6 +26,9 @@ from runners.in_distribution.interaction_prediction.task_builders import repo_ro
 OLLAMA_LLAMA31_8B_METHOD_NAME = "llm_yes_no_ollama_llama31_8b"
 OLLAMA_LLAMA31_8B_CLIENT = "ollama_local"
 OLLAMA_LLAMA31_8B_MODEL = "llama3.1:8b"
+VLLM_LLAMA33_70B_METHOD_NAME = "llm_yes_no_vllm_llama33_70b"
+VLLM_LLAMA33_70B_CLIENT = "vllm_local"
+VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
 MAX_HISTORY_ITEMS = 20
 TEMPERATURE = 0.0
 MAX_TOKENS = 256
@@ -70,6 +73,28 @@ def run_llama31_8b_full(task: Task, output_dir: Path) -> dict[str, object]:
         method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_full",
         client_name=OLLAMA_LLAMA31_8B_CLIENT,
         model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=None,
+    )
+
+
+def run_llama33_70b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_smoke",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=25,
+    )
+
+
+def run_llama33_70b_full(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
         max_candidate_groups=None,
     )
 
