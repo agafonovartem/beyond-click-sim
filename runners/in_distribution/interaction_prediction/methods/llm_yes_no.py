@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from pathlib import Path
 
@@ -33,6 +34,8 @@ MAX_HISTORY_ITEMS = 20
 TEMPERATURE = 0.0
 MAX_TOKENS = 256
 MAX_LLM_ERRORS = 3
+OLLAMA_MAX_WORKERS = 1
+VLLM_MAX_WORKERS = 32
 
 DATASET_PROMPT_COLUMNS = {
     "ml-1m": {
@@ -63,6 +66,7 @@ def run_llama31_8b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
         client_name=OLLAMA_LLAMA31_8B_CLIENT,
         model=OLLAMA_LLAMA31_8B_MODEL,
         max_candidate_groups=25,
+        max_workers=OLLAMA_MAX_WORKERS,
     )
 
 
@@ -74,6 +78,7 @@ def run_llama31_8b_full(task: Task, output_dir: Path) -> dict[str, object]:
         client_name=OLLAMA_LLAMA31_8B_CLIENT,
         model=OLLAMA_LLAMA31_8B_MODEL,
         max_candidate_groups=None,
+        max_workers=OLLAMA_MAX_WORKERS,
     )
 
 
@@ -85,6 +90,7 @@ def run_llama33_70b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
         client_name=VLLM_LLAMA33_70B_CLIENT,
         model=VLLM_LLAMA33_70B_MODEL,
         max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
     )
 
 
@@ -96,6 +102,7 @@ def run_llama33_70b_full(task: Task, output_dir: Path) -> dict[str, object]:
         client_name=VLLM_LLAMA33_70B_CLIENT,
         model=VLLM_LLAMA33_70B_MODEL,
         max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
     )
 
 
@@ -111,6 +118,7 @@ def run_method(
     temperature: float = TEMPERATURE,
     max_tokens: int = MAX_TOKENS,
     max_llm_errors: int = MAX_LLM_ERRORS,
+    max_workers: int = 1,
 ) -> dict[str, object]:
     """Run the yes/no LLM scorer for pointwise interaction alignment."""
 
@@ -144,6 +152,7 @@ def run_method(
         X_test,
         candidate_group_column=candidate_group_column,
         max_errors=max_llm_errors,
+        max_workers=max_workers,
     )
     valid = scores.notna()
     if not valid.any():
@@ -200,6 +209,7 @@ def run_method(
         "limits": {
             "max_candidate_groups": max_candidate_groups,
             "max_llm_errors": max_llm_errors,
+            "max_workers": max_workers,
         },
         "llm_errors": len(errors),
         "candidate_groups": {
@@ -224,6 +234,7 @@ def run_method(
         "scored_rows": int(valid.sum()),
         "requested_rows": int(len(X_test)),
         "max_candidate_groups": max_candidate_groups,
+        "max_workers": max_workers,
         "candidate_groups": {
             "requested": requested_candidate_groups,
             "scored": scored_candidate_groups,
@@ -240,17 +251,54 @@ def _score_groups(
     *,
     candidate_group_column: str,
     max_errors: int,
+    max_workers: int = 1,
 ) -> tuple[pd.Series, list[dict[str, str]]]:
+    if max_workers < 1:
+        raise ValueError("max_workers must be positive")
+
     scores = pd.Series(index=X.index, dtype=float, name="score")
     errors: list[dict[str, str]] = []
-    for group_id, group in X.groupby(candidate_group_column, sort=False):
-        try:
-            scores.loc[group.index] = scorer.score(group)
-        except Exception as error:  # noqa: BLE001 - keep long LLM runs alive.
-            errors.append({"candidate_group": str(group_id), "error": repr(error)})
-            if len(errors) >= max_errors:
-                break
+    groups = list(X.groupby(candidate_group_column, sort=False))
+
+    if max_workers == 1:
+        for group_id, group in groups:
+            group_scores, error = _score_one_group(scorer, group_id, group)
+            if error is not None:
+                errors.append(error)
+                if len(errors) >= max_errors:
+                    break
+            else:
+                scores.loc[group_scores.index] = group_scores
+        return scores, errors
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(_score_one_group, scorer, group_id, group)
+            for group_id, group in groups
+        ]
+        for future in as_completed(futures):
+            group_scores, error = future.result()
+            if error is not None:
+                errors.append(error)
+                if len(errors) >= max_errors:
+                    for pending in futures:
+                        pending.cancel()
+                    break
+            else:
+                scores.loc[group_scores.index] = group_scores
     return scores, errors
+
+
+def _score_one_group(
+    scorer: LLMInteractionYesNoScorer,
+    group_id: object,
+    group: pd.DataFrame,
+) -> tuple[pd.Series, dict[str, str] | None]:
+    try:
+        return scorer.score(group), None
+    except Exception as error:  # noqa: BLE001 - keep long LLM runs alive.
+        empty_scores = pd.Series(index=group.index, dtype=float, name="score")
+        return empty_scores, {"candidate_group": str(group_id), "error": repr(error)}
 
 
 def _write_errors(path: Path, errors: list[dict[str, str]]) -> None:
