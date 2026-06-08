@@ -132,8 +132,8 @@ class NonInteractionCandidateSampler(CandidateSampler):
         return f"candidate:{user_id}:{source_id}"
 
 
-class FixedSizeUserInteractionCandidateSampler(CandidateSampler):
-    """Build one Agent4Rec-style candidate list per user.
+class CappedUserInteractionCandidateSampler(CandidateSampler):
+    """Build one capped Agent4Rec-style candidate list per user.
 
     For each user in a held-out split, sample up to `total_items` candidates with
     ratio 1:`negative_ratio`: `k` observed positives and `k * negative_ratio`
@@ -167,7 +167,7 @@ class FixedSizeUserInteractionCandidateSampler(CandidateSampler):
         interactions: pd.DataFrame,
         items: pd.DataFrame,
     ) -> pd.DataFrame:
-        """Return one fixed-size candidate group per user."""
+        """Return one capped candidate group per user."""
 
         if self.negative_ratio < 1:
             raise ValueError("negative_ratio must be positive.")

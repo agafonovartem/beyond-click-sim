@@ -7,7 +7,10 @@ import pytest
 from beyond_click_sim.evaluation import (
     apply_threshold,
     binary_classification_metrics,
+    find_best_group_threshold,
     find_best_threshold,
+    find_best_threshold_by_metric,
+    grouped_binary_classification_metrics,
 )
 
 
@@ -48,6 +51,23 @@ def test_binary_classification_metrics_use_zero_division_zero() -> None:
     assert metrics["recall"] == 0.0
     assert metrics["f1"] == 0.0
     assert metrics["n_predicted_positive"] == 0
+
+
+def test_grouped_binary_classification_metrics_average_groups_equally() -> None:
+    y_true = pd.Series([1, 0, 0, 0, 1, 0])
+    y_pred = pd.Series([1, 1, 1, 1, 1, 0])
+    groups = pd.Series(["large", "large", "large", "large", "small", "small"])
+
+    metrics = grouped_binary_classification_metrics(y_true, y_pred, groups)
+
+    assert metrics["accuracy"] == pytest.approx((0.25 + 1.0) / 2)
+    assert metrics["precision"] == pytest.approx((0.25 + 1.0) / 2)
+    assert metrics["recall"] == 1.0
+    assert metrics["f1"] == pytest.approx((0.4 + 1.0) / 2)
+    assert metrics["n_groups"] == 2
+    assert metrics["n"] == 6
+    assert metrics["n_positive"] == 2
+    assert metrics["n_predicted_positive"] == 5
 
 
 def test_find_best_threshold_selects_threshold_by_metric() -> None:
@@ -102,12 +122,75 @@ def test_find_best_threshold_matches_brute_force(metric: str) -> None:
     assert selection["metric_value"] == pytest.approx(brute_value)
 
 
+def test_find_best_threshold_by_metric_uses_custom_metric_function() -> None:
+    y_true = pd.Series([1, 0, 0, 0, 1, 0])
+    scores = pd.Series([0.9, 0.8, 0.7, 0.6, 0.1, 0.0])
+    groups = pd.Series(["large", "large", "large", "large", "small", "small"])
+
+    selection = find_best_threshold_by_metric(
+        y_true,
+        scores,
+        metric_fn=lambda y, pred: grouped_binary_classification_metrics(
+            y,
+            pred,
+            groups,
+        )["f1"],
+        metric_name="macro_group_f1",
+    )
+
+    assert selection == {
+        "threshold": 0.1,
+        "metric": "macro_group_f1",
+        "metric_value": pytest.approx(0.7),
+    }
+
+
+@pytest.mark.parametrize("metric", ["accuracy", "precision", "recall", "f1"])
+def test_find_best_group_threshold_matches_brute_force(metric: str) -> None:
+    y_true = pd.Series([1, 0, 0, 0, 1, 0])
+    scores = pd.Series([0.9, 0.8, 0.7, 0.6, 0.1, 0.0])
+    groups = pd.Series(["large", "large", "large", "large", "small", "small"])
+    unique_scores = sorted(float(score) for score in scores.dropna().unique())
+    thresholds = [float(np.nextafter(unique_scores[-1], np.inf)), *unique_scores]
+
+    brute_threshold = thresholds[0]
+    brute_value = -1.0
+    for threshold in thresholds:
+        value = grouped_binary_classification_metrics(
+            y_true,
+            apply_threshold(scores, threshold),
+            groups,
+        )[metric]
+        if value > brute_value:
+            brute_threshold = threshold
+            brute_value = float(value)
+
+    selection = find_best_group_threshold(
+        y_true,
+        scores,
+        groups,
+        metric=metric,  # type: ignore[arg-type]
+    )
+
+    assert selection["threshold"] == brute_threshold
+    assert selection["metric"] == f"macro_group_{metric}"
+    assert selection["metric_value"] == pytest.approx(brute_value)
+
+
 def test_find_best_threshold_rejects_unsupported_metric() -> None:
     y_true = pd.Series([1])
     scores = pd.Series([0.5])
 
     with pytest.raises(ValueError, match="Unsupported metric"):
         find_best_threshold(y_true, scores, metric="auc")  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="Unsupported metric"):
+        find_best_group_threshold(
+            y_true,
+            scores,
+            pd.Series(["a"]),
+            metric="auc",  # type: ignore[arg-type]
+        )
 
 
 def test_find_best_threshold_rejects_empty_scores() -> None:
@@ -129,3 +212,25 @@ def test_binary_helpers_require_same_length() -> None:
 
     with pytest.raises(ValueError, match="same length"):
         find_best_threshold(pd.Series([1]), pd.Series([0.1, 0.2]))
+
+    with pytest.raises(ValueError, match="same length"):
+        find_best_group_threshold(
+            pd.Series([1]),
+            pd.Series([0.1]),
+            pd.Series(["a", "b"]),
+        )
+
+    with pytest.raises(ValueError, match="same length"):
+        grouped_binary_classification_metrics(
+            pd.Series([1]),
+            pd.Series([1]),
+            pd.Series(["a", "b"]),
+        )
+
+    with pytest.raises(ValueError, match="same length"):
+        find_best_threshold_by_metric(
+            pd.Series([1]),
+            pd.Series([0.1, 0.2]),
+            metric_fn=lambda y, pred: 0.0,
+            metric_name="custom",
+        )

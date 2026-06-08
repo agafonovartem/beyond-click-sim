@@ -8,7 +8,7 @@ import pandas as pd
 from beyond_click_sim.data.canonical import CanonicalDataset
 from beyond_click_sim.tasks import (
     AlignmentInteractionTaskBuilder,
-    FixedSizeUserInteractionCandidateSampler,
+    CappedUserInteractionCandidateSampler,
     MinUserInteractionsFilter,
     NonInteractionCandidateSampler,
     RandomFractionSplitter,
@@ -162,7 +162,7 @@ def test_non_interaction_sampler_is_stable_per_candidate_group() -> None:
     assert negatives_by_group(first) == negatives_by_group(second)
 
 
-def test_fixed_size_user_candidate_sampler_creates_one_group_per_user() -> None:
+def test_capped_user_candidate_sampler_creates_one_group_per_user() -> None:
     positives = pd.DataFrame(
         {
             "interaction_id": [f"r{idx}" for idx in range(1, 7)],
@@ -172,7 +172,7 @@ def test_fixed_size_user_candidate_sampler_creates_one_group_per_user() -> None:
     )
     interactions = positives[["interaction_id", "user_id", "item_id"]].copy()
     items = pd.DataFrame({"item_id": [f"i{idx}" for idx in range(1, 16)]})
-    sampler = FixedSizeUserInteractionCandidateSampler(
+    sampler = CappedUserInteractionCandidateSampler(
         negative_ratio=3,
         total_items=8,
         seed=0,
