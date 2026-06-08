@@ -42,7 +42,6 @@ DATASET_PROMPT_COLUMNS = {
             "item_genres_json",
             "item_tags_json",
             "playtime_forever",
-            "target_played_120",
         ),
         "candidate_description_columns": (
             "item_title",

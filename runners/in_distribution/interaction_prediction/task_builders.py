@@ -25,7 +25,7 @@ TOTAL_CANDIDATE_ITEMS = 20 # Cap, not guaranteed size: for m=1 and 5 held-out po
 
 DATASET_HISTORY_CONTEXT_COLUMNS = {
     "ml-1m": ("rating",),
-    "steam": ("playtime_forever", "target_played_120"),
+    "steam": ("playtime_forever",),
 }
 
 
