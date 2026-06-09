@@ -110,14 +110,21 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
             user_column=self.user_column,
             item_column=self.item_column,
         )
+        val_rows = self.sampler.sample(
+            split.val,
+            interactions=interactions,
+            items=items,
+        )
+        val_negative_pairs = self._sampled_pairs(val_rows)
+        test_rows = self.sampler.sample(
+            split.test,
+            interactions=interactions,
+            items=items,
+            excluded_pairs=val_negative_pairs,
+        )
+
         val = self._with_features(
-            rows=self._without_history_context(
-                self.sampler.sample(
-                    split.val,
-                    interactions=interactions,
-                    items=items,
-                )
-            ),
+            rows=self._without_history_context(val_rows),
             user_features=user_features,
             item_features=item_features,
             columns=task_columns,
@@ -125,13 +132,7 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
             item_column=self.item_column,
         )
         test = self._with_features(
-            rows=self._without_history_context(
-                self.sampler.sample(
-                    split.test,
-                    interactions=interactions,
-                    items=items,
-                )
-            ),
+            rows=self._without_history_context(test_rows),
             user_features=user_features,
             item_features=item_features,
             columns=task_columns,
@@ -199,6 +200,20 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
         for column in self.history_context_columns:
             rows[column] = pd.NA
         return rows
+
+    def _sampled_pairs(self, rows: pd.DataFrame) -> set[tuple[Any, Any]]:
+        """Return sampled negative pairs to exclude from later splits."""
+
+        if rows.empty:
+            return set()
+        sampled_rows = rows[rows[self.sampled_column].astype(bool)]
+        return set(
+            zip(
+                sampled_rows[self.user_column],
+                sampled_rows[self.item_column],
+                strict=True,
+            )
+        )
 
     def _task_columns(
         self,

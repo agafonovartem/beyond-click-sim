@@ -25,6 +25,10 @@ comparison is biased too.
 **Fix:** shuffle candidates within each group using a fixed per-group seed before building
 the prompt. Optionally add a position-bias diagnostic (permute order, measure score drift).
 
+**Resolution:** candidate rows are now shuffled within each candidate group using a stable
+per-group seed in `src/beyond_click_sim/tasks/samplers.py`. Tests cover both
+`NonInteractionCandidateSampler` and `CappedUserInteractionCandidateSampler`.
+
 ## 2. `MAX_LLM_ERRORS` aborts the whole run instead of skipping
 
 `_score_groups` stops the entire scoring loop once the error count reaches `MAX_LLM_ERRORS`
@@ -52,3 +56,8 @@ train/val/test.
 
 Currently low-impact (val is not yet used to select anything for the LLM, and the popularity
 threshold is a single scalar), but worth fixing for a clean evaluation protocol.
+
+**Resolution:** `AlignmentInteractionTaskBuilder` now samples validation candidates first,
+collects validation sampled-negative `(user_id, item_id)` pairs, and passes them as
+`excluded_pairs` when sampling test candidates. Samplers still allow repeated negatives
+within a split, but val/test sampled-negative pairs are disjoint.

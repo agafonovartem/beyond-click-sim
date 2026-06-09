@@ -12,7 +12,11 @@ from beyond_click_sim.tasks.base import (
     TaskSplit,
     split_xy,
 )
-from beyond_click_sim.tasks.filters import MinUserInteractionsFilter
+from beyond_click_sim.tasks.filters import (
+    MinUserInteractionsFilter,
+    SampleUsersFilter,
+    SequentialDatasetFilter,
+)
 from beyond_click_sim.tasks.samplers import (
     CappedUserInteractionCandidateSampler,
     NonInteractionCandidateSampler,
@@ -27,6 +31,8 @@ __all__ = [
     "MinUserInteractionsFilter",
     "NonInteractionCandidateSampler",
     "RandomFractionSplitter",
+    "SampleUsersFilter",
+    "SequentialDatasetFilter",
     "SplitFrames",
     "Splitter",
     "Task",

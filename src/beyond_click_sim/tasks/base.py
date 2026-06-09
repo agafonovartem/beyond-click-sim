@@ -119,6 +119,7 @@ class CandidateSampler(ABC):
         *,
         interactions: pd.DataFrame,
         items: pd.DataFrame,
+        excluded_pairs: set[tuple[Any, Any]] | None = None,
     ) -> pd.DataFrame:
         """Return candidate rows for one held-out split."""
 
@@ -223,7 +224,32 @@ class TaskBuilder(ABC):
 
         payload: dict[str, Any] = {"class": component.__class__.__name__}
         if is_dataclass(component):
-            payload.update(asdict(component))
+            raw_payload = asdict(component)
         elif hasattr(component, "__dict__"):
-            payload.update(vars(component))
+            raw_payload = vars(component)
+        else:
+            raw_payload = {}
+        payload.update(
+            {
+                key: TaskBuilder._manifest_value(value)
+                for key, value in raw_payload.items()
+            }
+        )
         return payload
+
+    @staticmethod
+    def _manifest_value(value: Any) -> Any:
+        """Convert nested task components into JSON-friendly values."""
+
+        if isinstance(value, (DatasetFilter, Splitter, CandidateSampler)):
+            return TaskBuilder._component_manifest(value)
+        if isinstance(value, tuple):
+            return [TaskBuilder._manifest_value(item) for item in value]
+        if isinstance(value, list):
+            return [TaskBuilder._manifest_value(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                key: TaskBuilder._manifest_value(item)
+                for key, item in value.items()
+            }
+        return value
