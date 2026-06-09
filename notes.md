@@ -18,7 +18,12 @@
 5.
     LLM simulator vs classic RS baselines is an asymmetric information regime by design. LLM sees one user's history and item metadata, but also has a pretrained world prior and possible memorized knowledge. Classic RS methods use train interactions from many users as their natural population-level signal. Therefore, limiting evaluation to 1000 users can mean two different questions:
 
-    - **Simulator question:** train classic RS on full train, let LLM use per-user history, and evaluate all methods on the same deterministic 1000-user candidate subset. Here 1000 users is an evaluation budget, not a dataset filter.
-    - **Agent4Rec/SimUSER-style reproduction:** sample 1000 eligible users before split and build the whole task only on them. This is closer to the "1000 agents" setup, but it intentionally limits classic RS training signal.
+    - **Simulator question:** train classic RS on full train, let LLM use per-user history, and evaluate all methods on the same deterministic 1000-user candidate subset. Here 1000 users is an evaluation budget that should be implemented in `CandidateSampler`, not a dataset filter.
+    - **Agent4Rec/SimUSER-style reproduction:** sample 1000 eligible users before split and build the whole task only on them. This would be a `DatasetFilter` before splitting. It is closer to the "1000 agents" setup, but it intentionally limits classic RS training signal.
 
     We should not silently mix these protocols. If both are useful, name them explicitly, e.g. `full_train_eval1000` and `sampled_users_train_eval1000`.
+6.
+    **Idea: select LLM scorer config on validation.** Treat LLM scorer choices as hyperparameters tuned on the validation split, with the test split evaluated only once at the end: `max_history_items` (history length), prompt wording/template, history composition (positive-only vs positive+negative), and metadata visibility (titles/genres/popularity/avg rating). "Tuning" here means config/prompt selection — optionally prompt or prefix tuning, or an automated prompt-search loop — not weight training. This matters once we compare prompt/config variants; otherwise we risk selecting on test. The yes/no scorer needs no threshold, so without such selection no val set is required.
+
+7.
+    **Idea: use `logprob(yes)` as a continuous LLM score.** The yes/no scorer returns hard 0/1, which already supports pointwise metrics and (coarse, tie-heavy) ranking. Reading the probability of the `yes` token from `top_logprobs` (supported by vLLM and the OpenAI API) would give a continuous score, enabling finer-grained ranking (NDCG/HR), threshold-free metrics (AUC/PR-AUC), and cleaner comparability with score-based baselines (popularity, MF, ...). Caveat: not all endpoints expose logprobs, and the values need not be calibrated.
