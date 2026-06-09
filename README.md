@@ -117,7 +117,7 @@ Run one popularity-baseline interaction task:
 
 ```bash
 uv run python -m runners.in_distribution.interaction_prediction.run \
-  --tasks ml-1m_cap20_m1_seed0 \
+  --tasks ml-1m_cap20_eval_users1000_m1_seed0 \
   --methods popularity_f1_threshold
 ```
 
@@ -127,7 +127,7 @@ Run an Ollama LLM smoke test:
 ollama pull llama3.1:8b
 
 uv run python -m runners.in_distribution.interaction_prediction.run \
-  --tasks ml-1m_cap20_m1_seed0 \
+  --tasks ml-1m_cap20_eval_users1000_m1_seed0 \
   --methods llm_yes_no_ollama_llama31_8b_smoke
 ```
 
@@ -135,9 +135,14 @@ Run a vLLM-backed Llama 3.3 70B smoke test:
 
 ```bash
 uv run python -m runners.in_distribution.interaction_prediction.run \
-  --tasks ml-1m_cap20_m1_seed0 \
+  --tasks ml-1m_cap20_eval_users1000_m1_seed0 \
   --methods llm_yes_no_vllm_llama33_70b_smoke
 ```
+
+The default interaction tasks use `eval_users1000`: classic scorers are trained on
+the full train split, while validation/test candidate construction is capped to a
+deterministic 1000 held-out users per split. Full-scale tasks remain available by
+omitting the `eval_users1000` part, e.g. `ml-1m_cap20_m1_seed0`.
 
 Available interaction-prediction methods:
 

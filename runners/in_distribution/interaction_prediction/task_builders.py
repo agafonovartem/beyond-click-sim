@@ -22,6 +22,7 @@ TRAIN_FRACTION = 0.7
 VAL_FRACTION = 0.1
 TEST_FRACTION = 0.2
 TOTAL_CANDIDATE_ITEMS = 20 # Cap, not guaranteed size: for m=1 and 5 held-out positives, group size is 10.
+EVAL_USERS = 1000
 
 DATASET_HISTORY_CONTEXT_COLUMNS = {
     "ml-1m": ("rating",),
@@ -29,12 +30,19 @@ DATASET_HISTORY_CONTEXT_COLUMNS = {
 }
 
 
-def build_alignment_task(dataset_name: str, negative_ratio: int, seed: int) -> Task:
+def build_alignment_task(
+    dataset_name: str,
+    negative_ratio: int,
+    seed: int,
+    *,
+    max_eval_users: int | None = None,
+) -> Task:
     """Build one interaction-prediction task for a dataset, ratio, and seed."""
 
     dataset = load_canonical_dataset(dataset_name)
+    eval_suffix = "" if max_eval_users is None else f"_eval_users{max_eval_users}"
     builder = AlignmentInteractionTaskBuilder(
-        name=f"{dataset_name}_interaction_cap20_m{negative_ratio}_seed{seed}",
+        name=f"{dataset_name}_interaction_cap20{eval_suffix}_m{negative_ratio}_seed{seed}",
         dataset_filter=MinUserInteractionsFilter(min_interactions=MIN_INTERACTIONS),
         splitter=RandomFractionSplitter(
             train_fraction=TRAIN_FRACTION,
@@ -45,6 +53,7 @@ def build_alignment_task(dataset_name: str, negative_ratio: int, seed: int) -> T
         sampler=CappedUserInteractionCandidateSampler(
             negative_ratio=negative_ratio,
             total_items=TOTAL_CANDIDATE_ITEMS,
+            max_eval_users=max_eval_users,
             seed=seed,
         ),
         history_context_columns=DATASET_HISTORY_CONTEXT_COLUMNS[dataset_name],
@@ -80,15 +89,26 @@ def data_root() -> Path:
     raise RuntimeError("Could not find data/canonical")
 
 
-def _make_builder(dataset_name: str, negative_ratio: int, seed: int) -> Callable[[], Task]:
+def _make_builder(
+    dataset_name: str,
+    negative_ratio: int,
+    seed: int,
+    *,
+    max_eval_users: int | None = None,
+) -> Callable[[], Task]:
     def build() -> Task:
-        return build_alignment_task(dataset_name, negative_ratio, seed)
+        return build_alignment_task(
+            dataset_name,
+            negative_ratio,
+            seed,
+            max_eval_users=max_eval_users,
+        )
 
     return build
 
 
 # TODO: make it parameter dependent. I want to pass seeds, ratios, dataset and get the collections of tasks.
-TASK_BUILDERS: dict[str, Callable[[], Task]] = {
+FULL_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     f"{dataset_name}_cap20_m{negative_ratio}_seed{seed}": _make_builder(
         dataset_name,
         negative_ratio,
@@ -97,4 +117,22 @@ TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     for dataset_name in DATASETS
     for negative_ratio in NEGATIVE_RATIOS
     for seed in SEEDS
+}
+
+EVAL1000_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
+    f"{dataset_name}_cap20_eval_users{EVAL_USERS}_m{negative_ratio}_seed{seed}": _make_builder(
+        dataset_name,
+        negative_ratio,
+        seed,
+        max_eval_users=EVAL_USERS,
+    )
+    for dataset_name in DATASETS
+    for negative_ratio in NEGATIVE_RATIOS
+    for seed in SEEDS
+}
+
+DEFAULT_TASK_NAMES = list(EVAL1000_TASK_BUILDERS)
+TASK_BUILDERS: dict[str, Callable[[], Task]] = {
+    **EVAL1000_TASK_BUILDERS,
+    **FULL_TASK_BUILDERS,
 }

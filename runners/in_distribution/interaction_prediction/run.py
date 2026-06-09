@@ -7,12 +7,13 @@ from time import perf_counter
 
 from runners.in_distribution.interaction_prediction.methods import METHOD_RUNNERS
 from runners.in_distribution.interaction_prediction.task_builders import (
+    DEFAULT_TASK_NAMES,
     TASK_BUILDERS,
     repo_root,
 )
 
 
-DEFAULT_TASKS = list(TASK_BUILDERS)
+DEFAULT_TASKS = DEFAULT_TASK_NAMES
 DEFAULT_METHODS = ["popularity_f1_threshold"]
 DEFAULT_OUTPUT_DIR = repo_root() / "outputs" / "in_distribution" / "interaction_prediction"
 
