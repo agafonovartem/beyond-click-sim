@@ -74,6 +74,12 @@ For direct LLM yes/no protocols, no threshold is needed: the prompt/parser alrea
 
 For pointwise threshold selection, validation should use the same candidate construction as test.
 
+For candidate-grouped pointwise tasks, aggregate the headline metric as
+`macro_by_user_group_mean`: compute the metric inside each candidate group, average groups
+within the same user, then average users equally. Keep `macro_by_group` and `micro` as
+diagnostics, not as the headline. Threshold selection for score-based methods should use
+the same user-group aggregation as the reported test metric.
+
 Threshold and hyperparameter selection belongs to the experiment loop, not to metric functions.
 
 Ranking is a separate protocol: sorting candidates within `candidate_group` and reporting HR@K/NDCG@K/MRR should not be silently mixed with pointwise alignment metrics.

@@ -166,7 +166,7 @@ Important distinction: `Scorer` answers how the user would respond; `Policy` ans
 
 Stage 1 does not need a stateful evaluator class. Metrics should be stateless functions. Threshold selection, hyperparameter selection, and prompt selection belong to the experiment loop and must use validation only.
 
-For pointwise interaction / positive preference prediction: `apply_threshold(scores, threshold)` converts scores into binary predictions, `find_best_threshold(y_val, val_scores, metric)` can be used by the experiment loop on validation, and `binary_classification_metrics(y_true, y_pred)` computes accuracy, precision, recall, and F1.
+For pointwise interaction / positive preference prediction: `apply_threshold(scores, threshold)` converts scores into binary predictions, `find_best_threshold(y_val, val_scores, metric)` can be used by the experiment loop on validation for ungrouped tasks, and `binary_classification_metrics(y_true, y_pred)` computes accuracy, precision, recall, and F1. For the current candidate-grouped interaction protocol, the headline aggregation is `macro_by_user_group_mean`: compute the metric per candidate group, average groups within each user, then average users equally. Score-based baselines should select thresholds on validation with the same user-group aggregation that is reported on test.
 
 For candidate ranking interaction / positive preference prediction: `ranking_metrics(y_true, scores, candidate_group, ks)` sorts rows within each candidate group and computes HR@K, NDCG@K, MRR, and related ranking metrics.
 

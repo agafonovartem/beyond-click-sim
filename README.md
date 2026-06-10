@@ -148,7 +148,7 @@ Available interaction-prediction methods:
 
 | Method | Description |
 | --- | --- |
-| `popularity_f1_threshold` | Item-popularity scorer with validation-selected F1 threshold. |
+| `popularity_f1_threshold` | Item-popularity scorer with a validation-selected `macro_by_user_group_mean_f1` threshold. |
 | `llm_yes_no_ollama_llama31_8b_smoke` | Local Ollama Llama 3.1 8B yes/no scorer on a small candidate-group subset. |
 | `llm_yes_no_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B yes/no scorer on the full selected task. |
 | `llm_yes_no_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B yes/no scorer on a small candidate-group subset. |
@@ -172,10 +172,22 @@ outputs/in_distribution/interaction_prediction/
 
 `llm_errors.jsonl` is produced by LLM methods and may be empty.
 
+For grouped pointwise interaction runs, the headline metric is
+`test.macro_by_user_group_mean.f1`: compute the metric per candidate group, average groups
+within each user, then average users equally. `macro_by_group` and `micro` remain diagnostic
+metrics in `metrics.json`.
+
+Old fixed-prediction LLM runs can be migrated to the current metric schema without new LLM
+calls:
+
+```bash
+uv run python runners/in_distribution/interaction_prediction/recompute_metrics.py RUN_DIR
+```
+
 Before trusting a result, inspect:
 
 - `manifest.json` for dataset, split, target, sampler, scorer, prompt/model config, and git commit;
-- `metrics.json` for validation/test metrics and candidate-group diagnostics;
+- `metrics.json` for validation/test metrics, user-level headline metrics, and candidate-group diagnostics;
 - `predictions.parquet` for row-level scores and predictions;
 - `issues.md` for known current validity issues.
 
