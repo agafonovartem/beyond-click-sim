@@ -8,8 +8,9 @@ import pandas as pd
 from beyond_click_sim.evaluation import (
     apply_threshold,
     binary_classification_metrics,
-    find_best_group_threshold,
+    find_best_user_group_threshold,
     grouped_binary_classification_metrics,
+    user_grouped_binary_classification_metrics,
 )
 from beyond_click_sim.scorers import PopularityScorer
 from beyond_click_sim.tasks import Task
@@ -24,7 +25,7 @@ from runners.in_distribution.interaction_prediction.task_builders import repo_ro
 
 
 METHOD_NAME = "popularity_f1_threshold"
-THRESHOLD_METRIC = "macro_group_f1"
+THRESHOLD_METRIC = "macro_by_user_group_mean_f1"
 
 
 def run(task: Task, output_dir: Path) -> dict[str, object]:
@@ -56,10 +57,11 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
     _record_stage(stage_times, "score_test", stage_start)
 
     stage_start = perf_counter()
-    threshold_selection = find_best_group_threshold(
+    threshold_selection = find_best_user_group_threshold(
         y_val,
         val_scores,
         X_val[candidate_group_column],
+        X_val["user_id"],
         metric="f1",
     )
     threshold = float(threshold_selection["threshold"])
@@ -76,10 +78,22 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
         val_predictions,
         X_val[candidate_group_column],
     )
+    val_user_group_metrics = user_grouped_binary_classification_metrics(
+        y_val,
+        val_predictions,
+        X_val[candidate_group_column],
+        X_val["user_id"],
+    )
     test_macro_metrics = grouped_binary_classification_metrics(
         y_test,
         test_predictions,
         X_test[candidate_group_column],
+    )
+    test_user_group_metrics = user_grouped_binary_classification_metrics(
+        y_test,
+        test_predictions,
+        X_test[candidate_group_column],
+        X_test["user_id"],
     )
     val_micro_metrics = binary_classification_metrics(y_val, val_predictions)
     test_micro_metrics = binary_classification_metrics(y_test, test_predictions)
@@ -149,13 +163,15 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
     metrics = {
         "method": METHOD_NAME,
         "task": task.name,
-        "main_metric": "test.macro_by_group.f1",
+        "main_metric": "test.macro_by_user_group_mean.f1",
         "val": {
             "macro_by_group": val_macro_metrics,
+            "macro_by_user_group_mean": val_user_group_metrics,
             "micro": val_micro_metrics,
         },
         "test": {
             "macro_by_group": test_macro_metrics,
+            "macro_by_user_group_mean": test_user_group_metrics,
             "micro": test_micro_metrics,
         },
         "threshold": threshold,

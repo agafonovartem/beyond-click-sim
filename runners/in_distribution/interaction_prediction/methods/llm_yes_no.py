@@ -10,6 +10,7 @@ from tqdm import tqdm
 from beyond_click_sim.evaluation import (
     binary_classification_metrics,
     grouped_binary_classification_metrics,
+    user_grouped_binary_classification_metrics,
 )
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMInteractionYesNoScorer
@@ -168,6 +169,12 @@ def run_method(
         predictions,
         valid_X[candidate_group_column],
     )
+    user_group_metrics = user_grouped_binary_classification_metrics(
+        valid_y,
+        predictions,
+        valid_X[candidate_group_column],
+        valid_X["user_id"],
+    )
     micro_metrics = binary_classification_metrics(valid_y, predictions)
     requested_candidate_groups = candidate_group_summary(
         X_test,
@@ -226,9 +233,10 @@ def run_method(
     result = {
         "method": method_name,
         "task": task.name,
-        "main_metric": "test.macro_by_group.f1",
+        "main_metric": "test.macro_by_user_group_mean.f1",
         "test": {
             "macro_by_group": macro_metrics,
+            "macro_by_user_group_mean": user_group_metrics,
             "micro": micro_metrics,
         },
         "llm_errors": len(errors),

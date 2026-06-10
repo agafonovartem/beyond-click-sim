@@ -6,7 +6,9 @@ from beyond_click_sim.evaluation.binary import (
     find_best_group_threshold,
     find_best_threshold,
     find_best_threshold_by_metric,
+    find_best_user_group_threshold,
     grouped_binary_classification_metrics,
+    user_grouped_binary_classification_metrics,
 )
 
 __all__ = [
@@ -15,5 +17,7 @@ __all__ = [
     "find_best_group_threshold",
     "find_best_threshold",
     "find_best_threshold_by_metric",
+    "find_best_user_group_threshold",
     "grouped_binary_classification_metrics",
+    "user_grouped_binary_classification_metrics",
 ]

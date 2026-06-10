@@ -56,3 +56,44 @@ variant.
 
 **Fix:** make the registry key and `task.name` identical (pick one convention), or record
 both the registry key and the builder name in the manifest.
+
+## 4. Headline metric averages over candidate groups, not users (heavy-user weighting)
+
+The reported metric (`test.macro_by_group.f1`) and the popularity threshold selection both
+average every candidate group **equally**: `grouped_binary_classification_metrics`
+(`src/beyond_click_sim/evaluation/binary.py:45-120`) and `find_best_group_threshold`
+(`runners/in_distribution/interaction_prediction/methods/popularity.py:59-64`).
+
+But a candidate group is a prompt-size **chunk**, not a user.
+`CappedUserInteractionCandidateSampler` splits a user's held-out positives into
+`g_u = ceil(P_u / max_positive_items)` groups, where
+`max_positive_items = total_items // (negative_ratio + 1)`
+(`src/beyond_click_sim/tasks/samplers.py:232,256-258`). So `g_u` grows with the user's
+activity **and** with `negative_ratio`. Averaging equally over groups therefore weights each
+user by their chunk count, not equally.
+
+Concretely, with per-user group means `mean_u` the current metric is
+`M_group = Σ_u (g_u / Σ g) · mean_u` (weight ∝ group count), whereas a per-user metric is
+`M_user = Σ_u (1 / U) · mean_u` (equal weight). They coincide only if every user has the
+same `g_u`. So the headline silently up-weights heavy users by an amount that also depends
+on the `negative_ratio` sweep axis — exactly the users and the knob we are studying.
+
+**Status:** fixed in code by reporting `macro_by_user_group_mean` and using the same
+aggregation for popularity threshold selection. Old outputs with `main_metric =
+test.macro_by_group.f1` still need recomputation or migration; fixed-prediction LLM runs
+can be migrated from `predictions.parquet`, while popularity runs should be rerun because
+the selected threshold can change.
+
+## 5. Note: per-group F1 is quantized on small groups
+
+Not a defect, a caveat to keep in mind when reading #4. Per-group F1 is computed from very
+few positives once `negative_ratio` is large: at m=9 a group has 2 positives, so per-group
+recall ∈ {0, 0.5, 1}; at m=19, 1 positive, recall ∈ {0, 1}
+(`src/beyond_click_sim/tasks/samplers.py:232`). Averaging these coarse per-group F1 values
+is a high-variance estimator that gets coarser as `negative_ratio` grows.
+
+This quantization already existed in the old group-macro metric. The two-level fix in #4
+re-weights users but **reuses the same per-group F1**, so it neither adds nor removes this
+noise. This is intentional for the current protocol: the candidate group is the LLM prompt
+context, and the fixed headline now changes only the user weighting, not the within-prompt
+decision unit.

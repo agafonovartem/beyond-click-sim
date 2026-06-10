@@ -10,7 +10,9 @@ from beyond_click_sim.evaluation import (
     find_best_group_threshold,
     find_best_threshold,
     find_best_threshold_by_metric,
+    find_best_user_group_threshold,
     grouped_binary_classification_metrics,
+    user_grouped_binary_classification_metrics,
 )
 
 
@@ -68,6 +70,51 @@ def test_grouped_binary_classification_metrics_average_groups_equally() -> None:
     assert metrics["n"] == 6
     assert metrics["n_positive"] == 2
     assert metrics["n_predicted_positive"] == 5
+
+
+def test_user_grouped_binary_classification_metrics_average_groups_then_users() -> None:
+    y_true = pd.Series([1, 0, 1, 0, 1, 0])
+    y_pred = pd.Series([1, 1, 0, 0, 1, 0])
+    groups = pd.Series(["u1-g1", "u1-g1", "u1-g2", "u1-g2", "u2-g1", "u2-g1"])
+    users = pd.Series(["u1", "u1", "u1", "u1", "u2", "u2"])
+
+    group_metrics = grouped_binary_classification_metrics(y_true, y_pred, groups)
+    user_group_metrics = user_grouped_binary_classification_metrics(
+        y_true,
+        y_pred,
+        groups,
+        users,
+    )
+
+    assert group_metrics["f1"] == pytest.approx(((2 / 3) + 0.0 + 1.0) / 3)
+    assert user_group_metrics["f1"] == pytest.approx((((2 / 3) + 0.0) / 2 + 1.0) / 2)
+    assert user_group_metrics["f1"] != pytest.approx(group_metrics["f1"])
+    assert user_group_metrics["accuracy"] == pytest.approx((0.5 + 1.0) / 2)
+    assert user_group_metrics["precision"] == pytest.approx((0.25 + 1.0) / 2)
+    assert user_group_metrics["recall"] == pytest.approx((0.5 + 1.0) / 2)
+    assert user_group_metrics["n_users"] == 2
+    assert user_group_metrics["n_groups"] == 3
+    assert user_group_metrics["n"] == 6
+    assert user_group_metrics["n_positive"] == 3
+    assert user_group_metrics["n_predicted_positive"] == 3
+
+
+def test_user_grouped_binary_classification_matches_group_macro_for_one_group_per_user() -> None:
+    y_true = pd.Series([1, 0, 1, 0])
+    y_pred = pd.Series([1, 1, 1, 0])
+    groups = pd.Series(["u1-g1", "u1-g1", "u2-g1", "u2-g1"])
+    users = pd.Series(["u1", "u1", "u2", "u2"])
+
+    group_metrics = grouped_binary_classification_metrics(y_true, y_pred, groups)
+    user_group_metrics = user_grouped_binary_classification_metrics(
+        y_true,
+        y_pred,
+        groups,
+        users,
+    )
+
+    for metric in ["accuracy", "precision", "recall", "f1"]:
+        assert user_group_metrics[metric] == pytest.approx(group_metrics[metric])
 
 
 def test_find_best_threshold_selects_threshold_by_metric() -> None:
@@ -177,6 +224,41 @@ def test_find_best_group_threshold_matches_brute_force(metric: str) -> None:
     assert selection["metric_value"] == pytest.approx(brute_value)
 
 
+@pytest.mark.parametrize("metric", ["accuracy", "precision", "recall", "f1"])
+def test_find_best_user_group_threshold_matches_brute_force(metric: str) -> None:
+    y_true = pd.Series([1, 0, 1, 0, 1, 0])
+    scores = pd.Series([0.9, 0.8, 0.7, 0.6, 0.2, 0.1])
+    groups = pd.Series(["u1-g1", "u1-g1", "u1-g2", "u1-g2", "u2-g1", "u2-g1"])
+    users = pd.Series(["u1", "u1", "u1", "u1", "u2", "u2"])
+    unique_scores = sorted(float(score) for score in scores.dropna().unique())
+    thresholds = [float(np.nextafter(unique_scores[-1], np.inf)), *unique_scores]
+
+    brute_threshold = thresholds[0]
+    brute_value = -1.0
+    for threshold in thresholds:
+        value = user_grouped_binary_classification_metrics(
+            y_true,
+            apply_threshold(scores, threshold),
+            groups,
+            users,
+        )[metric]
+        if value > brute_value:
+            brute_threshold = threshold
+            brute_value = float(value)
+
+    selection = find_best_user_group_threshold(
+        y_true,
+        scores,
+        groups,
+        users,
+        metric=metric,  # type: ignore[arg-type]
+    )
+
+    assert selection["threshold"] == brute_threshold
+    assert selection["metric"] == f"macro_by_user_group_mean_{metric}"
+    assert selection["metric_value"] == pytest.approx(brute_value)
+
+
 def test_find_best_threshold_rejects_unsupported_metric() -> None:
     y_true = pd.Series([1])
     scores = pd.Series([0.5])
@@ -189,6 +271,15 @@ def test_find_best_threshold_rejects_unsupported_metric() -> None:
             y_true,
             scores,
             pd.Series(["a"]),
+            metric="auc",  # type: ignore[arg-type]
+        )
+
+    with pytest.raises(ValueError, match="Unsupported metric"):
+        find_best_user_group_threshold(
+            y_true,
+            scores,
+            pd.Series(["a"]),
+            pd.Series(["u"]),
             metric="auc",  # type: ignore[arg-type]
         )
 
@@ -225,6 +316,22 @@ def test_binary_helpers_require_same_length() -> None:
             pd.Series([1]),
             pd.Series([1]),
             pd.Series(["a", "b"]),
+        )
+
+    with pytest.raises(ValueError, match="same length"):
+        user_grouped_binary_classification_metrics(
+            pd.Series([1]),
+            pd.Series([1]),
+            pd.Series(["a"]),
+            pd.Series(["u", "v"]),
+        )
+
+    with pytest.raises(ValueError, match="same length"):
+        find_best_user_group_threshold(
+            pd.Series([1]),
+            pd.Series([0.1]),
+            pd.Series(["a"]),
+            pd.Series(["u", "v"]),
         )
 
     with pytest.raises(ValueError, match="same length"):
