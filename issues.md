@@ -7,29 +7,7 @@ baselines, temporal/stratified splitters, policy-ranking, OOD, behavioral extrap
 memorization — is not listed here; it lives in the design notes (`architecture_note.md`,
 `in_distribution_scenarios.md`, `notes.md`).
 
-## 1. LLM candidate sets are not shuffled (position/label confound)
-
-`CappedUserInteractionCandidateSampler.sample` emits each group's rows positives-first,
-then negatives (`src/beyond_click_sim/tasks/samplers.py:230-252`). That order is preserved
-through the builder and runner, and `LLMInteractionYesNoScorer.score` labels candidates
-`C1..Cn` in row order (`src/beyond_click_sim/scorers/llm.py:147-157`). So in **every**
-candidate group the LLM sees the true positives as `C1..Ck`, followed by the negatives.
-
-This is not answer leakage (the model is never told the labels), but candidate position
-becomes perfectly correlated with the label. LLMs have well-documented primacy/position
-selection bias, so the measured alignment partly reflects presentation order rather than
-user-simulation ability — most plausibly inflating the LLM numbers. The popularity
-baseline is unaffected (it scores by item, ignoring order), so the LLM-vs-popularity
-comparison is biased too.
-
-**Fix:** shuffle candidates within each group using a fixed per-group seed before building
-the prompt. Optionally add a position-bias diagnostic (permute order, measure score drift).
-
-**Resolution:** candidate rows are now shuffled within each candidate group using a stable
-per-group seed in `src/beyond_click_sim/tasks/samplers.py`. Tests cover both
-`NonInteractionCandidateSampler` and `CappedUserInteractionCandidateSampler`.
-
-## 2. `MAX_LLM_ERRORS` aborts the whole run instead of skipping
+## 1. `MAX_LLM_ERRORS` aborts the whole run instead of skipping
 
 `_score_groups` stops the entire scoring loop once the error count reaches `MAX_LLM_ERRORS`
 (= 3): `runners/in_distribution/interaction_prediction/methods/llm_yes_no.py:37,271,293-296`.
@@ -40,24 +18,41 @@ malformed/parse-failed outputs early, and the run aborts, discarding all work.
 **Fix:** make the budget large or a fraction of the total group count, and skip-and-continue
 instead of aborting. Keep reporting scored-vs-requested coverage.
 
-## 3. Per-user candidate items are not guaranteed disjoint across splits (val vs test negatives)
+## 2. `candidate_group` ids collide between val and test splits
 
-Negatives exclude all observed items, so they never collide with any positive, and positives
-are already item-disjoint across splits (one row per user-item in both datasets). The
-remaining gap: val and test negatives come from independent `sampler.sample(...)` calls that
-share the same per-user group id, so the same unobserved item can be drawn as a negative in
-both val and test — i.e. the same `(user, item, target=0)` instance appears in two splits.
+`CappedUserInteractionCandidateSampler._candidate_group_id` builds the group id from only
+the user and chunk position — `candidate:user:{user_id}:chunk:{chunk_position}`
+(`src/beyond_click_sim/tasks/samplers.py:375-378`). The id does not encode the split, so
+user `U`'s chunk `0` gets the **same** `candidate_group` value in both `task.val` and
+`task.test`.
 
-Changing the seed only makes the collision unlikely, not impossible (two independent draws
-from the same pool can still overlap). A correct fix coordinates negative sampling across
-splits: draw val and test negatives jointly per user, or pass val negatives as an exclusion
-set when sampling test negatives, so per-user candidate items are guaranteed disjoint across
-train/val/test.
+Within-split metrics are unaffected: both methods group val and test separately. The risk
+is downstream. The popularity runner writes a single `predictions.parquet` containing both
+splits, distinguished only by a `split` column while the `candidate_group` values are
+identical across splits (`runners/in_distribution/interaction_prediction/methods/popularity.py:104-123`).
+Any later analysis that does `groupby("candidate_group")` without also grouping on `split`
+will silently merge a val group with its test counterpart, mixing splits in per-group
+aggregates.
 
-Currently low-impact (val is not yet used to select anything for the LLM, and the popularity
-threshold is a single scalar), but worth fixing for a clean evaluation protocol.
+**Fix:** namespace the group id by split (e.g. prefix with the split name in the builder),
+or document that `candidate_group` is unique only within a split and require analyses to
+group by `(split, candidate_group)`.
 
-**Resolution:** `AlignmentInteractionTaskBuilder` now samples validation candidates first,
-collects validation sampled-negative `(user_id, item_id)` pairs, and passes them as
-`excluded_pairs` when sampling test candidates. Samplers still allow repeated negatives
-within a split, but val/test sampled-negative pairs are disjoint.
+## 3. Task registry key disagrees with `task.name` (provenance)
+
+The task registry key — e.g. `ml-1m_cap20_eval_users1000_m1_seed0` — is what the CLI takes
+and what drives the output directory name
+(`runners/in_distribution/interaction_prediction/task_builders.py:111-132`,
+`runners/in_distribution/interaction_prediction/run.py:24,95-97`). But the builder sets a
+different `task.name` — `ml-1m_interaction_cap20_eval_users1000_m1_seed0` (note the extra
+`interaction`) — and that name is what gets recorded inside `metrics.json` / `manifest.json`
+(`task_builders.py:45`). So the output folder name and the `task` field stored inside it
+disagree, and there are effectively two identifiers for the same task.
+
+This is harmless to results but hurts provenance: matching a metrics file back to the run
+folder or the CLI invocation requires knowing about the rename. It predates the eval1000
+change (the full-scale builders have the same split) but eval1000 adds a third naming
+variant.
+
+**Fix:** make the registry key and `task.name` identical (pick one convention), or record
+both the registry key and the builder name in the manifest.
