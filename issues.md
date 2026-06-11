@@ -7,16 +7,15 @@ baselines, temporal/stratified splitters, direct re-ranking prompts, policy-rank
 behavioral extrapolation, memorization — is not listed here; it lives in the design notes
 (`architecture_note.md`, `in_distribution_scenarios.md`, `notes.md`).
 
-## 1. `MAX_LLM_ERRORS` aborts the whole run instead of skipping
+## 1. LLM metrics skip failed candidate groups
 
-`_score_groups` stops the entire scoring loop once the error count reaches `MAX_LLM_ERRORS`
-(= 3): `runners/in_distribution/interaction_prediction/methods/llm_yes_no.py:37,271,293-296`.
-Errored groups are already skipped and counted (their scores stay NaN and are excluded from
-metrics); only the abort is wrong. On a full run (thousands of groups) a model will exceed 3
-malformed/parse-failed outputs early, and the run aborts, discarding all work.
+LLM yes/no runs retry each candidate group up to `MAX_LLM_ATTEMPTS` times. If all attempts
+fail, the group remains in `predictions.parquet` with null `score` / `prediction`, while
+reported metrics are computed only on successfully parsed groups.
 
-**Fix:** make the budget large or a fraction of the total group count, and skip-and-continue
-instead of aborting. Keep reporting scored-vs-requested coverage.
+This means headline metrics are conditional on successful parsing. Coverage is reported via
+`llm_errors`, `scored_rows`, `requested_rows`, and requested/scored candidate-group summaries,
+but the metric value itself is not failure-penalized.
 
 ## 2. `candidate_group` ids collide between val and test splits
 

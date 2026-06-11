@@ -143,6 +143,35 @@ def test_evaluate_ranking_metrics_payload_requires_score_column() -> None:
         evaluate_ranking_metrics_payload(predictions, {"method": "llm_yes_no_test"})
 
 
+def test_evaluate_payloads_skip_null_llm_predictions() -> None:
+    predictions = pd.DataFrame(
+        {
+            "split": ["test"] * 4,
+            "user_id": ["u1", "u1", "u2", "u2"],
+            "candidate_group": ["g1", "g1", "g2", "g2"],
+            "target": [1, 0, 1, 0],
+            "score": [1.0, 0.0, None, None],
+        }
+    )
+    predictions["prediction"] = pd.Series(
+        [True, False, pd.NA, pd.NA],
+        dtype="boolean",
+    )
+
+    pointwise_metrics = evaluate_metrics_payload(
+        predictions,
+        {"method": "llm_yes_no_test"},
+    )
+    ranking_metrics = evaluate_ranking_metrics_payload(
+        predictions,
+        {"method": "llm_yes_no_test"},
+    )
+
+    assert pointwise_metrics["test"]["micro"]["n"] == 2
+    assert pointwise_metrics["test"]["macro_by_group"]["n_groups"] == 1
+    assert ranking_metrics["test"]["macro_by_group"]["n_groups"] == 1
+
+
 def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
 

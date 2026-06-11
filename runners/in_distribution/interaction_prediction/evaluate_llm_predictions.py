@@ -178,6 +178,9 @@ def evaluate_ranking_metrics_payload(
     updated = _ranking_base_payload(base_metrics)
     for split in _split_order(predictions["split"]):
         split_frame = predictions[predictions["split"].eq(split)]
+        split_frame = split_frame[split_frame["score"].notna()]
+        if split_frame.empty:
+            raise ValueError(f"No valid ranking scores for split {split!r}")
         y_true = split_frame["target"]
         scores = split_frame["score"]
         updated[str(split)] = {
@@ -209,6 +212,9 @@ def _evaluate_pointwise_predictions(
 
     for split in _split_order(predictions["split"]):
         split_frame = predictions[predictions["split"].eq(split)]
+        split_frame = split_frame[split_frame["prediction"].notna()]
+        if split_frame.empty:
+            raise ValueError(f"No valid pointwise predictions for split {split!r}")
         y_true = split_frame["target"]
         y_pred = split_frame["prediction"]
         updated[str(split)] = {

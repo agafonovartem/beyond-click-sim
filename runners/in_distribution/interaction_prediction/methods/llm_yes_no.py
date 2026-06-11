@@ -44,7 +44,7 @@ VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
 MAX_HISTORY_ITEMS = 20
 TEMPERATURE = 0.0
 MAX_TOKENS = 256
-MAX_LLM_ERRORS = 3
+MAX_LLM_ATTEMPTS = 5
 OLLAMA_MAX_WORKERS = 1
 VLLM_MAX_WORKERS = 32
 
@@ -128,7 +128,7 @@ def run_method(
     max_history_items: int = MAX_HISTORY_ITEMS,
     temperature: float = TEMPERATURE,
     max_tokens: int = MAX_TOKENS,
-    max_llm_errors: int = MAX_LLM_ERRORS,
+    max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
 ) -> dict[str, object]:
     """Run the yes/no LLM scorer for pointwise interaction alignment."""
@@ -162,29 +162,39 @@ def run_method(
         scorer,
         X_test,
         candidate_group_column=candidate_group_column,
-        max_errors=max_llm_errors,
+        max_attempts=max_llm_attempts,
         max_workers=max_workers,
     )
     valid = scores.notna()
+    predictions = scores.astype("boolean").rename("prediction")
+    prediction_frame(
+        split="test",
+        X=X_test,
+        y=y_test,
+        scores=scores,
+        predictions=predictions,
+    ).to_parquet(output_dir / "predictions.parquet", index=False)
+    _write_errors(output_dir / "llm_errors.jsonl", errors)
+
     if not valid.any():
         raise RuntimeError("LLM scorer did not produce any valid scores")
 
     valid_scores = scores.loc[valid]
     valid_X = X_test.loc[valid].copy()
     valid_y = y_test.loc[valid].copy()
-    predictions = valid_scores.astype(bool).rename("prediction")
+    valid_predictions = valid_scores.astype(bool).rename("prediction")
     macro_metrics = grouped_binary_classification_metrics(
         valid_y,
-        predictions,
+        valid_predictions,
         valid_X[candidate_group_column],
     )
     user_group_metrics = user_grouped_binary_classification_metrics(
         valid_y,
-        predictions,
+        valid_predictions,
         valid_X[candidate_group_column],
         valid_X["user_id"],
     )
-    micro_metrics = binary_classification_metrics(valid_y, predictions)
+    micro_metrics = binary_classification_metrics(valid_y, valid_predictions)
     ranking_metrics = ranking_metrics_for_split(
         X=valid_X,
         y=valid_y,
@@ -204,15 +214,6 @@ def run_method(
         sampled_column=task.schema.sampled_column,
     )
 
-    prediction_frame(
-        split="test",
-        X=valid_X,
-        y=valid_y,
-        scores=valid_scores,
-        predictions=predictions,
-    ).to_parquet(output_dir / "predictions.parquet", index=False)
-    _write_errors(output_dir / "llm_errors.jsonl", errors)
-
     root = repo_root()
     manifest = {
         "method": method_name,
@@ -231,7 +232,7 @@ def run_method(
         },
         "limits": {
             "max_candidate_groups": max_candidate_groups,
-            "max_llm_errors": max_llm_errors,
+            "max_llm_attempts": max_llm_attempts,
             "max_workers": max_workers,
         },
         "llm_errors": len(errors),
@@ -295,32 +296,43 @@ def _score_groups(
     X: pd.DataFrame,
     *,
     candidate_group_column: str,
-    max_errors: int,
+    max_attempts: int,
     max_workers: int = 1,
-) -> tuple[pd.Series, list[dict[str, str]]]:
+) -> tuple[pd.Series, list[dict[str, object]]]:
     if max_workers < 1:
         raise ValueError("max_workers must be positive")
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be positive")
 
     scores = pd.Series(index=X.index, dtype=float, name="score")
-    errors: list[dict[str, str]] = []
+    errors: list[dict[str, object]] = []
     groups = list(X.groupby(candidate_group_column, sort=False))
 
     if max_workers == 1:
         progress = tqdm(groups, desc="llm groups", unit="group")
         for group_id, group in progress:
-            group_scores, error = _score_one_group(scorer, group_id, group)
+            group_scores, error = _score_one_group(
+                scorer,
+                group_id,
+                group,
+                max_attempts=max_attempts,
+            )
             if error is not None:
                 errors.append(error)
                 progress.set_postfix(errors=len(errors))
-                if len(errors) >= max_errors:
-                    break
             else:
                 scores.loc[group_scores.index] = group_scores
         return scores, errors
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [
-            executor.submit(_score_one_group, scorer, group_id, group)
+            executor.submit(
+                _score_one_group,
+                scorer,
+                group_id,
+                group,
+                max_attempts=max_attempts,
+            )
             for group_id, group in groups
         ]
         progress = tqdm(
@@ -334,10 +346,6 @@ def _score_groups(
             if error is not None:
                 errors.append(error)
                 progress.set_postfix(errors=len(errors))
-                if len(errors) >= max_errors:
-                    for pending in futures:
-                        pending.cancel()
-                    break
             else:
                 scores.loc[group_scores.index] = group_scores
     return scores, errors
@@ -347,15 +355,25 @@ def _score_one_group(
     scorer: LLMInteractionYesNoScorer,
     group_id: object,
     group: pd.DataFrame,
-) -> tuple[pd.Series, dict[str, str] | None]:
-    try:
-        return scorer.score(group), None
-    except Exception as error:  # noqa: BLE001 - keep long LLM runs alive.
-        empty_scores = pd.Series(index=group.index, dtype=float, name="score")
-        return empty_scores, {"candidate_group": str(group_id), "error": repr(error)}
+    *,
+    max_attempts: int,
+) -> tuple[pd.Series, dict[str, object] | None]:
+    attempt_errors: list[str] = []
+    for _ in range(max_attempts):
+        try:
+            return scorer.score(group), None
+        except Exception as error:  # noqa: BLE001 - keep long LLM runs alive.
+            attempt_errors.append(repr(error))
+
+    empty_scores = pd.Series(index=group.index, dtype=float, name="score")
+    return empty_scores, {
+        "candidate_group": str(group_id),
+        "attempts": max_attempts,
+        "errors": attempt_errors,
+    }
 
 
-def _write_errors(path: Path, errors: list[dict[str, str]]) -> None:
+def _write_errors(path: Path, errors: list[dict[str, object]]) -> None:
     with path.open("w", encoding="utf-8") as file:
         for error in errors:
             file.write(json.dumps(error, sort_keys=True) + "\n")
