@@ -7,7 +7,15 @@ from typing import Any
 
 import pandas as pd
 
+from beyond_click_sim.evaluation import (
+    grouped_ranking_metrics,
+    user_grouped_ranking_metrics,
+)
 from beyond_click_sim.tasks import Task, split_xy
+from runners.in_distribution.interaction_prediction.metrics import (
+    RANKING_KS,
+    RANKING_TIE_POLICY,
+)
 
 
 def task_xy(task: Task) -> dict[str, tuple[pd.DataFrame, pd.Series]]:
@@ -66,6 +74,48 @@ def prediction_frame(
     frame["score"] = scores
     frame["prediction"] = predictions
     return frame
+
+
+def score_frame(
+    *,
+    split: str,
+    X: pd.DataFrame,
+    y: pd.Series,
+    scores: pd.Series,
+) -> pd.DataFrame:
+    frame = X.copy()
+    frame.insert(0, "split", split)
+    frame["target"] = y
+    frame["score"] = scores
+    return frame
+
+
+def ranking_metrics_for_split(
+    *,
+    X: pd.DataFrame,
+    y: pd.Series,
+    scores: pd.Series,
+    candidate_group_column: str,
+    ks: tuple[int, ...] = RANKING_KS,
+    tie_policy: str = RANKING_TIE_POLICY,
+) -> dict[str, dict[str, float | int | str]]:
+    return {
+        "macro_by_group": grouped_ranking_metrics(
+            y,
+            scores,
+            X[candidate_group_column],
+            ks=ks,
+            tie_policy=tie_policy,  # type: ignore[arg-type]
+        ),
+        "macro_by_user_group_mean": user_grouped_ranking_metrics(
+            y,
+            scores,
+            X[candidate_group_column],
+            X["user_id"],
+            ks=ks,
+            tie_policy=tie_policy,  # type: ignore[arg-type]
+        ),
+    }
 
 
 def candidate_group_summary(

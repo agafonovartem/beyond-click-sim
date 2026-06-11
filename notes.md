@@ -30,3 +30,22 @@
 
 8.
     **Idea: use `logprob(yes)` as a continuous LLM score.** The yes/no scorer returns hard 0/1, which already supports pointwise metrics and (coarse, tie-heavy) ranking. Reading the probability of the `yes` token from `top_logprobs` (supported by vLLM and the OpenAI API) would give a continuous score, enabling finer-grained ranking (NDCG/HR), threshold-free metrics (AUC/PR-AUC), and cleaner comparability with score-based baselines (popularity, MF, ...). Caveat: not all endpoints expose logprobs, and the values need not be calibrated.
+
+9.
+    **Ranking output protocol: pointwise-score ranking vs direct re-ranking.** Our ranking
+    metrics (HR@k/NDCG@k) sort per-row scores within each `candidate_group`. For score-based
+    methods (popularity) this is a genuine ordering. For the yes/no LLM the score is binary, so
+    the ranking is tie-dominated and is a *coarse re-summary* of the same per-group yes/no
+    decisions: the expected (tie-averaged) HR@k/NDCG@k of a group depends only on (group size,
+    #positives, #predicted-yes, #true-positives-in-yes) — the same confusion counts behind
+    precision/recall. Always report `groups_with_score_ties_fraction` next to the ranking headline.
+
+    This is a ranking diagnostic derived from Agent4Rec-style binary per-item decisions; it is
+    not a direct-ranking prompt, and the original Agent4Rec paper's headline is distribution
+    alignment rather than NDCG (arXiv 2310.10108).
+    **AgentRecBench instead uses a direct re-ranking protocol** (arXiv 2505.19623): the agent's
+    terminal `CandidateRank` action emits a full ordering over the 20 candidates (1 positive : 19
+    negatives), so there are no ties and HR@{1,3,5} measures a true ranking. **We do not currently
+    cover this direct-re-ranking case.** For a genuine LLM ranking signal beyond a transform of the
+    classification, the options are `logprob(yes)` as a continuous score (item 8) or an
+    AgentRecBench-style direct "rank these candidates" prompt.

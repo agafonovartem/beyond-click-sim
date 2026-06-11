@@ -11,14 +11,20 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from runners.in_distribution.interaction_prediction.recompute_metrics import (
+from runners.in_distribution.interaction_prediction.evaluate_llm_predictions import (
     LEGACY_METRICS_FILENAME,
     MAIN_METRIC,
-    recompute_run_metrics,
+    evaluate_metrics_payload,
+    evaluate_ranking_metrics_payload,
+    evaluate_run_predictions,
+)
+from runners.in_distribution.interaction_prediction.metrics import (
+    RANKING_MAIN_METRIC,
+    RANKING_METRICS_FILENAME,
 )
 
 
-def test_recompute_run_metrics_migrates_fixed_prediction_run(tmp_path: Path) -> None:
+def test_evaluate_run_predictions_migrates_fixed_prediction_run(tmp_path: Path) -> None:
     run_dir = tmp_path / "llm_run"
     run_dir.mkdir()
     predictions = pd.DataFrame(
@@ -56,7 +62,7 @@ def test_recompute_run_metrics_migrates_fixed_prediction_run(tmp_path: Path) -> 
     _write_json(run_dir / "metrics.json", original_metrics)
     _write_json(run_dir / "manifest.json", original_manifest)
 
-    result = recompute_run_metrics(run_dir)
+    result = evaluate_run_predictions(run_dir)
 
     assert result.status == "updated"
     assert _read_json(run_dir / LEGACY_METRICS_FILENAME) == original_metrics
@@ -75,8 +81,19 @@ def test_recompute_run_metrics_migrates_fixed_prediction_run(tmp_path: Path) -> 
     assert migrated_metrics["test"]["macro_by_user_group_mean"]["n_groups"] == 3
     assert migrated_metrics["test"]["micro"]["n"] == 6
 
+    ranking_metrics = _read_json(run_dir / RANKING_METRICS_FILENAME)
+    assert ranking_metrics["protocol"] == "ranking"
+    assert ranking_metrics["main_metric"] == RANKING_MAIN_METRIC
+    assert ranking_metrics["test"]["macro_by_group"]["ndcg@1"] == pytest.approx(
+        (0.5 + 0.5 + 1.0) / 3
+    )
+    assert ranking_metrics["test"]["macro_by_user_group_mean"]["ndcg@1"] == pytest.approx(
+        ((0.5 + 0.5) / 2 + 1.0) / 2
+    )
+    assert ranking_metrics["test"]["macro_by_user_group_mean"]["n_users"] == 2
 
-def test_recompute_run_metrics_skips_threshold_selected_run(tmp_path: Path) -> None:
+
+def test_evaluate_run_predictions_skips_threshold_selected_run(tmp_path: Path) -> None:
     run_dir = tmp_path / "popularity_run"
     run_dir.mkdir()
     pd.DataFrame(
@@ -99,13 +116,31 @@ def test_recompute_run_metrics_skips_threshold_selected_run(tmp_path: Path) -> N
     _write_json(run_dir / "metrics.json", metrics)
     _write_json(run_dir / "manifest.json", manifest)
 
-    result = recompute_run_metrics(run_dir)
+    result = evaluate_run_predictions(run_dir)
 
     assert result.status == "skipped"
-    assert "threshold_on_validation" in result.message
+    assert "not a known fixed-prediction rule" in result.message
     assert _read_json(run_dir / "metrics.json") == metrics
     assert not (run_dir / LEGACY_METRICS_FILENAME).exists()
     assert not (run_dir / "manifest.legacy_macro_by_group.json").exists()
+
+
+def test_evaluate_ranking_metrics_payload_requires_score_column() -> None:
+    predictions = pd.DataFrame(
+        {
+            "split": ["test"],
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "target": [1],
+            "prediction": [True],
+        }
+    )
+
+    pointwise_metrics = evaluate_metrics_payload(predictions, {"method": "llm_yes_no_test"})
+
+    assert pointwise_metrics["test"]["micro"]["n"] == 1
+    with pytest.raises(ValueError, match="missing columns: \\['score'\\]"):
+        evaluate_ranking_metrics_payload(predictions, {"method": "llm_yes_no_test"})
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:

@@ -20,8 +20,17 @@ from runners.in_distribution.interaction_prediction.methods.common import (
     current_git_commit,
     limit_candidate_groups,
     prediction_frame,
+    ranking_metrics_for_split,
     task_xy,
     write_json,
+)
+from runners.in_distribution.interaction_prediction.metrics import (
+    POINTWISE_MAIN_METRIC,
+    POINTWISE_METRICS_FILENAME,
+    RANKING_KS,
+    RANKING_MAIN_METRIC,
+    RANKING_METRICS_FILENAME,
+    RANKING_TIE_POLICY,
 )
 from runners.in_distribution.interaction_prediction.task_builders import repo_root
 
@@ -176,6 +185,12 @@ def run_method(
         valid_X["user_id"],
     )
     micro_metrics = binary_classification_metrics(valid_y, predictions)
+    ranking_metrics = ranking_metrics_for_split(
+        X=valid_X,
+        y=valid_y,
+        scores=valid_scores,
+        candidate_group_column=candidate_group_column,
+    )
     requested_candidate_groups = candidate_group_summary(
         X_test,
         y_test,
@@ -233,7 +248,7 @@ def run_method(
     result = {
         "method": method_name,
         "task": task.name,
-        "main_metric": "test.macro_by_user_group_mean.f1",
+        "main_metric": POINTWISE_MAIN_METRIC,
         "test": {
             "macro_by_group": macro_metrics,
             "macro_by_user_group_mean": user_group_metrics,
@@ -249,8 +264,29 @@ def run_method(
             "scored": scored_candidate_groups,
         },
     }
+    ranking_result = {
+        "method": method_name,
+        "task": task.name,
+        "protocol": "ranking",
+        "main_metric": RANKING_MAIN_METRIC,
+        "ranking_evaluation": {
+            "ks": list(RANKING_KS),
+            "tie_policy": RANKING_TIE_POLICY,
+        },
+        "test": ranking_metrics,
+        "llm_errors": len(errors),
+        "scored_rows": int(valid.sum()),
+        "requested_rows": int(len(X_test)),
+        "max_candidate_groups": max_candidate_groups,
+        "max_workers": max_workers,
+        "candidate_groups": {
+            "requested": requested_candidate_groups,
+            "scored": scored_candidate_groups,
+        },
+    }
     write_json(output_dir / "manifest.json", manifest)
-    write_json(output_dir / "metrics.json", result)
+    write_json(output_dir / POINTWISE_METRICS_FILENAME, result)
+    write_json(output_dir / RANKING_METRICS_FILENAME, ranking_result)
     return result
 
 

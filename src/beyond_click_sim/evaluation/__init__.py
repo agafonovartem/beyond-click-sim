@@ -10,6 +10,10 @@ from beyond_click_sim.evaluation.binary import (
     grouped_binary_classification_metrics,
     user_grouped_binary_classification_metrics,
 )
+from beyond_click_sim.evaluation.ranking import (
+    grouped_ranking_metrics,
+    user_grouped_ranking_metrics,
+)
 
 __all__ = [
     "apply_threshold",
@@ -19,5 +23,7 @@ __all__ = [
     "find_best_threshold_by_metric",
     "find_best_user_group_threshold",
     "grouped_binary_classification_metrics",
+    "grouped_ranking_metrics",
     "user_grouped_binary_classification_metrics",
+    "user_grouped_ranking_metrics",
 ]

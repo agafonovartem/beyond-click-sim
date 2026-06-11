@@ -18,13 +18,24 @@ from runners.in_distribution.interaction_prediction.methods.common import (
     candidate_group_summary,
     current_git_commit,
     prediction_frame,
+    ranking_metrics_for_split,
+    score_frame,
     task_xy,
     write_json,
+)
+from runners.in_distribution.interaction_prediction.metrics import (
+    POINTWISE_MAIN_METRIC,
+    POINTWISE_METRICS_FILENAME,
+    RANKING_KS,
+    RANKING_MAIN_METRIC,
+    RANKING_METRICS_FILENAME,
+    RANKING_TIE_POLICY,
 )
 from runners.in_distribution.interaction_prediction.task_builders import repo_root
 
 
 METHOD_NAME = "popularity_f1_threshold"
+RANKING_METHOD_NAME = "popularity_ranking"
 THRESHOLD_METRIC = "macro_by_user_group_mean_f1"
 
 
@@ -163,7 +174,7 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
     metrics = {
         "method": METHOD_NAME,
         "task": task.name,
-        "main_metric": "test.macro_by_user_group_mean.f1",
+        "main_metric": POINTWISE_MAIN_METRIC,
         "val": {
             "macro_by_group": val_macro_metrics,
             "macro_by_user_group_mean": val_user_group_metrics,
@@ -184,7 +195,133 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
     }
     stage_start = perf_counter()
     write_json(output_dir / "manifest.json", manifest)
-    write_json(output_dir / "metrics.json", metrics)
+    write_json(output_dir / POINTWISE_METRICS_FILENAME, metrics)
+    _record_stage(stage_times, "write_metadata", stage_start)
+    return metrics
+
+
+def run_ranking(task: Task, output_dir: Path) -> dict[str, object]:
+    """Run the deterministic item-popularity baseline for raw-score ranking."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stage_times: dict[str, float] = {}
+
+    stage_start = perf_counter()
+    xy = task_xy(task)
+    X_train, y_train = xy["train"]
+    X_val, y_val = xy["val"]
+    X_test, y_test = xy["test"]
+    candidate_group_column = task.schema.candidate_group_column
+    if candidate_group_column is None:
+        raise ValueError("Popularity ranking method requires candidate_group_column")
+    _record_stage(stage_times, "prepare_xy", stage_start)
+
+    stage_start = perf_counter()
+    scorer = PopularityScorer(item_column="item_id").fit(X_train, y_train)
+    _record_stage(stage_times, "fit", stage_start)
+
+    stage_start = perf_counter()
+    val_scores = scorer.score(X_val)
+    _record_stage(stage_times, "score_val", stage_start)
+
+    stage_start = perf_counter()
+    test_scores = scorer.score(X_test)
+    _record_stage(stage_times, "score_test", stage_start)
+
+    stage_start = perf_counter()
+    val_ranking_metrics = ranking_metrics_for_split(
+        X=X_val,
+        y=y_val,
+        scores=val_scores,
+        candidate_group_column=candidate_group_column,
+    )
+    test_ranking_metrics = ranking_metrics_for_split(
+        X=X_test,
+        y=y_test,
+        scores=test_scores,
+        candidate_group_column=candidate_group_column,
+    )
+    _record_stage(stage_times, "compute_ranking_metrics", stage_start)
+
+    stage_start = perf_counter()
+    val_candidate_groups = candidate_group_summary(
+        X_val,
+        y_val,
+        candidate_group_column=candidate_group_column,
+        sampled_column=task.schema.sampled_column,
+    )
+    test_candidate_groups = candidate_group_summary(
+        X_test,
+        y_test,
+        candidate_group_column=candidate_group_column,
+        sampled_column=task.schema.sampled_column,
+    )
+    _record_stage(stage_times, "candidate_group_summary", stage_start)
+
+    stage_start = perf_counter()
+    predictions = pd.concat(
+        [
+            score_frame(
+                split="val",
+                X=X_val,
+                y=y_val,
+                scores=val_scores,
+            ),
+            score_frame(
+                split="test",
+                X=X_test,
+                y=y_test,
+                scores=test_scores,
+            ),
+        ],
+        ignore_index=True,
+    )
+    predictions.to_parquet(output_dir / "predictions.parquet", index=False)
+    _record_stage(stage_times, "write_predictions", stage_start)
+
+    root = repo_root()
+    manifest = {
+        "method": RANKING_METHOD_NAME,
+        "protocol": "ranking",
+        "scorer": {
+            "class": "PopularityScorer",
+            "item_column": "item_id",
+        },
+        "ranking_evaluation": {
+            "ks": list(RANKING_KS),
+            "tie_policy": RANKING_TIE_POLICY,
+        },
+        "task": {
+            "name": task.name,
+            "manifest": task.manifest,
+        },
+        "candidate_groups": {
+            "val": val_candidate_groups,
+            "test": test_candidate_groups,
+        },
+        "stage_times_seconds": stage_times,
+        "git_commit": current_git_commit(root),
+    }
+    metrics = {
+        "method": RANKING_METHOD_NAME,
+        "task": task.name,
+        "protocol": "ranking",
+        "main_metric": RANKING_MAIN_METRIC,
+        "ranking_evaluation": {
+            "ks": list(RANKING_KS),
+            "tie_policy": RANKING_TIE_POLICY,
+        },
+        "val": val_ranking_metrics,
+        "test": test_ranking_metrics,
+        "candidate_groups": {
+            "val": val_candidate_groups,
+            "test": test_candidate_groups,
+        },
+        "stage_times_seconds": stage_times,
+    }
+    stage_start = perf_counter()
+    write_json(output_dir / "manifest.json", manifest)
+    write_json(output_dir / RANKING_METRICS_FILENAME, metrics)
     _record_stage(stage_times, "write_metadata", stage_start)
     return metrics
 

@@ -149,6 +149,7 @@ Available interaction-prediction methods:
 | Method | Description |
 | --- | --- |
 | `popularity_f1_threshold` | Item-popularity scorer with a validation-selected `macro_by_user_group_mean_f1` threshold. |
+| `popularity_ranking` | Item-popularity scorer evaluated as raw-score candidate ranking; headline metric `test.macro_by_user_group_mean.ndcg@5` (raw scores ranked directly, no validation selection). |
 | `llm_yes_no_ollama_llama31_8b_smoke` | Local Ollama Llama 3.1 8B yes/no scorer on a small candidate-group subset. |
 | `llm_yes_no_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B yes/no scorer on the full selected task. |
 | `llm_yes_no_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B yes/no scorer on a small candidate-group subset. |
@@ -166,29 +167,42 @@ outputs/in_distribution/interaction_prediction/
   {timestamp}_{task}_{method}/
     manifest.json
     metrics.json
+    metrics_ranking.json
     predictions.parquet
     llm_errors.jsonl
 ```
 
-`llm_errors.jsonl` is produced by LLM methods and may be empty.
+`metrics.json` is produced by pointwise methods and LLM yes/no methods. `metrics_ranking.json`
+is produced by ranking methods and LLM yes/no methods. `llm_errors.jsonl` is produced by LLM
+methods and may be empty.
 
 For grouped pointwise interaction runs, the headline metric is
 `test.macro_by_user_group_mean.f1`: compute the metric per candidate group, average groups
 within each user, then average users equally. `macro_by_group` and `micro` remain diagnostic
 metrics in `metrics.json`.
 
+Ranking interaction runs use raw row-level `score` values and write `metrics_ranking.json`
+instead of mixing protocols into `metrics.json`. The ranking headline is
+`test.macro_by_user_group_mean.ndcg@5`; HR@1/3/5/10 and NDCG@1/3/5/10 are also logged.
+LLM yes/no runs write both files because ranking can be computed from the same fixed scores.
+
 Old fixed-prediction LLM runs can be migrated to the current metric schema without new LLM
 calls:
 
 ```bash
-uv run python runners/in_distribution/interaction_prediction/recompute_metrics.py RUN_DIR
+uv run python runners/in_distribution/interaction_prediction/evaluate_llm_predictions.py RUN_DIR
 ```
+
+Score-based pointwise methods with validation-selected thresholds should be rerun instead of
+migrated, because threshold selection is part of their method protocol. Raw-score ranking
+methods should be run under an explicit ranking method such as `popularity_ranking`.
 
 Before trusting a result, inspect:
 
 - `manifest.json` for dataset, split, target, sampler, scorer, prompt/model config, and git commit;
-- `metrics.json` for validation/test metrics, user-level headline metrics, and candidate-group diagnostics;
-- `predictions.parquet` for row-level scores and predictions;
+- `metrics.json` for pointwise validation/test metrics, user-level headline metrics, and candidate-group diagnostics;
+- `metrics_ranking.json` for raw-score ranking metrics when present;
+- `predictions.parquet` for row-level scores and, for pointwise runs, thresholded or fixed predictions;
 - `issues.md` for known current validity issues.
 
 ## Documentation

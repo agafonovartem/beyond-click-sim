@@ -1,11 +1,11 @@
 # Known Issues
 
 Tracked defects in the **current** code, i.e. the in-distribution interaction-prediction
-pipeline (popularity + LLM yes/no scorers). Unimplemented future work — preference &
-regression tasks, ranking metrics, additional negative samplers, stronger classic
-baselines, temporal/stratified splitters, policy-ranking, OOD, behavioral extrapolation,
-memorization — is not listed here; it lives in the design notes (`architecture_note.md`,
-`in_distribution_scenarios.md`, `notes.md`).
+pipeline (popularity + LLM yes/no scorers, pointwise and raw-score ranking). Unimplemented
+future work — preference & regression tasks, additional negative samplers, stronger classic
+baselines, temporal/stratified splitters, direct re-ranking prompts, policy-ranking, OOD,
+behavioral extrapolation, memorization — is not listed here; it lives in the design notes
+(`architecture_note.md`, `in_distribution_scenarios.md`, `notes.md`).
 
 ## 1. `MAX_LLM_ERRORS` aborts the whole run instead of skipping
 
@@ -56,3 +56,36 @@ variant.
 
 **Fix:** make the registry key and `task.name` identical (pick one convention), or record
 both the registry key and the builder name in the manifest.
+
+## 4. Ranking headline `ndcg@5`/`hit_rate@5` is not directly comparable across `m`
+
+The ranking headline is `test.macro_by_user_group_mean.ndcg@5` with `RANKING_KS = (1,3,5,10)`
+(`runners/in_distribution/interaction_prediction/metrics.py:8,10`). In cap20 construction,
+`max_positive_items = total_items // (m + 1)`, so full candidate groups usually contain up to
+20 items for `m=1`, `m=3`, `m=4`, `m=9`, and `m=19`, while `m=2` has a maximum full-group size
+of 18. Tail groups can be smaller when a user has too few held-out positives.
+
+The larger comparability problem is not just group size, but the joint change in group-size
+distribution and positive prevalence. At `m=1`, a full group has 10 positives; at `m=19`, a full
+group has one positive. Therefore HR@5/NDCG@5 have different random-ranking baselines and
+different difficulty across `m`, even when both groups have 20 candidates. For tail groups with
+`group_size <= k`, `k_eff = min(k, group_size)` (`src/beyond_click_sim/evaluation/ranking.py:135`)
+and hit-rate returns `1.0` whenever the group has a positive (`ranking.py:163-164`), so
+`groups_with_size_lte@k` must be checked before interpreting `@k` metrics.
+
+**Fix:** do not pool headline ranking metrics across different `m` values. Report each `m`
+separately with `groups_with_size_lte@k`, positive prevalence, `groups_with_score_ties_fraction`,
+and, ideally, a random-ranking baseline. Consider `@1` as the most stable cross-`m` diagnostic,
+while keeping `@1/3/5/10` for within-setup analysis.
+
+## 5. Ranking metric aggregation is O(candidate_groups × rows) (performance / repro-time, not correctness)
+
+`_per_group_ranking_metrics` loops `for group_code in range(...)` and rescans the full code array
+with `np.flatnonzero(group_codes == group_code)` per group
+(`src/beyond_click_sim/evaluation/ranking.py:96-97`); the binary path is vectorized
+(`src/beyond_click_sim/evaluation/binary.py:62-77`). Results are correct, but this is quadratic in
+group count and on a full (non-eval1000) task with tens or hundreds of thousands of groups adds
+avoidable minutes. Speedup only — no effect on metric values.
+
+**Fix:** sort once by group code and slice contiguous blocks (or `np.split` on sorted codes)
+instead of a per-group mask scan.
