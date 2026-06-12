@@ -1,0 +1,129 @@
+{
+  "candidate_groups": {
+    "requested": {
+      "groups": 17641,
+      "positives_max": 1,
+      "positives_mean": 1.0,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 20.0,
+      "rows_min": 20,
+      "sampled_max": 19,
+      "sampled_mean": 19.0,
+      "sampled_min": 19
+    },
+    "scored": {
+      "groups": 17641,
+      "positives_max": 1,
+      "positives_mean": 1.0,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 20.0,
+      "rows_min": 20,
+      "sampled_max": 19,
+      "sampled_mean": 19.0,
+      "sampled_min": 19
+    }
+  },
+  "decision_rule": {
+    "kind": "hard_binary_yes_no_parser",
+    "threshold": null
+  },
+  "git_commit": "c06102cf4cecf700a513e9b17489ab4c426a5109",
+  "limits": {
+    "max_candidate_groups": null,
+    "max_llm_errors": 3,
+    "max_workers": 32
+  },
+  "llm_errors": 0,
+  "method": "llm_yes_no_vllm_llama33_70b_full",
+  "scorer": {
+    "class": "LLMInteractionYesNoScorer",
+    "client_name": "vllm_local",
+    "max_history_items": 20,
+    "max_tokens": 256,
+    "model": "llama-3.3-70b-instruct",
+    "prompt_columns": {
+      "candidate_description_columns": [
+        "item_title",
+        "item_genres_json",
+        "item_tags_json"
+      ],
+      "history_description_columns": [
+        "item_title",
+        "item_genres_json",
+        "item_tags_json",
+        "playtime_forever"
+      ]
+    },
+    "temperature": 0.0
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "steam",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_steam_id",
+        "user_raw_user_id",
+        "user_user_url",
+        "user_reported_items_count",
+        "user_source_line",
+        "user_raw_snapshot_count",
+        "item_raw_item_id",
+        "item_title",
+        "item_library_item_name",
+        "item_metadata_available",
+        "item_metadata_title",
+        "item_app_name",
+        "item_release_date",
+        "item_genres_json",
+        "item_tags_json",
+        "item_specs_json",
+        "item_price_raw",
+        "item_developer",
+        "item_publisher"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "playtime_forever"
+      ],
+      "items": 10978,
+      "rows": {
+        "test": 352820,
+        "train": 3471481,
+        "val": 183680
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedUserInteractionCandidateSampler",
+        "item_column": "item_id",
+        "max_eval_users": 1000,
+        "negative_ratio": 19,
+        "sampled_column": "sampled",
+        "seed": 0,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 0,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": 57333
+    },
+    "name": "steam_interaction_cap20_eval_users1000_m19_seed0"
+  }
+}

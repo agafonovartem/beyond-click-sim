@@ -1,0 +1,120 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 4087,
+      "positives_max": 5,
+      "positives_mean": 4.531441154881331,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 18.125764619525324,
+      "rows_min": 4,
+      "sampled_max": 15,
+      "sampled_mean": 13.594323464643994,
+      "sampled_min": 3
+    },
+    "val": {
+      "groups": 2332,
+      "positives_max": 5,
+      "positives_mean": 4.134219554030874,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 16.536878216123498,
+      "rows_min": 4,
+      "sampled_max": 15,
+      "sampled_mean": 12.402658662092625,
+      "sampled_min": 3
+    }
+  },
+  "decision_rule": {
+    "kind": "threshold_on_validation",
+    "metric": "macro_by_user_group_mean_f1",
+    "metric_value": 0.8123189961164908,
+    "selection_metric": "macro_by_user_group_mean_f1",
+    "threshold": 643.0
+  },
+  "git_commit": "c6f9d0a7d61b890154804de2ed0445d3b7b283b8",
+  "method": "popularity_f1_threshold",
+  "scorer": {
+    "class": "PopularityScorer",
+    "item_column": "item_id"
+  },
+  "stage_times_seconds": {
+    "apply_threshold": 0.0,
+    "candidate_group_summary": 0.077,
+    "compute_metrics": 0.143,
+    "fit": 0.605,
+    "prepare_xy": 0.293,
+    "score_test": 0.01,
+    "score_val": 0.008,
+    "select_threshold": 0.118,
+    "write_predictions": 0.221
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "steam",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_steam_id",
+        "user_raw_user_id",
+        "user_user_url",
+        "user_reported_items_count",
+        "user_source_line",
+        "user_raw_snapshot_count",
+        "item_raw_item_id",
+        "item_title",
+        "item_library_item_name",
+        "item_metadata_available",
+        "item_metadata_title",
+        "item_app_name",
+        "item_release_date",
+        "item_genres_json",
+        "item_tags_json",
+        "item_specs_json",
+        "item_price_raw",
+        "item_developer",
+        "item_publisher"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "playtime_forever"
+      ],
+      "items": 10978,
+      "rows": {
+        "test": 74080,
+        "train": 3471481,
+        "val": 38564
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedUserInteractionCandidateSampler",
+        "item_column": "item_id",
+        "max_eval_users": 1000,
+        "negative_ratio": 3,
+        "sampled_column": "sampled",
+        "seed": 3,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 3,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": 57333
+    },
+    "name": "steam_interaction_cap20_eval_users1000_m3_seed3"
+  }
+}

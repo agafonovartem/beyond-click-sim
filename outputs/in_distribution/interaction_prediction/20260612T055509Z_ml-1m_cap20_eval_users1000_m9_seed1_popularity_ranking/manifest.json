@@ -1,0 +1,110 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 16466,
+      "positives_max": 2,
+      "positives_mean": 1.9692092797279241,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.69209279727924,
+      "rows_min": 10,
+      "sampled_max": 18,
+      "sampled_mean": 17.722883517551317,
+      "sampled_min": 9
+    },
+    "val": {
+      "groups": 8552,
+      "positives_max": 2,
+      "positives_mean": 1.9380261927034612,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.380261927034613,
+      "rows_min": 10,
+      "sampled_max": 18,
+      "sampled_mean": 17.44223573433115,
+      "sampled_min": 9
+    }
+  },
+  "git_commit": "c06102cf4cecf700a513e9b17489ab4c426a5109",
+  "method": "popularity_ranking",
+  "protocol": "ranking",
+  "ranking_evaluation": {
+    "ks": [
+      1,
+      3,
+      5,
+      10
+    ],
+    "tie_policy": "average"
+  },
+  "scorer": {
+    "class": "PopularityScorer",
+    "item_column": "item_id"
+  },
+  "stage_times_seconds": {
+    "candidate_group_summary": 0.1,
+    "compute_ranking_metrics": 15.294,
+    "fit": 0.104,
+    "prepare_xy": 0.074,
+    "score_test": 0.061,
+    "score_val": 0.033,
+    "write_predictions": 0.408
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "items": 3883,
+      "rows": {
+        "test": 324250,
+        "train": 694335,
+        "val": 165740
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedUserInteractionCandidateSampler",
+        "item_column": "item_id",
+        "max_eval_users": 1000,
+        "negative_ratio": 9,
+        "sampled_column": "sampled",
+        "seed": 1,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 1,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": 6040
+    },
+    "name": "ml-1m_interaction_cap20_eval_users1000_m9_seed1"
+  }
+}
