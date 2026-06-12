@@ -8,7 +8,7 @@ Notes:
 - Pop pointwise uses `popularity_f1_threshold`; pop ranking uses raw popularity scores via `popularity_ranking`.
 - Paper-table notebook: `notebooks/compare_popularity_llm_eval1000.ipynb` renders four compact seed-averaged tables: ML-1M pointwise, Steam pointwise, ML-1M ranking, and Steam ranking.
 - Raw-score pop ranking is included in the ranking tables from `metrics_ranking.json`.
-- Regression notebook: `notebooks/compare_regression_mean_eval1000.ipynb` currently renders the ML-1M rating `MeanRegressor` seed table and seed-averaged summary. `ModeRegressor` is the primary discrete constant baseline for simulator-style rating prediction and is listed directly below.
+- Regression notebook: `notebooks/compare_regression_mean_eval1000.ipynb` currently renders the ML-1M rating `MeanRegressor` seed table and seed-averaged summary. `ModeRegressor` is the primary discrete constant baseline for simulator-style rating prediction; prompt-window history baselines are listed directly below.
 
 ## Regression Prediction
 
@@ -21,7 +21,7 @@ Protocol:
 - Filter: `MinUserInteractionsFilter(10)`.
 - Evaluation budget: post-split `PostSplitUserSampler(n_users=1000, seed=seed)`.
 - Candidate construction: none; no negatives, no `candidate_group`, no `sampled`.
-- Methods: `llm_regressor_vllm_llama33_70b_full` predicts a strict bare integer rating from train history and item metadata; `mode_regressor` fits the most frequent train rating and predicts a valid discrete rating; `mean_regressor` fits the continuous train target mean and is retained as a MAE/RMSE diagnostic.
+- Methods: `mode_regressor` fits the most frequent train rating and predicts a valid discrete rating; `mean_regressor` fits the continuous train target mean and is retained as a MAE/RMSE diagnostic. `history_mean_regressor` and `history_mode_regressor` use the same last-20 train-history window in input order that is shown to `LLMRegressor`.
 - Main metric: `test.macro_by_user_mean.mae`; micro MAE/RMSE are retained as secondary diagnostics.
 - Scope: 6040 filtered/train users and 3883 items for all seeds; test users are capped to 1000 after splitting.
 
@@ -36,6 +36,44 @@ Protocol:
 | seed | train rows | val rows | test rows | test users | mode | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
 | 0 | 694335 | 17629 | 34520 | 1000 | 4.0000 | 0.8364 | 1.0932 | 0.8468 | 1.1665 | `20260612T152221Z_ml-1m_rating_eval_users1000_seed0_mode_regressor` |
+
+#### HistoryMeanRegressor
+
+| seed | train rows | val rows | test rows | test users | max history | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 694335 | 17629 | 34520 | 1000 | 20 | 0.8418 | 1.0185 | 0.8375 | 1.0480 | `20260612T221357Z_ml-1m_rating_eval_users1000_seed0_history_mean_regressor` |
+| 1 | 694335 | 16574 | 32425 | 1000 | 20 | 0.8429 | 1.0202 | 0.8560 | 1.0684 | `20260612T221411Z_ml-1m_rating_eval_users1000_seed1_history_mean_regressor` |
+| 2 | 694335 | 16731 | 32738 | 1000 | 20 | 0.8371 | 1.0178 | 0.8370 | 1.0536 | `20260612T221425Z_ml-1m_rating_eval_users1000_seed2_history_mean_regressor` |
+| 3 | 694335 | 17388 | 34008 | 1000 | 20 | 0.8425 | 1.0203 | 0.8377 | 1.0481 | `20260612T221439Z_ml-1m_rating_eval_users1000_seed3_history_mean_regressor` |
+| 4 | 694335 | 17564 | 34407 | 1000 | 20 | 0.8531 | 1.0337 | 0.8573 | 1.0721 | `20260612T221453Z_ml-1m_rating_eval_users1000_seed4_history_mean_regressor` |
+
+Seed average over seeds 0-4:
+
+| metric | mean | std |
+|---|---:|---:|
+| test.macro_by_user_mean.mae | 0.8435 | 0.0058 |
+| test.macro_by_user_mean.rmse | 1.0221 | 0.0066 |
+| test.micro.mae | 0.8451 | 0.0106 |
+| test.micro.rmse | 1.0580 | 0.0114 |
+
+#### HistoryModeRegressor
+
+| seed | train rows | val rows | test rows | test users | max history | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 694335 | 17629 | 34520 | 1000 | 20 | 0.8947 | 1.1894 | 0.8843 | 1.2388 | `20260612T221359Z_ml-1m_rating_eval_users1000_seed0_history_mode_regressor` |
+| 1 | 694335 | 16574 | 32425 | 1000 | 20 | 0.8954 | 1.1901 | 0.9080 | 1.2665 | `20260612T221413Z_ml-1m_rating_eval_users1000_seed1_history_mode_regressor` |
+| 2 | 694335 | 16731 | 32738 | 1000 | 20 | 0.8933 | 1.1943 | 0.8929 | 1.2615 | `20260612T221427Z_ml-1m_rating_eval_users1000_seed2_history_mode_regressor` |
+| 3 | 694335 | 17388 | 34008 | 1000 | 20 | 0.8805 | 1.1812 | 0.8805 | 1.2498 | `20260612T221441Z_ml-1m_rating_eval_users1000_seed3_history_mode_regressor` |
+| 4 | 694335 | 17564 | 34407 | 1000 | 20 | 0.9100 | 1.2080 | 0.9141 | 1.2749 | `20260612T221455Z_ml-1m_rating_eval_users1000_seed4_history_mode_regressor` |
+
+Seed average over seeds 0-4:
+
+| metric | mean | std |
+|---|---:|---:|
+| test.macro_by_user_mean.mae | 0.8948 | 0.0105 |
+| test.macro_by_user_mean.rmse | 1.1926 | 0.0098 |
+| test.micro.mae | 0.8960 | 0.0147 |
+| test.micro.rmse | 1.2583 | 0.0142 |
 
 #### MeanRegressor
 
