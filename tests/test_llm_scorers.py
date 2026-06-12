@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from beyond_click_sim.scorers import LLMInteractionYesNoScorer, LLMRegressor
+from beyond_click_sim.scorers.constant import select_user_history_positions
 from beyond_click_sim.scorers.llm import (
     parse_regression_value_response,
     parse_yes_no_response,
@@ -362,6 +363,41 @@ def test_llm_regressor_scores_rows_with_integer_values() -> None:
 
     second_prompt = client.completions.calls[1]["messages"][1]["content"]
     assert "- No interaction history available." in second_prompt
+
+
+def test_llm_regressor_uses_shared_history_window_selection() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u2", "u1", "u1", "u2", "u1"],
+            "item_title": ["A", "B", "C", "D", "E", "F"],
+            "item_genres": ["g"] * 6,
+            "rating": [5, 1, 2, 4, 3, 1],
+        }
+    )
+    client = FakeClient([])
+
+    scorer = LLMRegressor(
+        client=client,
+        model="fake-model",
+        history_description_columns=("item_title", "item_genres", "rating"),
+        candidate_description_columns=("item_title", "item_genres"),
+        target_description="Predict the integer MovieLens rating.",
+        output_instructions="Return exactly one integer: 1, 2, 3, 4, or 5. Return no other text.",
+        valid_values=(1, 2, 3, 4, 5),
+        max_history_items=3,
+    ).fit(X_train, pd.Series([5, 1, 2, 4, 3, 1]))
+
+    selected = select_user_history_positions(
+        X_train,
+        user_column="user_id",
+        max_history_items=3,
+    )
+    assert selected["u1"] == [2, 3, 5]
+    assert scorer.history_by_user_["u1"] == [
+        "H1. item_title: C; item_genres: g; rating: 2",
+        "H2. item_title: D; item_genres: g; rating: 4",
+        "H3. item_title: F; item_genres: g; rating: 1",
+    ]
 
 
 def test_llm_regressor_prompt_does_not_leak_candidate_target_or_rating() -> None:

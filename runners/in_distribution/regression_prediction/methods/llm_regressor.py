@@ -11,6 +11,10 @@ from tqdm import tqdm
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMRegressor
 from beyond_click_sim.tasks import Task
+from runners.in_distribution.regression_prediction.config import (
+    DATASET_TARGET_REGRESSION_CONFIG,
+    MAX_HISTORY_ITEMS,
+)
 from runners.in_distribution.regression_prediction.methods.common import (
     current_git_commit,
     regression_metrics_for_split,
@@ -31,33 +35,12 @@ OLLAMA_LLAMA31_8B_MODEL = "llama3.1:8b"
 VLLM_LLAMA33_70B_METHOD_NAME = "llm_regressor_vllm_llama33_70b"
 VLLM_LLAMA33_70B_CLIENT = "vllm_local"
 VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
-MAX_HISTORY_ITEMS = 20
 TEMPERATURE = 0.0
 MAX_TOKENS = 64
 MAX_LLM_ATTEMPTS = 5
 SMOKE_ROWS = 25
 OLLAMA_MAX_WORKERS = 1
 VLLM_MAX_WORKERS = 32
-
-DATASET_TARGET_PROMPT_CONFIG = {
-    "ml-1m": {
-        "target_rating": {
-            "history_description_columns": ("item_title", "item_genres", "rating"),
-            "candidate_description_columns": ("item_title", "item_genres"),
-            "target_name": "rating",
-            "target_description": (
-                "Predict the integer MovieLens rating this user would give to "
-                "the candidate movie on a 1 to 5 scale."
-            ),
-            "output_instructions": (
-                "Return exactly one integer: 1, 2, 3, 4, or 5. "
-                "Return no other text."
-            ),
-            "valid_values": (1, 2, 3, 4, 5),
-            "output_format": "bare_integer",
-        },
-    },
-}
 
 
 def run_llama31_8b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
@@ -132,7 +115,7 @@ def run_method(
 
     dataset_name = str(task.manifest["dataset"])
     target_source_column = str(task.manifest["target_source_column"])
-    target_config = DATASET_TARGET_PROMPT_CONFIG[dataset_name][target_source_column]
+    target_config = DATASET_TARGET_REGRESSION_CONFIG[dataset_name][target_source_column]
 
     xy = task_xy(task)
     X_train, y_train = xy["train"]
