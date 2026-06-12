@@ -8,7 +8,7 @@ Notes:
 - Pop pointwise uses `popularity_f1_threshold`; pop ranking uses raw popularity scores via `popularity_ranking`.
 - Paper-table notebook: `notebooks/compare_popularity_llm_eval1000.ipynb` renders four compact seed-averaged tables: ML-1M pointwise, Steam pointwise, ML-1M ranking, and Steam ranking.
 - Raw-score pop ranking is included in the ranking tables from `metrics_ranking.json`.
-- Regression notebook: `notebooks/compare_regression_mean_eval1000.ipynb` renders the ML-1M rating `MeanRegressor` seed table and seed-averaged summary. `ModeRegressor` is the primary discrete constant baseline for simulator-style rating prediction.
+- Regression notebook: `notebooks/compare_regression_mean_eval1000.ipynb` currently renders the ML-1M rating `MeanRegressor` seed table and seed-averaged summary. `ModeRegressor` is the primary discrete constant baseline for simulator-style rating prediction and is listed directly below.
 
 ## Regression Prediction
 

@@ -195,11 +195,12 @@ outputs/in_distribution/regression_prediction/
     manifest.json
     metrics.json
     predictions.parquet
+    llm_errors.jsonl
 ```
 
 `metrics.json` is produced by pointwise methods and LLM yes/no methods. `metrics_ranking.json`
 is produced by ranking methods and LLM yes/no methods. `llm_errors.jsonl` is produced by LLM
-methods and may be empty.
+methods and may be empty; constant regression baselines do not write it.
 
 Regression runs use observed held-out rows only: no candidate sampler, no negatives, no
 `candidate_group`, and no `sampled` column. The current ML-1M rating protocol uses

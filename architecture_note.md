@@ -170,7 +170,7 @@ For pointwise interaction / positive preference prediction: `apply_threshold(sco
 
 For candidate ranking interaction / positive preference prediction: `ranking_metrics(y_true, scores, candidate_group, ks)` sorts rows within each candidate group and computes HR@K, NDCG@K, MRR, and related ranking metrics.
 
-For intensity regression: `regression_metrics(y_true, scores)` computes MAE, MSE/RMSE, and correlation. Ranking metrics after sorting by predicted intensity are optional and should be treated as a separate ranking protocol.
+For intensity regression: `regression_metrics(y_true, scores)` computes MAE and RMSE. Ranking metrics after sorting by predicted intensity are optional and should be treated as a separate ranking protocol.
 
 Every result should log dataset, task type, target definition, candidate sampling strategy, negative sampling strategy, scorer name, scorer config, decision rule, selected threshold if any, validation metric used for selection, LLM prompt/config if applicable, random seed, and final metrics.
 
