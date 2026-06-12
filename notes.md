@@ -49,3 +49,6 @@
     cover this direct-re-ranking case.** For a genuine LLM ranking signal beyond a transform of the
     classification, the options are `logprob(yes)` as a continuous score (item 8) or an
     AgentRecBench-style direct "rank these candidates" prompt.
+
+10.
+    **LLM metric stability check.** Check whether LLM metrics are stable enough on smaller user samples. If bootstrap/subsampling shows acceptable uncertainty, 100 users may be enough for intermediate results instead of 1000 users.

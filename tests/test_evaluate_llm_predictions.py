@@ -125,6 +125,36 @@ def test_evaluate_run_predictions_skips_threshold_selected_run(tmp_path: Path) -
     assert not (run_dir / "manifest.legacy_macro_by_group.json").exists()
 
 
+def test_evaluate_run_predictions_skips_popularity_even_without_decision_rule(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "popularity_run"
+    run_dir.mkdir()
+    pd.DataFrame(
+        {
+            "split": ["test"],
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "target": [1],
+            "prediction": [True],
+        }
+    ).to_parquet(run_dir / "predictions.parquet", index=False)
+    metrics = {
+        "method": "popularity_f1_threshold",
+        "main_metric": "test.macro_by_group.f1",
+    }
+    manifest = {"method": "popularity_f1_threshold"}
+    _write_json(run_dir / "metrics.json", metrics)
+    _write_json(run_dir / "manifest.json", manifest)
+
+    result = evaluate_run_predictions(run_dir)
+
+    assert result.status == "skipped"
+    assert "not a known fixed-prediction rule" in result.message
+    assert _read_json(run_dir / "metrics.json") == metrics
+    assert not (run_dir / LEGACY_METRICS_FILENAME).exists()
+
+
 def test_evaluate_ranking_metrics_payload_requires_score_column() -> None:
     predictions = pd.DataFrame(
         {
