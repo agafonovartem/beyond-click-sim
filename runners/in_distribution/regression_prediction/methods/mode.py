@@ -5,7 +5,7 @@ from time import perf_counter
 
 import pandas as pd
 
-from beyond_click_sim.scorers import MeanRegressor
+from beyond_click_sim.scorers import ModeRegressor
 from beyond_click_sim.tasks import Task
 from runners.in_distribution.regression_prediction.methods.common import (
     current_git_commit,
@@ -21,11 +21,11 @@ from runners.in_distribution.regression_prediction.metrics import (
 from runners.in_distribution.regression_prediction.task_builders import repo_root
 
 
-METHOD_NAME = "mean_regressor"
+METHOD_NAME = "mode_regressor"
 
 
 def run(task: Task, output_dir: Path) -> dict[str, object]:
-    """Run the train-mean baseline for regression prediction."""
+    """Run the train-mode baseline for discrete regression prediction."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     stage_times: dict[str, float] = {}
@@ -40,7 +40,7 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
     _record_stage(stage_times, "prepare_xy", stage_start)
 
     stage_start = perf_counter()
-    scorer = MeanRegressor().fit(X_train, y_train)
+    scorer = ModeRegressor().fit(X_train, y_train)
     _record_stage(stage_times, "fit", stage_start)
 
     stage_start = perf_counter()
@@ -72,8 +72,9 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
         "method": METHOD_NAME,
         "protocol": "regression",
         "scorer": {
-            "class": "MeanRegressor",
-            "mean": scorer.mean_,
+            "class": "ModeRegressor",
+            "mode": scorer.mode_,
+            "tie_break": scorer.tie_break,
         },
         "regression_evaluation": {
             "main_metric": REGRESSION_MAIN_METRIC,
@@ -110,4 +111,4 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
 def _record_stage(stage_times: dict[str, float], stage: str, start: float) -> None:
     seconds = round(perf_counter() - start, 3)
     stage_times[stage] = seconds
-    print(f"[mean_regressor] {stage}: {seconds}s", flush=True)
+    print(f"[mode_regressor] {stage}: {seconds}s", flush=True)

@@ -7,6 +7,10 @@ from typing import Any
 
 import pandas as pd
 
+from beyond_click_sim.evaluation import (
+    regression_metrics,
+    user_grouped_regression_metrics,
+)
 from beyond_click_sim.tasks import Task, split_xy
 
 
@@ -64,3 +68,19 @@ def score_frame(
     frame["target"] = y
     frame["score"] = scores
     return frame
+
+
+def regression_metrics_for_split(
+    *,
+    X: pd.DataFrame,
+    y: pd.Series,
+    scores: pd.Series,
+) -> dict[str, dict[str, float | int]]:
+    return {
+        "micro": regression_metrics(y, scores),
+        "macro_by_user_mean": user_grouped_regression_metrics(
+            y,
+            scores,
+            X["user_id"],
+        ),
+    }

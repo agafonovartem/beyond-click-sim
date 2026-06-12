@@ -20,3 +20,22 @@ Return exactly one line for each candidate label.
 The text before each colon must match these labels:
 {output_labels}
 Fill each line after the colon with either yes or no."""
+
+
+REGRESSION_SYSTEM_PROMPT = """You are simulating a user's numeric response in a recommender system.
+Given the user's interaction history and one candidate item, predict the user's numeric response.
+Use only the provided history and candidate information.
+Return only the required numeric value."""
+
+
+REGRESSION_USER_PROMPT_TEMPLATE = """User interaction history:
+{history}
+
+Candidate item:
+{candidate}
+
+Task:
+{target_description}
+
+Required output format:
+{output_instructions}"""

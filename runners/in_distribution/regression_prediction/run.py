@@ -14,7 +14,7 @@ from runners.in_distribution.regression_prediction.task_builders import (
 
 
 DEFAULT_TASKS = DEFAULT_TASK_NAMES
-DEFAULT_METHODS = ["mean_regressor"]
+DEFAULT_METHODS = ["mode_regressor"]
 DEFAULT_OUTPUT_DIR = repo_root() / "outputs" / "in_distribution" / "regression_prediction"
 
 
@@ -73,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--methods",
         default=None,
-        help="Comma-separated method names. Default: mean_regressor.",
+        help="Comma-separated method names. Default: mode_regressor.",
     )
     parser.add_argument(
         "--output-dir",

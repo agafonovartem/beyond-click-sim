@@ -121,12 +121,12 @@ uv run python -m runners.in_distribution.interaction_prediction.run \
   --methods popularity_f1_threshold
 ```
 
-Run one MovieLens-1M rating-regression mean baseline:
+Run one MovieLens-1M rating-regression mode baseline:
 
 ```bash
 uv run python -m runners.in_distribution.regression_prediction.run \
   --tasks ml-1m_rating_eval_users1000_seed0 \
-  --methods mean_regressor
+  --methods mode_regressor
 ```
 
 Run an Ollama LLM smoke test:
@@ -170,7 +170,12 @@ Available regression-prediction methods:
 
 | Method | Description |
 | --- | --- |
-| `mean_regressor` | Constant baseline that predicts the train target mean; headline metric `test.macro_by_user_mean.mae`. |
+| `mode_regressor` | Constant discrete baseline that predicts the most frequent train target; default regression method and headline metric `test.macro_by_user_mean.mae`. |
+| `mean_regressor` | Constant continuous baseline that predicts the train target mean; useful MAE/RMSE diagnostic but not a literal discrete rating response simulator. |
+| `llm_regressor_ollama_llama31_8b_smoke` | Local Ollama Llama 3.1 8B integer-rating scorer on the first 25 test rows. |
+| `llm_regressor_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B integer-rating scorer on the full selected test split. |
+| `llm_regressor_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B integer-rating scorer on the first 25 test rows. |
+| `llm_regressor_vllm_llama33_70b_full` | vLLM Llama 3.3 70B integer-rating scorer on the full selected test split. |
 
 ## Outputs
 
@@ -199,7 +204,9 @@ methods and may be empty.
 Regression runs use observed held-out rows only: no candidate sampler, no negatives, no
 `candidate_group`, and no `sampled` column. The current ML-1M rating protocol uses
 `target_rating`, a 70/10/20 per-user random split, full filtered train, and a deterministic
-post-split `eval_users1000` cap for validation/test.
+post-split `eval_users1000` cap for validation/test. LLM rating regression evaluates test rows
+only and requires a strict bare integer in `{1, 2, 3, 4, 5}`; invalid or out-of-range responses
+are logged as LLM errors rather than clamped.
 
 For grouped pointwise interaction runs, the headline metric is
 `test.macro_by_user_group_mean.f1`: compute the metric per candidate group, average groups
