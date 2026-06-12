@@ -1,6 +1,6 @@
 # In Distribution
 
-Snapshot of local `eval_users1000` interaction-prediction artifacts. Metrics are copied from `outputs/in_distribution/interaction_prediction/*/metrics*.json`; this is a run registry, not a paper table.
+Snapshot of local `eval_users1000` in-distribution artifacts. Metrics are copied from compact JSON provenance under `outputs/in_distribution/`; this is a run registry, not a paper table.
 
 Notes:
 - Main pointwise metric: `test.macro_by_user_group_mean.f1` when available; otherwise `test.macro_by_group.f1` and marked as `group`.
@@ -8,6 +8,41 @@ Notes:
 - Pop pointwise uses `popularity_f1_threshold`; pop ranking uses raw popularity scores via `popularity_ranking`.
 - Paper-table notebook: `notebooks/compare_popularity_llm_eval1000.ipynb` renders four compact seed-averaged tables: ML-1M pointwise, Steam pointwise, ML-1M ranking, and Steam ranking.
 - Raw-score pop ranking is included in the ranking tables from `metrics_ranking.json`.
+- Regression notebook: `notebooks/compare_regression_mean_eval1000.ipynb` renders the ML-1M rating `MeanRegressor` seed table and seed-averaged summary.
+
+## Regression Prediction
+
+### ML-1M rating eval_1000 users
+
+Protocol:
+- Dataset: `ml-1m` canonical `v1`.
+- Target: `target_rating`; `rating` is available as train history context and hidden on val/test rows.
+- Split: `RandomFractionSplitter(0.7, 0.1, 0.2, group_column="user_id")`, seeds 0-4.
+- Filter: `MinUserInteractionsFilter(10)`.
+- Evaluation budget: post-split `PostSplitUserSampler(n_users=1000, seed=seed)`.
+- Candidate construction: none; no negatives, no `candidate_group`, no `sampled`.
+- Method: `mean_regressor`, fit on full filtered train split and predicts the train target mean.
+- Main metric: `test.macro_by_user_mean.mae`; micro MAE/RMSE are retained as secondary diagnostics.
+- Scope: 6040 filtered/train users and 3883 items for all seeds; test users are capped to 1000 after splitting.
+
+#### MeanRegressor
+
+| seed | train rows | val rows | test rows | test users | train mean | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 694335 | 17629 | 34520 | 1000 | 3.5812 | 0.9352 | 1.0809 | 0.9214 | 1.1009 | `20260612T121634Z_ml-1m_rating_eval_users1000_seed0_mean_regressor` |
+| 1 | 694335 | 16574 | 32425 | 1000 | 3.5820 | 0.9330 | 1.0769 | 0.9352 | 1.1194 | `20260612T121644Z_ml-1m_rating_eval_users1000_seed1_mean_regressor` |
+| 2 | 694335 | 16731 | 32738 | 1000 | 3.5795 | 0.9387 | 1.0832 | 0.9277 | 1.1107 | `20260612T121654Z_ml-1m_rating_eval_users1000_seed2_mean_regressor` |
+| 3 | 694335 | 17388 | 34008 | 1000 | 3.5808 | 0.9394 | 1.0849 | 0.9246 | 1.1069 | `20260612T121705Z_ml-1m_rating_eval_users1000_seed3_mean_regressor` |
+| 4 | 694335 | 17564 | 34407 | 1000 | 3.5804 | 0.9411 | 1.0860 | 0.9383 | 1.1219 | `20260612T121716Z_ml-1m_rating_eval_users1000_seed4_mean_regressor` |
+
+Seed average over seeds 0-4:
+
+| metric | mean | std |
+|---|---:|---:|
+| test.macro_by_user_mean.mae | 0.9375 | 0.0033 |
+| test.macro_by_user_mean.rmse | 1.0824 | 0.0036 |
+| test.micro.mae | 0.9294 | 0.0071 |
+| test.micro.rmse | 1.1120 | 0.0087 |
 
 ## Interaction Prediction
 

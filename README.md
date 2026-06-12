@@ -32,7 +32,7 @@ The paper scope is broader than one click-prediction benchmark:
 - **Offline-constructed OOD shifts** - evaluate cold-start, temporal, semantic, feature-based, or domain-like shifts.
 - **Behavioral extrapolation** - study effects such as choice overload, anchoring, social proof, repeated exposure, fatigue, novelty seeking, trust degradation, and session exit.
 
-Current code primarily supports the first in-distribution interaction-prediction benchmark.
+Current code primarily supports the first in-distribution interaction-prediction benchmark and a small MovieLens-1M rating-regression protocol.
 
 ## What is inside
 
@@ -121,6 +121,14 @@ uv run python -m runners.in_distribution.interaction_prediction.run \
   --methods popularity_f1_threshold
 ```
 
+Run one MovieLens-1M rating-regression mean baseline:
+
+```bash
+uv run python -m runners.in_distribution.regression_prediction.run \
+  --tasks ml-1m_rating_eval_users1000_seed0 \
+  --methods mean_regressor
+```
+
 Run an Ollama LLM smoke test:
 
 ```bash
@@ -158,6 +166,12 @@ Available interaction-prediction methods:
 > [!NOTE]
 > LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; vLLM is expected at `http://127.0.0.1:8000/v1`.
 
+Available regression-prediction methods:
+
+| Method | Description |
+| --- | --- |
+| `mean_regressor` | Constant baseline that predicts the train target mean; headline metric `test.macro_by_user_mean.mae`. |
+
 ## Outputs
 
 Experiment runs are written under:
@@ -170,11 +184,22 @@ outputs/in_distribution/interaction_prediction/
     metrics_ranking.json
     predictions.parquet
     llm_errors.jsonl
+
+outputs/in_distribution/regression_prediction/
+  {timestamp}_{task}_{method}/
+    manifest.json
+    metrics.json
+    predictions.parquet
 ```
 
 `metrics.json` is produced by pointwise methods and LLM yes/no methods. `metrics_ranking.json`
 is produced by ranking methods and LLM yes/no methods. `llm_errors.jsonl` is produced by LLM
 methods and may be empty.
+
+Regression runs use observed held-out rows only: no candidate sampler, no negatives, no
+`candidate_group`, and no `sampled` column. The current ML-1M rating protocol uses
+`target_rating`, a 70/10/20 per-user random split, full filtered train, and a deterministic
+post-split `eval_users1000` cap for validation/test.
 
 For grouped pointwise interaction runs, the headline metric is
 `test.macro_by_user_group_mean.f1`: compute the metric per candidate group, average groups

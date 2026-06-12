@@ -378,6 +378,71 @@ class CappedUserInteractionCandidateSampler(CandidateSampler):
         return f"candidate:user:{user_id}:chunk:{chunk_position}"
 
 
+class PostSplitUserSampler:
+    """Limit held-out rows to a deterministic sample of users after splitting.
+
+    Samples users (not candidate items): it draws a random subset of real
+    held-out users and keeps their rows, adding no synthetic negatives.
+    Intentionally not a ``CandidateSampler`` — it has a different ``sample()``
+    contract (``sample(rows, *, train)`` returning subset rows plus a selection
+    summary) and must not be used interchangeably with one.
+    """
+
+    def __init__(
+        self,
+        n_users: int | None,
+        seed: int = 0,
+        user_column: str = "user_id",
+        require_train_history: bool = True,
+    ) -> None:
+        if n_users is not None and n_users < 1:
+            raise ValueError("n_users must be positive when provided.")
+        self.n_users = n_users
+        self.seed = seed
+        self.user_column = user_column
+        self.require_train_history = require_train_history
+
+    def sample(
+        self,
+        rows: pd.DataFrame,
+        *,
+        train: pd.DataFrame,
+    ) -> tuple[pd.DataFrame, dict[str, int]]:
+        if rows.empty:
+            return rows.copy(), {
+                "eligible_users": 0,
+                "selected_users": 0,
+                "rows_before": 0,
+                "rows_after": 0,
+            }
+        if self.user_column not in rows.columns:
+            raise ValueError(f"Missing user column: {self.user_column!r}")
+        if self.require_train_history and self.user_column not in train.columns:
+            raise ValueError(f"Missing user column in train: {self.user_column!r}")
+
+        if self.require_train_history:
+            train_users = set(train[self.user_column])
+            eligible_rows = rows[rows[self.user_column].isin(train_users)].copy()
+        else:
+            eligible_rows = rows.copy()
+
+        eligible_users = eligible_rows[self.user_column].drop_duplicates()
+        selected_users = stable_sample_values(
+            eligible_users,
+            n=self.n_users,
+            seed=self.seed,
+        )
+        sampled = eligible_rows[
+            eligible_rows[self.user_column].isin(selected_users)
+        ].copy()
+        return sampled, {
+            "eligible_users": int(eligible_users.nunique()),
+            "selected_users": int(sampled[self.user_column].nunique()),
+            "rows_before": int(len(rows)),
+            "rows_after": int(len(sampled)),
+        }
+
+
 def _chunks(values: list[Any], size: int) -> list[list[Any]]:
     """Split values into consecutive non-empty chunks."""
 

@@ -2,9 +2,9 @@
 
 Tracked defects in the **current** code, i.e. the in-distribution interaction-prediction
 pipeline (popularity + LLM yes/no scorers, pointwise and raw-score ranking). Unimplemented
-future work — preference & regression tasks, additional negative samplers, stronger classic
-baselines, temporal/stratified splitters, direct re-ranking prompts, policy-ranking, OOD,
-behavioral extrapolation, memorization — is not listed here; it lives in the design notes
+future work — preference tasks, additional regression targets/methods, additional negative
+samplers, stronger classic baselines, temporal/stratified splitters, direct re-ranking prompts,
+policy-ranking, OOD, behavioral extrapolation, memorization — is not listed here; it lives in the design notes
 (`architecture_note.md`, `in_distribution_scenarios.md`, `notes.md`).
 
 ## 1. LLM metrics skip failed candidate groups

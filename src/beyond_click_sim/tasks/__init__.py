@@ -17,9 +17,11 @@ from beyond_click_sim.tasks.filters import (
     SampleUsersFilter,
     SequentialDatasetFilter,
 )
+from beyond_click_sim.tasks.regression import RegressionPredictionTaskBuilder
 from beyond_click_sim.tasks.samplers import (
     CappedUserInteractionCandidateSampler,
     NonInteractionCandidateSampler,
+    PostSplitUserSampler,
 )
 from beyond_click_sim.tasks.splitters import RandomFractionSplitter
 
@@ -30,7 +32,9 @@ __all__ = [
     "DatasetFilter",
     "MinUserInteractionsFilter",
     "NonInteractionCandidateSampler",
+    "PostSplitUserSampler",
     "RandomFractionSplitter",
+    "RegressionPredictionTaskBuilder",
     "SampleUsersFilter",
     "SequentialDatasetFilter",
     "SplitFrames",

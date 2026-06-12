@@ -1,0 +1,103 @@
+{
+  "git_commit": "9e40ed53ba2f3987955915d420c5397c4d6bf050",
+  "method": "mean_regressor",
+  "protocol": "regression",
+  "regression_evaluation": {
+    "aggregations": [
+      "micro",
+      "macro_by_user_mean"
+    ],
+    "main_metric": "test.macro_by_user_mean.mae",
+    "metrics": [
+      "mae",
+      "rmse"
+    ]
+  },
+  "scorer": {
+    "class": "MeanRegressor",
+    "mean": 3.5812050379139753
+  },
+  "stage_times_seconds": {
+    "compute_metrics": 0.909,
+    "fit": 0.001,
+    "prepare_xy": 0.007,
+    "score_test": 0.0,
+    "score_val": 0.0,
+    "write_predictions": 0.023
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": null,
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "eval_sampler": {
+        "class": "PostSplitUserSampler",
+        "n_users": 1000,
+        "require_train_history": true,
+        "seed": 0,
+        "user_column": "user_id"
+      },
+      "eval_user_selection": {
+        "kind": "post_split",
+        "test": {
+          "eligible_users": 6040,
+          "rows_after": 34520,
+          "rows_before": 202451,
+          "selected_users": 1000
+        },
+        "val": {
+          "eligible_users": 6040,
+          "rows_after": 17629,
+          "rows_before": 103423,
+          "selected_users": 1000
+        }
+      },
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "items": 3883,
+      "protocol": "regression",
+      "rows": {
+        "test": 34520,
+        "train": 694335,
+        "val": 17629
+      },
+      "sampled_column": null,
+      "sampler": null,
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 0,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_rows_dropped": 0,
+      "target_source_column": "target_rating",
+      "users": {
+        "filtered": 6040,
+        "test": 1000,
+        "train": 6040,
+        "val": 1000
+      }
+    },
+    "name": "ml-1m_rating_eval_users1000_seed0"
+  }
+}
