@@ -61,7 +61,7 @@ both the registry key and the builder name in the manifest.
 The ranking headline is `test.macro_by_user_group_mean.ndcg@5` with `RANKING_KS = (1,3,5,10)`
 (`runners/in_distribution/interaction_prediction/metrics.py:8,10`). In cap20 construction,
 `max_positive_items = total_items // (m + 1)`, so full candidate groups usually contain up to
-20 items for `m=1`, `m=3`, `m=4`, `m=9`, and `m=19`, while `m=2` has a maximum full-group size
+20 items for `m=1`, `m=3`, `m=9`, and `m=19`, while `m=2` has a maximum full-group size
 of 18. Tail groups can be smaller when a user has too few held-out positives.
 
 The larger comparability problem is not just group size, but the joint change in group-size

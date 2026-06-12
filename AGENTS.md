@@ -66,3 +66,15 @@ For factual or empirical claims, cross-check against papers, code, documentation
 - Keep pointwise prediction, candidate ranking, static policy evaluation, and trajectory simulation conceptually separate.
 - Every experiment result should document dataset, split, target definition, candidate construction, seed, model/prompt version, metadata visibility, sample sizes, metrics, and known caveats.
 - Treat exploratory notebooks and notes as sources of ideas to extract and simplify, not structures to copy blindly.
+
+## Experiment Artifacts
+
+`final_results.md` is the current registry of final results. Treat runs listed there as the result set intended for reporting, not as a scratch notebook index.
+
+For every run listed in `final_results.md`, commit the compact provenance files:
+- `manifest.json`
+- the relevant `metrics*.json`
+
+Do not list uncommitted, server-only, or locally missing runs as final results. Final results are defined by explicit user instructions, not inferred from notebooks or output directories.
+
+Do not commit row-level or large artifacts. If a notebook depends on ignored row-level artifacts, mark it briefly: local parquet required.

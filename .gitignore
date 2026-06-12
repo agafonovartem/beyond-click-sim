@@ -8,5 +8,15 @@ __pycache__/
 .env.*
 !.env.example
 /data/
-/outputs/
 *.parquet
+
+# Generated outputs are large. Track only compact run provenance/metric JSONs.
+/outputs/*
+!/outputs/in_distribution/
+/outputs/in_distribution/*
+!/outputs/in_distribution/interaction_prediction/
+/outputs/in_distribution/interaction_prediction/*
+!/outputs/in_distribution/interaction_prediction/*eval_users1000*/
+/outputs/in_distribution/interaction_prediction/*/*
+!/outputs/in_distribution/interaction_prediction/*eval_users1000*/manifest.json
+!/outputs/in_distribution/interaction_prediction/*eval_users1000*/metrics*.json

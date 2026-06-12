@@ -7,10 +7,7 @@ Notes:
 - Main ranking metric: `test.macro_by_user_group_mean.ndcg@5` when available; HR@1 is included for quick sanity checks.
 - Pop pointwise uses `popularity_f1_threshold`; pop ranking uses raw popularity scores via `popularity_ranking`.
 - Paper-table notebook: `notebooks/compare_popularity_llm_eval1000.ipynb` renders four compact seed-averaged tables: ML-1M pointwise, Steam pointwise, ML-1M ranking, and Steam ranking.
-- LLM stability notebook: `notebooks/llm_metric_stability.ipynb` estimates fixed-prediction LLM metric stability with user bootstrap/subsampling from saved `predictions.parquet`.
 - Raw-score pop ranking is included in the ranking tables from `metrics_ranking.json`.
-- Steam LLM `m19` pointwise metrics were migrated from saved fixed predictions with `runners/in_distribution/interaction_prediction/evaluate_llm_predictions.py`; the old group-macro-only payload is backed up as `metrics.legacy_macro_by_group.json`.
-- ML-1M LLM `m19` has no completed fresh eval1000 artifact yet: `20260612T045107Z_ml-1m_cap20_eval_users1000_m19_seed0_llm_yes_no_vllm_llama33_70b_full` exists but has no metrics files. The older partial run is listed as non-final.
 
 ## Interaction Prediction
 
