@@ -21,9 +21,15 @@ Protocol:
 - Filter: `MinUserInteractionsFilter(10)`.
 - Evaluation budget: post-split `PostSplitUserSampler(n_users=1000, seed=seed)`.
 - Candidate construction: none; no negatives, no `candidate_group`, no `sampled`.
-- Methods: `mode_regressor` fits the most frequent train rating and predicts a valid discrete rating; `mean_regressor` fits the continuous train target mean and is retained as a MAE/RMSE diagnostic.
+- Methods: `llm_regressor_vllm_llama33_70b_full` predicts a strict bare integer rating from train history and item metadata; `mode_regressor` fits the most frequent train rating and predicts a valid discrete rating; `mean_regressor` fits the continuous train target mean and is retained as a MAE/RMSE diagnostic.
 - Main metric: `test.macro_by_user_mean.mae`; micro MAE/RMSE are retained as secondary diagnostics.
 - Scope: 6040 filtered/train users and 3883 items for all seeds; test users are capped to 1000 after splitting.
+
+#### LLMRegressor
+
+| seed | train rows | test rows | test users | llm errors | scored/requested | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 694335 | 34520 | 1000 | 0 | 34520/34520 | 0.8043 | 1.0862 | 0.8096 | 1.1237 | `20260612T154600Z_ml-1m_rating_eval_users1000_seed0_llm_regressor_vllm_llama33_70b_full` |
 
 #### ModeRegressor
 
