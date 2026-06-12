@@ -1,0 +1,140 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 2255,
+      "positives_max": 10,
+      "positives_mean": 7.9405764966740575,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 15.881152993348115,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 7.9405764966740575,
+      "sampled_min": 1
+    },
+    "val": {
+      "groups": 1456,
+      "positives_max": 10,
+      "positives_mean": 6.395604395604396,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 12.791208791208792,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 6.395604395604396,
+      "sampled_min": 1
+    }
+  },
+  "main_metric": "test.macro_by_user_group_mean.ndcg@5",
+  "method": "popularity_ranking",
+  "protocol": "ranking",
+  "ranking_evaluation": {
+    "ks": [
+      1,
+      3,
+      5,
+      10
+    ],
+    "tie_policy": "average"
+  },
+  "stage_times_seconds": {
+    "candidate_group_summary": 0.156,
+    "compute_ranking_metrics": 1.222,
+    "fit": 0.561,
+    "prepare_xy": 0.29,
+    "score_test": 0.006,
+    "score_val": 0.005,
+    "write_predictions": 0.104
+  },
+  "task": "steam_interaction_cap20_eval_users1000_m1_seed2",
+  "test": {
+    "macro_by_group": {
+      "groups_with_score_ties": 826,
+      "groups_with_score_ties_fraction": 0.3662971175166297,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 543,
+      "groups_with_size_lte@3": 85,
+      "groups_with_size_lte@5": 165,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.975609756097561,
+      "hit_rate@10": 1.0,
+      "hit_rate@3": 1.0,
+      "hit_rate@5": 1.0,
+      "n": 35812,
+      "n_groups": 2255,
+      "n_positive": 17906,
+      "ndcg@1": 0.975609756097561,
+      "ndcg@10": 0.9320179070984983,
+      "ndcg@3": 0.9675027850101247,
+      "ndcg@5": 0.9582272555654385,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 826,
+      "groups_with_score_ties_fraction": 0.3662971175166297,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 543,
+      "groups_with_size_lte@3": 85,
+      "groups_with_size_lte@5": 165,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.9862562421520331,
+      "hit_rate@10": 1.0,
+      "hit_rate@3": 1.0,
+      "hit_rate@5": 1.0,
+      "n": 35812,
+      "n_groups": 2255,
+      "n_positive": 17906,
+      "n_users": 1000,
+      "ndcg@1": 0.9862562421520331,
+      "ndcg@10": 0.9589847988972051,
+      "ndcg@3": 0.9768319501836905,
+      "ndcg@5": 0.9709884047757487,
+      "tie_policy": "average"
+    }
+  },
+  "val": {
+    "macro_by_group": {
+      "groups_with_score_ties": 392,
+      "groups_with_score_ties_fraction": 0.2692307692307692,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 645,
+      "groups_with_size_lte@3": 58,
+      "groups_with_size_lte@5": 239,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.9739010989010989,
+      "hit_rate@10": 1.0,
+      "hit_rate@3": 1.0,
+      "hit_rate@5": 1.0,
+      "n": 18624,
+      "n_groups": 1456,
+      "n_positive": 9312,
+      "ndcg@1": 0.9739010989010989,
+      "ndcg@10": 0.9478828299256222,
+      "ndcg@3": 0.9625838075545157,
+      "ndcg@5": 0.958303083345906,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 392,
+      "groups_with_score_ties_fraction": 0.2692307692307692,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 645,
+      "groups_with_size_lte@3": 58,
+      "groups_with_size_lte@5": 239,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.9819106209150327,
+      "hit_rate@10": 1.0,
+      "hit_rate@3": 1.0,
+      "hit_rate@5": 1.0,
+      "n": 18624,
+      "n_groups": 1456,
+      "n_positive": 9312,
+      "n_users": 1000,
+      "ndcg@1": 0.9819106209150327,
+      "ndcg@10": 0.9674155493632675,
+      "ndcg@3": 0.969831020873851,
+      "ndcg@5": 0.9678807494587276,
+      "tie_policy": "average"
+    }
+  }
+}
