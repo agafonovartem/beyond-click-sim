@@ -8,7 +8,7 @@ Notes:
 - Pop pointwise uses `popularity_f1_threshold`; pop ranking uses raw popularity scores via `popularity_ranking`.
 - Paper-table notebook: `notebooks/compare_popularity_llm_eval1000.ipynb` renders four compact seed-averaged tables: ML-1M pointwise, Steam pointwise, ML-1M ranking, and Steam ranking.
 - Raw-score pop ranking is included in the ranking tables from `metrics_ranking.json`.
-- Regression notebook: `notebooks/compare_regression_mean_eval1000.ipynb` renders the ML-1M rating `MeanRegressor` seed table and seed-averaged summary.
+- Regression notebook: `notebooks/compare_regression_mean_eval1000.ipynb` renders the ML-1M rating `MeanRegressor` seed table and seed-averaged summary. `ModeRegressor` is the primary discrete constant baseline for simulator-style rating prediction.
 
 ## Regression Prediction
 
@@ -21,9 +21,15 @@ Protocol:
 - Filter: `MinUserInteractionsFilter(10)`.
 - Evaluation budget: post-split `PostSplitUserSampler(n_users=1000, seed=seed)`.
 - Candidate construction: none; no negatives, no `candidate_group`, no `sampled`.
-- Method: `mean_regressor`, fit on full filtered train split and predicts the train target mean.
+- Methods: `mode_regressor` fits the most frequent train rating and predicts a valid discrete rating; `mean_regressor` fits the continuous train target mean and is retained as a MAE/RMSE diagnostic.
 - Main metric: `test.macro_by_user_mean.mae`; micro MAE/RMSE are retained as secondary diagnostics.
 - Scope: 6040 filtered/train users and 3883 items for all seeds; test users are capped to 1000 after splitting.
+
+#### ModeRegressor
+
+| seed | train rows | val rows | test rows | test users | mode | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 694335 | 17629 | 34520 | 1000 | 4.0000 | 0.8364 | 1.0932 | 0.8468 | 1.1665 | `20260612T152221Z_ml-1m_rating_eval_users1000_seed0_mode_regressor` |
 
 #### MeanRegressor
 
