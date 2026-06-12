@@ -186,6 +186,28 @@ instead of mixing protocols into `metrics.json`. The ranking headline is
 `test.macro_by_user_group_mean.ndcg@5`; HR@1/3/5/10 and NDCG@1/3/5/10 are also logged.
 LLM yes/no runs write both files because ranking can be computed from the same fixed scores.
 
+For LLM yes/no runs, ranking is a block ranking over two hard scores: `yes = 1.0` and
+`no = 0.0`. All `yes` rows are ranked above all `no` rows. Rows with the same score are
+handled with `tie_policy = "average"`: the metric is the expected value under a uniform
+random order inside the tied block, not the original row order.
+
+Example candidate group:
+
+| Row | LLM score | Ground truth |
+| --- | --- | --- |
+| 1 | yes | no |
+| 2 | yes | yes |
+| 3 | yes | no |
+| 4 | no | no |
+| 5 | no | yes |
+| 6 | no | no |
+
+The top tied block is the three `yes` rows and contains one true positive. Therefore
+`HR@1 = 1/3`, `HR@2 = 2/3`, and `HR@3 = 1.0`. This is intentional: hard yes/no scores
+can test whether positives are lifted into the `yes` block, but they do not rank items
+within that block. Interpret these ranking metrics as tie-aware block-ranking metrics, not
+as evidence of fine-grained candidate ordering.
+
 Old fixed-prediction LLM runs can be migrated to the current metric schema without new LLM
 calls:
 
