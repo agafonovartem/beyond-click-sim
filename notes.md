@@ -52,3 +52,33 @@
 
 10.
     **LLM metric stability check.** Check whether LLM metrics are stable enough on smaller user samples. If bootstrap/subsampling shows acceptable uncertainty, 100 users may be enough for intermediate results instead of 1000 users.
+
+11.
+    **Missing item quality / popularity metadata.** We currently do not materialize item-level
+    aggregate features such as average rating or number of ratings/reviews. This is a real gap:
+    AgentRecBench exposes candidate item fields like average rating and review count, Agent4Rec
+    builds item profiles with quality and popularity, and SimUSER uses aggregated item ratings
+    plus review-count visibility in parts of its simulator analysis.
+
+    We should add a train-only item aggregate feature layer, not just a standalone popularity
+    scorer. Minimal features: `rating_count`, `mean_rating`, `rating_std`, `positive_rate`,
+    `popularity_rank`, and `popularity_quantile`. For MovieLens, `mean_rating` is item quality /
+    consensus rating, while `rating_count` is popularity; these should not be collapsed into one
+    feature. For implicit-only datasets, `interaction_count` and positive-rate variants may be the
+    available proxies.
+
+    Leakage rule: default aggregates must be computed from the training split only and joined onto
+    validation/test candidate rows. If we want to simulate platform-visible public statistics
+    computed from all historical data before a task timestamp, that should be a separate explicit
+    protocol, ideally with temporal/as-of aggregates.
+
+    Use cases:
+    - expose/hide these fields in LLM prompt metadata visibility variants;
+    - use them as features for simple tabular baselines and stronger non-LLM scorers;
+    - stratify results by item popularity/quality buckets;
+    - report cold-item coverage, missing aggregate rates, and popularity/quality distribution by
+      split/candidate construction.
+
+    Every run manifest should record aggregate source (`train_only`, `as_of_time`, or
+    `full_dataset_public_stats`), exposed columns, hidden analysis-only columns, missing rates, and
+    whether the scorer used the aggregates directly.

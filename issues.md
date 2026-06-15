@@ -2,7 +2,8 @@
 
 Tracked defects in the **current** code, especially the in-distribution interaction-prediction
 pipeline (popularity + LLM yes/no scorers, pointwise and raw-score ranking) and the first
-rating-regression protocol. Unimplemented future work — preference tasks, additional regression
+rating-regression protocol, including protocol-validity and provenance gaps that affect how current
+outputs should be interpreted. Unimplemented future work — preference tasks, additional regression
 targets/methods, additional negative samplers, stronger classic baselines, temporal/stratified
 splitters, direct re-ranking prompts, policy-ranking, OOD, behavioral extrapolation, memorization
 — is not listed here; it lives in the design notes
@@ -126,3 +127,27 @@ should not be interpreted as proof that the model used only the visible metadata
 metadata-visibility variants separately. When comparing to classic baselines, state explicitly
 whether LLM world priors are considered allowed simulator signal or a leakage risk for that
 experiment.
+
+## 8. Candidate rows lack train-only item quality / popularity aggregate metadata
+
+Current candidate rows expose raw item metadata such as title/genre/year where available, but they
+do not expose reusable train-derived item aggregates such as `rating_count`, `mean_rating`,
+`positive_rate`, or popularity quantiles. The only implemented population-level item signal is the
+separate `PopularityScorer`, which learns a train target count internally and returns a score; that
+signal is not materialized as candidate metadata for LLM prompts, tabular baselines, stratified
+analysis, or manifest-visible metadata-visibility variants.
+
+This creates an information-regime gap relative to the simulator literature we are comparing
+against. AgentRecBench-style prompts include item-side fields such as average rating and review
+count, Agent4Rec item profiles include quality and popularity, and SimUSER uses aggregated item
+ratings / review-count visibility in parts of its setup. Without an explicit item-aggregate feature
+layer, our "metadata visibility" setting is underspecified: it is unclear whether a simulator was
+denied useful population context by design, or whether the feature simply has not been implemented.
+
+**Fix:** add a train-only item aggregate feature builder and make visibility explicit per task/run.
+At minimum, compute item `rating_count`, `mean_rating`, `rating_std`, `positive_rate`, and
+popularity rank/quantile from the training split only, join them onto validation/test candidate rows,
+and record whether these fields were hidden, used only for analysis, or exposed to a scorer/LLM
+prompt. Do not compute these aggregates from validation/test interactions or the full dataset unless
+the task intentionally defines a different "platform-visible global statistics" regime and records it
+in the manifest.
