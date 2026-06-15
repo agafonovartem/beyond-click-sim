@@ -11,8 +11,8 @@ DATASET_TARGET_REGRESSION_CONFIG = {
             "history_value_column": "rating",
             "target_name": "rating",
             "target_description": (
-                "Predict the integer MovieLens rating this user would give to "
-                "the candidate movie on a 1 to 5 scale."
+                "Predict the integer rating this user would give to "
+                "this movie on a 1 to 5 scale."
             ),
             "output_instructions": (
                 "Return exactly one integer: 1, 2, 3, 4, or 5. "
