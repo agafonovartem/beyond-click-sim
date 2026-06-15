@@ -68,7 +68,7 @@ Seed average over seeds 0-4:
 | 2 | 0 | complete | 0 | 6173/6173 | 0.5827 | user_group | 0.4979 | 0.4679 | `20260610T081306Z_ml-1m_cap20_eval_users1000_m2_seed0_llm_yes_no_vllm_llama33_70b_full` |
 | 3 | 0 | complete | 0 | 7293/7293 | 0.4968 | user_group | 0.4029 | 0.3689 | `20260611T180320Z_ml-1m_cap20_eval_users1000_m3_seed0_llm_yes_no_vllm_llama33_70b_full` |
 | 9 | 0 | complete | 0 | 17517/17517 | 0.2683 | user_group | 0.3019 | 0.1669 | `20260611T211709Z_ml-1m_cap20_eval_users1000_m9_seed0_llm_yes_no_vllm_llama33_70b_full` |
-| 19 | 0 | partial_non_final | 3 | 448/34520 | 0.1743 | user_group | n/a | n/a | `20260610T133914Z_ml-1m_cap20_eval_users1000_m19_seed0_llm_yes_no_vllm_llama33_70b_full` |
+| 19 | 0 | complete | 0 | 34520/34520 | 0.1531 | user_group | 0.2454 | 0.0875 | `20260612T045107Z_ml-1m_cap20_eval_users1000_m19_seed0_llm_yes_no_vllm_llama33_70b_full` |
 
 #### Pop
 
