@@ -124,6 +124,20 @@ class CandidateSampler(ABC):
         """Return candidate rows for one held-out split."""
 
 
+class ItemFeatureBuilder(ABC):
+    """Build split-dependent item features from train interactions only."""
+
+    @abstractmethod
+    def enrich_items(
+        self,
+        *,
+        items: pd.DataFrame,
+        train_interactions: pd.DataFrame,
+        item_column: str,
+    ) -> tuple[pd.DataFrame, dict[str, Any]]:
+        """Return items with extra feature columns and a manifest block."""
+
+
 class TaskBuilder(ABC):
     """Build a materialized task from a canonical dataset."""
 
@@ -143,6 +157,7 @@ class TaskBuilder(ABC):
         # Extra interaction columns available to history-aware models only for
         # observed train rows. They are not generic item/user features.
         history_context_columns: tuple[str, ...] = (),
+        item_feature_builder: ItemFeatureBuilder | None = None,
     ) -> None:
         self.name = name
         self.target_source_column = target_source_column
@@ -155,6 +170,7 @@ class TaskBuilder(ABC):
         self.sampled_column = sampled_column
         self.candidate_group_column = candidate_group_column
         self.history_context_columns = history_context_columns
+        self.item_feature_builder = item_feature_builder
 
     @abstractmethod
     def build(self, dataset: CanonicalDataset) -> Task:
@@ -218,6 +234,22 @@ class TaskBuilder(ABC):
         merged = merged.merge(item_features, on=item_column, how="left")
         return merged.loc[:, columns]
 
+    def _enrich_items_from_train(
+        self,
+        *,
+        items: pd.DataFrame,
+        train_interactions: pd.DataFrame,
+    ) -> tuple[pd.DataFrame, dict[str, Any] | None]:
+        """Apply optional train-only item feature construction."""
+
+        if self.item_feature_builder is None:
+            return items, None
+        return self.item_feature_builder.enrich_items(
+            items=items,
+            train_interactions=train_interactions,
+            item_column=self.item_column,
+        )
+
     @staticmethod
     def _component_manifest(component: object) -> dict[str, Any]:
         """Serialize a filter/splitter/sampler config for reproducibility."""
@@ -241,7 +273,13 @@ class TaskBuilder(ABC):
     def _manifest_value(value: Any) -> Any:
         """Convert nested task components into JSON-friendly values."""
 
-        if isinstance(value, (DatasetFilter, Splitter, CandidateSampler)):
+        task_component_types = (
+            DatasetFilter,
+            Splitter,
+            CandidateSampler,
+            ItemFeatureBuilder,
+        )
+        if isinstance(value, task_component_types):
             return TaskBuilder._component_manifest(value)
         if isinstance(value, tuple):
             return [TaskBuilder._manifest_value(item) for item in value]

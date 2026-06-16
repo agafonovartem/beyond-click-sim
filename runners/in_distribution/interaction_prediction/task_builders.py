@@ -10,6 +10,7 @@ from beyond_click_sim.tasks import (
     MinUserInteractionsFilter,
     RandomFractionSplitter,
     Task,
+    TrainItemRatingStatistics,
 )
 
 
@@ -28,6 +29,9 @@ DATASET_HISTORY_CONTEXT_COLUMNS = {
     "ml-1m": ("rating",),
     "steam": ("playtime_forever",),
 }
+DATASET_ITEM_RATING_VALUE_COLUMNS = {
+    "ml-1m": "rating",
+}
 
 
 def build_alignment_task(
@@ -36,13 +40,18 @@ def build_alignment_task(
     seed: int,
     *,
     max_eval_users: int | None = None,
+    use_item_rating_stats: bool = False,
 ) -> Task:
     """Build one interaction-prediction task for a dataset, ratio, and seed."""
 
     dataset = load_canonical_dataset(dataset_name)
     eval_suffix = "" if max_eval_users is None else f"_eval_users{max_eval_users}"
+    item_stats_suffix = "_item_stats" if use_item_rating_stats else ""
     builder = AlignmentInteractionTaskBuilder(
-        name=f"{dataset_name}_interaction_cap20{eval_suffix}_m{negative_ratio}_seed{seed}",
+        name=(
+            f"{dataset_name}_interaction{item_stats_suffix}_cap20"
+            f"{eval_suffix}_m{negative_ratio}_seed{seed}"
+        ),
         dataset_filter=MinUserInteractionsFilter(min_interactions=MIN_INTERACTIONS),
         splitter=RandomFractionSplitter(
             train_fraction=TRAIN_FRACTION,
@@ -57,6 +66,10 @@ def build_alignment_task(
             seed=seed,
         ),
         history_context_columns=DATASET_HISTORY_CONTEXT_COLUMNS[dataset_name],
+        item_feature_builder=_item_feature_builder(
+            dataset_name,
+            use_item_rating_stats=use_item_rating_stats,
+        ),
     )
     return builder.build(dataset)
 
@@ -95,6 +108,7 @@ def _make_builder(
     seed: int,
     *,
     max_eval_users: int | None = None,
+    use_item_rating_stats: bool = False,
 ) -> Callable[[], Task]:
     def build() -> Task:
         return build_alignment_task(
@@ -102,9 +116,26 @@ def _make_builder(
             negative_ratio,
             seed,
             max_eval_users=max_eval_users,
+            use_item_rating_stats=use_item_rating_stats,
         )
 
     return build
+
+
+def _item_feature_builder(
+    dataset_name: str,
+    *,
+    use_item_rating_stats: bool,
+) -> TrainItemRatingStatistics | None:
+    if not use_item_rating_stats:
+        return None
+    if dataset_name not in DATASET_ITEM_RATING_VALUE_COLUMNS:
+        raise ValueError(
+            f"No item rating statistics config for dataset: {dataset_name}"
+        )
+    return TrainItemRatingStatistics(
+        value_column=DATASET_ITEM_RATING_VALUE_COLUMNS[dataset_name],
+    )
 
 
 # TODO: make it parameter dependent. I want to pass seeds, ratios, dataset and get the collections of tasks.
@@ -131,8 +162,25 @@ EVAL1000_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     for seed in SEEDS
 }
 
+EVAL1000_ITEM_STATS_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
+    (
+        f"{dataset_name}_item_stats_cap20_eval_users{EVAL_USERS}"
+        f"_m{negative_ratio}_seed{seed}"
+    ): _make_builder(
+        dataset_name,
+        negative_ratio,
+        seed,
+        max_eval_users=EVAL_USERS,
+        use_item_rating_stats=True,
+    )
+    for dataset_name in DATASET_ITEM_RATING_VALUE_COLUMNS
+    for negative_ratio in NEGATIVE_RATIOS
+    for seed in SEEDS
+}
+
 DEFAULT_TASK_NAMES = list(EVAL1000_TASK_BUILDERS)
 TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     **EVAL1000_TASK_BUILDERS,
+    **EVAL1000_ITEM_STATS_TASK_BUILDERS,
     **FULL_TASK_BUILDERS,
 }

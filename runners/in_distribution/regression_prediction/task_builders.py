@@ -10,6 +10,7 @@ from beyond_click_sim.tasks import (
     RandomFractionSplitter,
     RegressionPredictionTaskBuilder,
     Task,
+    TrainItemRatingStatistics,
 )
 
 
@@ -29,6 +30,9 @@ DATASET_TARGETS = {
         },
     },
 }
+DATASET_ITEM_RATING_VALUE_COLUMNS = {
+    "ml-1m": "rating",
+}
 
 
 def build_regression_task(
@@ -37,13 +41,15 @@ def build_regression_task(
     seed: int,
     *,
     max_eval_users: int | None = None,
+    use_item_rating_stats: bool = False,
 ) -> Task:
     """Build one observed-only regression task."""
 
     dataset = load_canonical_dataset(dataset_name)
     target_config = DATASET_TARGETS[dataset_name][target_name]
     eval_suffix = "" if max_eval_users is None else f"_eval_users{max_eval_users}"
-    task_name = f"{dataset_name}_{target_name}{eval_suffix}_seed{seed}"
+    item_stats_suffix = "_item_stats" if use_item_rating_stats else ""
+    task_name = f"{dataset_name}_{target_name}{item_stats_suffix}{eval_suffix}_seed{seed}"
     builder = RegressionPredictionTaskBuilder(
         name=task_name,
         dataset_filter=MinUserInteractionsFilter(min_interactions=MIN_INTERACTIONS),
@@ -58,6 +64,10 @@ def build_regression_task(
         eval_sampler=PostSplitUserSampler(
             n_users=max_eval_users,
             seed=seed,
+        ),
+        item_feature_builder=_item_feature_builder(
+            dataset_name,
+            use_item_rating_stats=use_item_rating_stats,
         ),
     )
     return builder.build(dataset)
@@ -97,6 +107,7 @@ def _make_builder(
     seed: int,
     *,
     max_eval_users: int | None = None,
+    use_item_rating_stats: bool = False,
 ) -> Callable[[], Task]:
     def build() -> Task:
         return build_regression_task(
@@ -104,9 +115,26 @@ def _make_builder(
             target_name,
             seed,
             max_eval_users=max_eval_users,
+            use_item_rating_stats=use_item_rating_stats,
         )
 
     return build
+
+
+def _item_feature_builder(
+    dataset_name: str,
+    *,
+    use_item_rating_stats: bool,
+) -> TrainItemRatingStatistics | None:
+    if not use_item_rating_stats:
+        return None
+    if dataset_name not in DATASET_ITEM_RATING_VALUE_COLUMNS:
+        raise ValueError(
+            f"No item rating statistics config for dataset: {dataset_name}"
+        )
+    return TrainItemRatingStatistics(
+        value_column=DATASET_ITEM_RATING_VALUE_COLUMNS[dataset_name],
+    )
 
 
 EVAL1000_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
@@ -121,7 +149,22 @@ EVAL1000_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     for seed in SEEDS
 }
 
+EVAL1000_ITEM_STATS_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
+    f"{dataset_name}_{target_name}_item_stats_eval_users{EVAL_USERS}_seed{seed}": _make_builder(
+        dataset_name,
+        target_name,
+        seed,
+        max_eval_users=EVAL_USERS,
+        use_item_rating_stats=True,
+    )
+    for dataset_name, targets in DATASET_TARGETS.items()
+    if dataset_name in DATASET_ITEM_RATING_VALUE_COLUMNS
+    for target_name in targets
+    for seed in SEEDS
+}
+
 DEFAULT_TASK_NAMES = list(EVAL1000_TASK_BUILDERS)
 TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     **EVAL1000_TASK_BUILDERS,
+    **EVAL1000_ITEM_STATS_TASK_BUILDERS,
 }

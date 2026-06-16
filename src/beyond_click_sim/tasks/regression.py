@@ -5,6 +5,7 @@ import pandas as pd
 from beyond_click_sim.data.canonical import CanonicalDataset
 from beyond_click_sim.tasks.base import (
     DatasetFilter,
+    ItemFeatureBuilder,
     Splitter,
     Task,
     TaskBuilder,
@@ -33,6 +34,7 @@ class RegressionPredictionTaskBuilder(TaskBuilder):
         item_column: str = "item_id",
         history_context_columns: tuple[str, ...] = (),
         eval_sampler: PostSplitUserSampler | None = None,
+        item_feature_builder: ItemFeatureBuilder | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -46,6 +48,7 @@ class RegressionPredictionTaskBuilder(TaskBuilder):
             sampled_column=None,
             candidate_group_column=None,
             history_context_columns=history_context_columns,
+            item_feature_builder=item_feature_builder,
         )
         self.eval_sampler = eval_sampler
         self._validate_history_context_columns()
@@ -87,6 +90,10 @@ class RegressionPredictionTaskBuilder(TaskBuilder):
             train=split.train,
         )
 
+        items, item_feature_manifest = self._enrich_items_from_train(
+            items=items,
+            train_interactions=split.train,
+        )
         user_features = self._prefixed_features(users, self.user_column, "user")
         item_features = self._prefixed_features(items, self.item_column, "item")
         feature_columns = self._feature_columns(
@@ -145,6 +152,7 @@ class RegressionPredictionTaskBuilder(TaskBuilder):
                 "target_column": self.target_column,
                 "feature_columns": list(feature_columns),
                 "history_context_columns": list(self.history_context_columns),
+                "item_feature_builder": item_feature_manifest,
                 "sampled_column": None,
                 "candidate_group_column": None,
                 "filter": self._component_manifest(self.dataset_filter),

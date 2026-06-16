@@ -15,6 +15,10 @@ from beyond_click_sim.evaluation import (
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMInteractionYesNoScorer
 from beyond_click_sim.tasks import Task
+from runners.in_distribution.llm_item_stats import (
+    item_rating_column_labels,
+    maybe_add_item_rating_prompt_columns,
+)
 from runners.in_distribution.interaction_prediction.methods.common import (
     candidate_group_summary,
     current_git_commit,
@@ -33,7 +37,6 @@ from runners.in_distribution.interaction_prediction.metrics import (
     RANKING_TIE_POLICY,
 )
 from runners.in_distribution.interaction_prediction.task_builders import repo_root
-
 
 OLLAMA_LLAMA31_8B_METHOD_NAME = "llm_yes_no_ollama_llama31_8b"
 OLLAMA_LLAMA31_8B_CLIENT = "ollama_local"
@@ -81,6 +84,22 @@ def run_llama31_8b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
     )
 
 
+def run_llama31_8b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_with_item_stats_smoke",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=25,
+        max_workers=OLLAMA_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
 def run_llama31_8b_full(task: Task, output_dir: Path) -> dict[str, object]:
     return run_method(
         task,
@@ -90,6 +109,22 @@ def run_llama31_8b_full(task: Task, output_dir: Path) -> dict[str, object]:
         model=OLLAMA_LLAMA31_8B_MODEL,
         max_candidate_groups=None,
         max_workers=OLLAMA_MAX_WORKERS,
+    )
+
+
+def run_llama31_8b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_with_item_stats_full",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=None,
+        max_workers=OLLAMA_MAX_WORKERS,
+        use_item_stats=True,
     )
 
 
@@ -105,6 +140,22 @@ def run_llama33_70b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
     )
 
 
+def run_llama33_70b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_with_item_stats_smoke",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
 def run_llama33_70b_full(task: Task, output_dir: Path) -> dict[str, object]:
     return run_method(
         task,
@@ -114,6 +165,22 @@ def run_llama33_70b_full(task: Task, output_dir: Path) -> dict[str, object]:
         model=VLLM_LLAMA33_70B_MODEL,
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
+    )
+
+
+def run_llama33_70b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_with_item_stats_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        use_item_stats=True,
     )
 
 
@@ -130,12 +197,21 @@ def run_method(
     max_tokens: int = MAX_TOKENS,
     max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
+    use_item_stats: bool = False,
 ) -> dict[str, object]:
     """Run the yes/no LLM scorer for pointwise interaction alignment."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
-    prompt_columns = DATASET_PROMPT_COLUMNS[dataset_name]
+    prompt_columns = maybe_add_item_rating_prompt_columns(
+        dataset_name,
+        DATASET_PROMPT_COLUMNS[dataset_name],
+        use_item_stats=use_item_stats,
+    )
+    column_labels = item_rating_column_labels(
+        dataset_name,
+        use_item_stats=use_item_stats,
+    )
     candidate_group_column = task.schema.candidate_group_column
     if candidate_group_column is None:
         raise ValueError("LLM yes/no method requires candidate_group_column")
@@ -153,6 +229,7 @@ def run_method(
         model=model,
         history_description_columns=prompt_columns["history_description_columns"],
         candidate_description_columns=prompt_columns["candidate_description_columns"],
+        column_labels=column_labels,
         max_history_items=max_history_items,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -225,6 +302,8 @@ def run_method(
             "temperature": temperature,
             "max_tokens": max_tokens,
             "prompt_columns": prompt_columns,
+            "column_labels": column_labels,
+            "uses_item_stats": use_item_stats,
         },
         "decision_rule": {
             "kind": "hard_binary_yes_no_parser",

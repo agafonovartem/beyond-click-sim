@@ -6,6 +6,7 @@ import sys
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from beyond_click_sim.tasks import Task, TaskSchema
 
@@ -132,3 +133,58 @@ def test_llm_yes_no_runner_retries_and_keeps_failed_rows(
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["limits"]["max_llm_attempts"] == 2
     assert "max_llm_errors" not in manifest["limits"]
+
+    first_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "H1. item_title: Toy Story; item_genres: Animation; rating: 5" in first_prompt
+    assert "user rating" not in first_prompt
+
+
+def test_llm_yes_no_runner_requires_item_stats_columns_when_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(llm_yes_no, "make_llm_client", lambda _: FakeClient([]))
+
+    task = Task(
+        name="toy",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["i-train-1"],
+                "item_title": ["Toy Story"],
+                "item_genres": ["Animation"],
+                "rating": [5],
+                "target": [1],
+            }
+        ),
+        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["i1"],
+                "candidate_group": ["g1"],
+                "item_title": ["Lion King"],
+                "item_genres": ["Animation"],
+                "target": [1],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            feature_columns=("user_id", "item_id"),
+        ),
+        manifest={"dataset": "ml-1m", "seed": 0},
+    )
+
+    with pytest.raises(ValueError, match="Missing required columns"):
+        llm_yes_no.run_method(
+            task,
+            tmp_path,
+            method_name="llm_yes_no_test_with_item_stats",
+            client_name="fake",
+            model="fake-model",
+            max_candidate_groups=None,
+            max_llm_attempts=1,
+            max_workers=1,
+            use_item_stats=True,
+        )

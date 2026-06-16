@@ -3,7 +3,6 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 from tqdm import tqdm
@@ -11,6 +10,10 @@ from tqdm import tqdm
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMRegressor
 from beyond_click_sim.tasks import Task
+from runners.in_distribution.llm_item_stats import (
+    item_rating_column_labels,
+    maybe_add_item_rating_prompt_columns,
+)
 from runners.in_distribution.regression_prediction.config import (
     DATASET_TARGET_REGRESSION_CONFIG,
     MAX_HISTORY_ITEMS,
@@ -27,7 +30,6 @@ from runners.in_distribution.regression_prediction.metrics import (
     REGRESSION_METRICS_FILENAME,
 )
 from runners.in_distribution.regression_prediction.task_builders import repo_root
-
 
 OLLAMA_LLAMA31_8B_METHOD_NAME = "llm_regressor_ollama_llama31_8b"
 OLLAMA_LLAMA31_8B_CLIENT = "ollama_local"
@@ -55,6 +57,22 @@ def run_llama31_8b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
     )
 
 
+def run_llama31_8b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_with_item_stats_smoke",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_rows=SMOKE_ROWS,
+        max_workers=OLLAMA_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
 def run_llama31_8b_full(task: Task, output_dir: Path) -> dict[str, object]:
     return run_method(
         task,
@@ -64,6 +82,22 @@ def run_llama31_8b_full(task: Task, output_dir: Path) -> dict[str, object]:
         model=OLLAMA_LLAMA31_8B_MODEL,
         max_rows=None,
         max_workers=OLLAMA_MAX_WORKERS,
+    )
+
+
+def run_llama31_8b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_with_item_stats_full",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_rows=None,
+        max_workers=OLLAMA_MAX_WORKERS,
+        use_item_stats=True,
     )
 
 
@@ -79,6 +113,22 @@ def run_llama33_70b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
     )
 
 
+def run_llama33_70b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_with_item_stats_smoke",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=SMOKE_ROWS,
+        max_workers=VLLM_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
 def run_llama33_70b_full(task: Task, output_dir: Path) -> dict[str, object]:
     return run_method(
         task,
@@ -88,6 +138,22 @@ def run_llama33_70b_full(task: Task, output_dir: Path) -> dict[str, object]:
         model=VLLM_LLAMA33_70B_MODEL,
         max_rows=None,
         max_workers=VLLM_MAX_WORKERS,
+    )
+
+
+def run_llama33_70b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_with_item_stats_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=None,
+        max_workers=VLLM_MAX_WORKERS,
+        use_item_stats=True,
     )
 
 
@@ -104,6 +170,7 @@ def run_method(
     max_tokens: int = MAX_TOKENS,
     max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
+    use_item_stats: bool = False,
 ) -> dict[str, object]:
     """Run an LLM discrete numeric scorer for regression prediction."""
 
@@ -116,6 +183,19 @@ def run_method(
     dataset_name = str(task.manifest["dataset"])
     target_source_column = str(task.manifest["target_source_column"])
     target_config = DATASET_TARGET_REGRESSION_CONFIG[dataset_name][target_source_column]
+    base_prompt_columns = {
+        "history_description_columns": target_config["history_description_columns"],
+        "candidate_description_columns": target_config["candidate_description_columns"],
+    }
+    prompt_columns = maybe_add_item_rating_prompt_columns(
+        dataset_name,
+        base_prompt_columns,
+        use_item_stats=use_item_stats,
+    )
+    column_labels = item_rating_column_labels(
+        dataset_name,
+        use_item_stats=use_item_stats,
+    )
 
     xy = task_xy(task)
     X_train, y_train = xy["train"]
@@ -127,11 +207,12 @@ def run_method(
     scorer = LLMRegressor(
         client=make_llm_client(client_name),
         model=model,
-        history_description_columns=target_config["history_description_columns"],
-        candidate_description_columns=target_config["candidate_description_columns"],
+        history_description_columns=prompt_columns["history_description_columns"],
+        candidate_description_columns=prompt_columns["candidate_description_columns"],
         target_description=str(target_config["target_description"]),
         output_instructions=str(target_config["output_instructions"]),
         valid_values=target_config["valid_values"],
+        column_labels=column_labels,
         max_history_items=max_history_items,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -168,10 +249,6 @@ def run_method(
     coverage = scored_rows / requested_rows if requested_rows else 0.0
 
     root = repo_root()
-    prompt_columns = {
-        "history_description_columns": target_config["history_description_columns"],
-        "candidate_description_columns": target_config["candidate_description_columns"],
-    }
     scorer_manifest = {
         "class": "LLMRegressor",
         "client_name": client_name,
@@ -180,6 +257,8 @@ def run_method(
         "temperature": temperature,
         "max_tokens": max_tokens,
         "prompt_columns": prompt_columns,
+        "column_labels": column_labels,
+        "uses_item_stats": use_item_stats,
         "target": {
             "name": target_config["target_name"],
             "description": target_config["target_description"],

@@ -209,6 +209,66 @@ def test_llm_interaction_scorer_separates_history_and_candidate_columns() -> Non
     assert "999" not in user_prompt
 
 
+def test_llm_interaction_scorer_formats_labels_and_numeric_values() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_title": ["Toy Story"],
+            "rating": [5.0],
+            "item_rating_mean": [4.153],
+            "item_rating_count": [2077],
+            "missing_stat": [float("nan")],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "item_title": ["Lion King"],
+            "item_rating_mean": [3.333],
+            "item_rating_count": [0],
+            "missing_stat": [float("nan")],
+        }
+    )
+    client = FakeClient(["C1: yes"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        history_description_columns=(
+            "item_title",
+            "rating",
+            "item_rating_mean",
+            "item_rating_count",
+            "missing_stat",
+        ),
+        candidate_description_columns=(
+            "item_title",
+            "item_rating_mean",
+            "item_rating_count",
+            "missing_stat",
+        ),
+        column_labels={
+            "rating": "user rating",
+            "item_rating_mean": "average rating",
+            "item_rating_count": "number of prior reviews",
+        },
+    )
+    scorer.fit(X_train, pd.Series([1]))
+    scorer.score(X_test)
+
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert (
+        "H1. item_title: Toy Story; user rating: 5; average rating: 4.15; "
+        "number of prior reviews: 2077"
+    ) in user_prompt
+    assert (
+        "C1. item_title: Lion King; average rating: 3.33; "
+        "number of prior reviews: 0"
+    ) in user_prompt
+    assert "missing_stat" not in user_prompt
+
+
 def test_llm_interaction_scorer_requires_fit_before_score() -> None:
     scorer = LLMInteractionYesNoScorer(
         client=FakeClient(["C1: yes"]),
@@ -437,6 +497,57 @@ def test_llm_regressor_prompt_does_not_leak_candidate_target_or_rating() -> None
     assert "target" not in user_prompt
     assert "rating: 999" not in user_prompt
     assert "999" not in user_prompt
+
+
+def test_llm_regressor_formats_labels_and_numeric_values() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_title": ["Toy Story"],
+            "rating": [5.0],
+            "item_rating_mean": [4.153],
+            "item_rating_count": [2077],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_title": ["Lion King"],
+            "item_rating_mean": [3.333],
+            "item_rating_count": [0],
+        }
+    )
+    client = FakeClient(["4"])
+
+    scorer = LLMRegressor(
+        client=client,
+        model="fake-model",
+        history_description_columns=(
+            "item_title",
+            "rating",
+            "item_rating_mean",
+            "item_rating_count",
+        ),
+        candidate_description_columns=(
+            "item_title",
+            "item_rating_mean",
+            "item_rating_count",
+        ),
+        column_labels={
+            "rating": "user rating",
+            "item_rating_mean": "average rating",
+            "item_rating_count": "number of prior reviews",
+        },
+        target_description="Predict a rating.",
+        output_instructions="Return exactly one integer.",
+        valid_values=(1, 2, 3, 4, 5),
+    ).fit(X_train, pd.Series([5]))
+    scorer.score(X_test)
+
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "user rating: 5" in user_prompt
+    assert "average rating: 4.15" in user_prompt
+    assert "Candidate. item_title: Lion King; average rating: 3.33" in user_prompt
 
 
 def test_llm_regressor_requires_fit_before_score() -> None:

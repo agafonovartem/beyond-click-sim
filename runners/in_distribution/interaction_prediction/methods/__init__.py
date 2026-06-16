@@ -8,8 +8,12 @@ from beyond_click_sim.tasks import Task
 from runners.in_distribution.interaction_prediction.methods.llm_yes_no import (
     run_llama31_8b_full,
     run_llama31_8b_smoke,
+    run_llama31_8b_with_item_stats_full,
+    run_llama31_8b_with_item_stats_smoke,
     run_llama33_70b_full,
     run_llama33_70b_smoke,
+    run_llama33_70b_with_item_stats_full,
+    run_llama33_70b_with_item_stats_smoke,
 )
 from runners.in_distribution.interaction_prediction.methods.popularity import (
     run as run_popularity,
@@ -24,6 +28,18 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     "popularity_ranking": run_popularity_ranking,
     "llm_yes_no_ollama_llama31_8b_smoke": run_llama31_8b_smoke,
     "llm_yes_no_ollama_llama31_8b_full": run_llama31_8b_full,
+    "llm_yes_no_ollama_llama31_8b_with_item_stats_smoke": (
+        run_llama31_8b_with_item_stats_smoke
+    ),
+    "llm_yes_no_ollama_llama31_8b_with_item_stats_full": (
+        run_llama31_8b_with_item_stats_full
+    ),
     "llm_yes_no_vllm_llama33_70b_smoke": run_llama33_70b_smoke,
     "llm_yes_no_vllm_llama33_70b_full": run_llama33_70b_full,
+    "llm_yes_no_vllm_llama33_70b_with_item_stats_smoke": (
+        run_llama33_70b_with_item_stats_smoke
+    ),
+    "llm_yes_no_vllm_llama33_70b_with_item_stats_full": (
+        run_llama33_70b_with_item_stats_full
+    ),
 }

@@ -82,3 +82,20 @@
     Every run manifest should record aggregate source (`train_only`, `as_of_time`, or
     `full_dataset_public_stats`), exposed columns, hidden analysis-only columns, missing rates, and
     whether the scorer used the aggregates directly.
+
+12.
+    **Matched baseline for item-stats rating regression.** If an LLM regression prompt exposes
+    `item_rating_mean`, the information regime changes: the model receives the item's train-only
+    mean rating, which is a very strong held-out-rating predictor and close to the classic
+    per-item-mean baseline. Existing regression baselines cover global mean/mode and user-history
+    mean/mode, but not train-only item mean.
+
+    Therefore, any `llm_regressor_*_with_item_stats_*` result is hard to interpret unless it is
+    compared against a matched item-mean regressor using the same train-only aggregate source and
+    the same missing-item fallback policy. Otherwise an apparent LLM gain may only show that we
+    handed the model item quality metadata, not that it performed useful user-conditioned reasoning.
+
+    Minimal diagnostic: add an `item_mean_regressor` baseline that fits per-item mean rating on
+    `task.train`, predicts that mean for warm test items, and uses an explicit fallback for items
+    without train ratings. For simulator-style integer-rating comparison, also decide whether to
+    report a rounded/clipped valid-rating variant alongside the continuous MAE/RMSE diagnostic.

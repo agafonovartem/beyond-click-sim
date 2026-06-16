@@ -8,6 +8,7 @@ from beyond_click_sim.data.canonical import CanonicalDataset
 from beyond_click_sim.tasks.base import (
     CandidateSampler,
     DatasetFilter,
+    ItemFeatureBuilder,
     Splitter,
     Task,
     TaskBuilder,
@@ -42,6 +43,7 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
         sampled_column: str = "sampled",
         candidate_group_column: str = "candidate_group",
         history_context_columns: tuple[str, ...] = (),
+        item_feature_builder: ItemFeatureBuilder | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -55,6 +57,7 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
             sampled_column=sampled_column,
             candidate_group_column=candidate_group_column,
             history_context_columns=history_context_columns,
+            item_feature_builder=item_feature_builder,
         )
         self._validate_history_context_columns()
         if self.dataset_filter is None:
@@ -92,6 +95,23 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
         )
         split = self.splitter.split(interactions)
 
+        val_rows = self.sampler.sample(
+            split.val,
+            interactions=interactions,
+            items=items,
+        )
+        val_negative_pairs = self._sampled_pairs(val_rows)
+        test_rows = self.sampler.sample(
+            split.test,
+            interactions=interactions,
+            items=items,
+            excluded_pairs=val_negative_pairs,
+        )
+
+        items, item_feature_manifest = self._enrich_items_from_train(
+            items=items,
+            train_interactions=split.train,
+        )
         user_features = self._prefixed_features(users, self.user_column, "user")
         item_features = self._prefixed_features(items, self.item_column, "item")
         feature_columns = self._feature_columns(
@@ -110,19 +130,6 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
             user_column=self.user_column,
             item_column=self.item_column,
         )
-        val_rows = self.sampler.sample(
-            split.val,
-            interactions=interactions,
-            items=items,
-        )
-        val_negative_pairs = self._sampled_pairs(val_rows)
-        test_rows = self.sampler.sample(
-            split.test,
-            interactions=interactions,
-            items=items,
-            excluded_pairs=val_negative_pairs,
-        )
-
         val = self._with_features(
             rows=self._without_history_context(val_rows),
             user_features=user_features,
@@ -162,6 +169,7 @@ class AlignmentInteractionTaskBuilder(TaskBuilder):
                 "target_column": self.target_column,
                 "feature_columns": list(feature_columns),
                 "history_context_columns": list(self.history_context_columns),
+                "item_feature_builder": item_feature_manifest,
                 "sampled_column": self.sampled_column,
                 "candidate_group_column": self.candidate_group_column,
                 "filter": self._component_manifest(self.dataset_filter),

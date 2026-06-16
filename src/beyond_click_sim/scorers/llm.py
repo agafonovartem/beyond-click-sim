@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from numbers import Integral, Real
 import re
 from typing import Any
 
@@ -65,6 +66,7 @@ class LLMInteractionYesNoScorer(Scorer):
         max_history_items: int | None = 30,
         temperature: float = 0.0,
         max_tokens: int = 512,
+        column_labels: dict[str, str] | None = None,
     ) -> None:
         if candidate_description_columns is None:
             candidate_description_columns = item_description_columns
@@ -89,6 +91,7 @@ class LLMInteractionYesNoScorer(Scorer):
         self.max_history_items = max_history_items
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.column_labels = {} if column_labels is None else dict(column_labels)
         self.history_by_user_: dict[Any, list[str]] | None = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "LLMInteractionYesNoScorer":
@@ -213,7 +216,8 @@ class LLMInteractionYesNoScorer(Scorer):
             value = getattr(row, column)
             if pd.isna(value) or value == "":
                 continue
-            parts.append(f"{column}: {value}")
+            column_label = self.column_labels.get(column, column)
+            parts.append(f"{column_label}: {_format_prompt_value(value)}")
         description = "; ".join(parts) if parts else "no item description"
         return f"{label}. {description}"
 
@@ -264,6 +268,21 @@ def _chat_completion_text(response: Any) -> str:
     return str(content)
 
 
+def _format_prompt_value(value: Any) -> str:
+    """Return compact text for scalar values shown in LLM prompts."""
+
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, Integral):
+        return str(int(value))
+    if isinstance(value, Real):
+        numeric = float(value)
+        if numeric.is_integer():
+            return str(int(numeric))
+        return f"{numeric:.2f}"
+    return str(value)
+
+
 class LLMRegressor(Scorer):
     """LLM scorer for one-row numeric response prediction.
 
@@ -290,6 +309,7 @@ class LLMRegressor(Scorer):
         max_history_items: int | None = 30,
         temperature: float = 0.0,
         max_tokens: int = 64,
+        column_labels: dict[str, str] | None = None,
     ) -> None:
         if candidate_description_columns is None:
             candidate_description_columns = item_description_columns
@@ -311,7 +331,10 @@ class LLMRegressor(Scorer):
         valid_values_tuple = tuple(valid_values)
         if not valid_values_tuple:
             raise ValueError("valid_values must be non-empty")
-        if any(not isinstance(value, int) or isinstance(value, bool) for value in valid_values_tuple):
+        if any(
+            not isinstance(value, int) or isinstance(value, bool)
+            for value in valid_values_tuple
+        ):
             raise ValueError("valid_values must contain integers")
 
         self.client = client
@@ -326,6 +349,7 @@ class LLMRegressor(Scorer):
         self.max_history_items = max_history_items
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.column_labels = {} if column_labels is None else dict(column_labels)
         self.history_by_user_: dict[Any, list[str]] | None = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "LLMRegressor":
@@ -384,7 +408,11 @@ class LLMRegressor(Scorer):
         return scores
 
     def _build_messages(self, *, row: pd.Series) -> list[dict[str, str]]:
-        history = self.history_by_user_.get(row[self.user_column], []) if self.history_by_user_ else []
+        history = (
+            self.history_by_user_.get(row[self.user_column], [])
+            if self.history_by_user_
+            else []
+        )
         candidate = self._format_item_description(
             row=row,
             label="Candidate",
@@ -413,7 +441,8 @@ class LLMRegressor(Scorer):
             value = row[column]
             if pd.isna(value) or value == "":
                 continue
-            parts.append(f"{column}: {value}")
+            column_label = self.column_labels.get(column, column)
+            parts.append(f"{column_label}: {_format_prompt_value(value)}")
         description = "; ".join(parts) if parts else "no item description"
         return f"{label}. {description}"
 

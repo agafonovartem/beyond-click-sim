@@ -146,3 +146,143 @@ def test_llm_regression_runner_writes_valid_coverage_artifacts(
     assert "H1. item_title: Toy Story; item_genres: Animation; rating: 5" in first_prompt
     assert "Candidate. item_title: Lion King; item_genres: Animation" in first_prompt
     assert "Return exactly one integer" in first_prompt
+
+
+def test_llm_regression_runner_requires_item_stats_columns_when_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task = Task(
+        name="ml-1m_rating_eval_users1_seed0",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["i1"],
+                "item_title": ["Toy Story"],
+                "item_genres": ["Animation"],
+                "rating": [5],
+                "target": [5],
+            }
+        ),
+        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["i2"],
+                "item_title": ["Lion King"],
+                "item_genres": ["Animation"],
+                "rating": [pd.NA],
+                "target": [4],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            feature_columns=("item_title", "item_genres"),
+            history_context_columns=("rating",),
+        ),
+        manifest={
+            "protocol": "regression",
+            "dataset": "ml-1m",
+            "target_source_column": "target_rating",
+        },
+    )
+    monkeypatch.setattr(
+        llm_regressor,
+        "make_llm_client",
+        lambda _client_name: FakeClient([]),
+    )
+
+    with pytest.raises(ValueError, match="Missing required columns"):
+        llm_regressor.run_method(
+            task,
+            tmp_path,
+            method_name="llm_regressor_fake_with_item_stats_smoke",
+            client_name="fake",
+            model="fake-model",
+            max_rows=1,
+            max_llm_attempts=1,
+            max_workers=1,
+            use_item_stats=True,
+        )
+
+
+def test_llm_regression_runner_labels_rating_only_with_item_stats(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task = Task(
+        name="ml-1m_rating_item_stats_eval_users1_seed0",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["i1"],
+                "item_title": ["Toy Story"],
+                "item_genres": ["Animation"],
+                "item_rating_mean": [4.153],
+                "item_rating_count": [2077],
+                "rating": [5],
+                "target": [5],
+            }
+        ),
+        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["i2"],
+                "item_title": ["Lion King"],
+                "item_genres": ["Animation"],
+                "item_rating_mean": [3.333],
+                "item_rating_count": [0],
+                "rating": [pd.NA],
+                "target": [4],
+            },
+            index=["a"],
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            feature_columns=(
+                "item_title",
+                "item_genres",
+                "item_rating_mean",
+                "item_rating_count",
+            ),
+            history_context_columns=("rating",),
+        ),
+        manifest={
+            "protocol": "regression",
+            "dataset": "ml-1m",
+            "target_source_column": "target_rating",
+        },
+    )
+    client = FakeClient(["4"])
+    monkeypatch.setattr(
+        llm_regressor,
+        "make_llm_client",
+        lambda _client_name: client,
+    )
+
+    llm_regressor.run_method(
+        task,
+        tmp_path,
+        method_name="llm_regressor_fake_with_item_stats_smoke",
+        client_name="fake",
+        model="fake-model",
+        max_rows=1,
+        max_llm_attempts=1,
+        max_workers=1,
+        use_item_stats=True,
+    )
+
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert (
+        "H1. item_title: Toy Story; item_genres: Animation; user rating: 5; "
+        "average rating: 4.15; number of prior reviews: 2077"
+    ) in prompt
+    assert (
+        "Candidate. item_title: Lion King; item_genres: Animation; "
+        "average rating: 3.33; number of prior reviews: 0"
+    ) in prompt
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["uses_item_stats"] is True
+    assert manifest["scorer"]["column_labels"]["rating"] == "user rating"
