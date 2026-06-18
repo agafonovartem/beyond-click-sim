@@ -92,62 +92,59 @@ avoidable minutes. Speedup only — no effect on metric values.
 **Fix:** sort once by group code and slice contiguous blocks (or `np.split` on sorted codes)
 instead of a per-group mask scan.
 
-## 6. Rating-regression mean baseline predicts impossible user responses
+## 6. LLM prompts may over-constrain useful model prior
 
-The current `mean_regressor` baseline for MovieLens rating prediction fits the train mean and
-returns that continuous value for every row. This is a legitimate MAE/RMSE regression baseline,
-but it is not a literal user-response simulator: MovieLens users can only emit discrete ratings
-1-5, while the train mean is usually non-integer (for example around `3.58` in the current
-ML-1M runs).
+The current LLM system prompts say `Use only the provided history and candidate information.`
+This wording is not well aligned with the main research question. In this project, the LLM's
+semantic/world prior is part of what we may want to evaluate as simulator signal, not something
+that is automatically a defect. The prompt should prevent obvious protocol cheating, such as
+assuming access to hidden held-out labels or future interactions, but it should not imply that
+general model knowledge is disabled or forbidden by default.
 
-This matters when comparing against an LLM asked to simulate a user's rating response. If the
-LLM is constrained to output an integer rating, the continuous mean baseline has an information
-and output-space advantage; if the LLM is allowed to output fractional ratings, it is no longer
-strictly simulating the observed response format.
+The practical risk is prompt wording: we may unnecessarily discourage useful semantic reasoning
+and later describe the protocol as if the model used only visible metadata. This is not a separate
+experiment axis or a broad memorization caveat; it is a prompt-design cleanup.
 
-**Mitigation:** use the discrete `ModeRegressor` / most-common-rating baseline as the primary
-simulator-style constant baseline and report `MeanRegressor` as a continuous MAE/RMSE diagnostic.
-For LLM rating simulation, require a strict integer in the valid rating set rather than clamping
-or accepting arbitrary continuous values.
+**Fix:** remove or soften the restrictive sentence in the yes/no and regression system prompts.
+Prefer neutral wording such as "Given the user's observed history and candidate item information,
+predict the user's response" plus the existing output-format constraints. Add only a narrow
+anti-cheating instruction if needed, e.g. do not assume access to hidden held-out labels, future
+interactions, or evaluation answers.
 
-## 7. LLM "use only provided information" prompts do not remove model priors
+## 7. Visible item-card metadata is not aligned clearly with competitor protocols
 
-The current LLM prompt stance tells the model to use only the provided user history and item
-metadata. This is a useful protocol instruction because it discourages hidden recommender-like
-behavior and keeps prompts comparable across tasks. However, an LLM cannot actually disable its
-pretraining prior or possible memorized knowledge about popular movies/games. In this project,
-that prior is also part of the scientific question: a user simulator may be useful precisely
-because it brings broad semantic/world knowledge, but the same prior can create unfairness or
-dataset memorization artifacts.
+Our default ML-1M prompts expose basic item metadata such as title/genre/year. Explicit item-stats
+variants additionally expose train-only `item_rating_mean` and `item_rating_count`. The problem is
+not that every possible aggregate feature is missing; the problem is that the visible item-card
+metadata regime is not stated clearly enough relative to the simulator papers we compare against.
 
-This affects both yes/no interaction prediction and rating regression. A prompt instruction alone
-should not be interpreted as proof that the model used only the visible metadata.
+Agent4Rec presents recommended movies with item-profile information. In the paper, item profiles
+include quality, popularity, genre, and summary; in the released MovieLens simulation code, the
+runtime recommended-item string contains the movie title, `History ratings`, and `Summary`
+(`repos/Agent4Rec/simulation/arena.py`). The summary comes from `movies_augmentation.csv`, while
+the historical rating is computed from MovieLens ratings in `3_get_movie_detail.py`; this appears to
+use the full raw ratings file, not a train-only split.
 
-**Fix:** treat this as an interpretation caveat in result tables, and evaluate memorization /
-metadata-visibility variants separately. When comparing to classic baselines, state explicitly
-whether LLM world priors are considered allowed simulator signal or a leakage risk for that
-experiment.
+AgentRecBench is not a MovieLens setup. Its Amazon/Yelp/Goodreads agents use platform-specific
+item fields such as stars, review counts, average ratings, rating counts, descriptions, attributes,
+authors, publication years, and similar books. Therefore fields like `review_count`,
+`rating_number`, or `ratings_count` should be treated as dataset/platform metadata, not as a
+universal recommender feature we must blindly reproduce for MovieLens.
 
-## 8. Candidate rows lack train-only item quality / popularity aggregate metadata
+SimUSER also treats item-side cues as part of the simulated environment: it defines aggregated item
+rating and genre/category, and separately studies environment interventions such as showing the
+number of reviews, positive/negative reviews, and thumbnails/posters. This supports treating
+metadata visibility as an interface condition rather than a generic model-feature checklist.
 
-Current candidate rows expose raw item metadata such as title/genre/year where available, but they
-do not expose reusable train-derived item aggregates such as `rating_count`, `mean_rating`,
-`positive_rate`, or popularity quantiles. The only implemented population-level item signal is the
-separate `PopularityScorer`, which learns a train target count internally and returns a score; that
-signal is not materialized as candidate metadata for LLM prompts, tabular baselines, stratified
-analysis, or manifest-visible metadata-visibility variants.
+For our ML-1M experiments, `item_rating_mean` is the closest train-only analog of Agent4Rec's
+historical rating / platform average rating, while `item_rating_count` is a count/popularity signal
+closer to review-count visibility. These fields are reasonable visible item-card variants, but their
+visibility must be named and interpreted as such. Item-stats gains should not be described as
+generic LLM improvement unless the table states that the prompt exposed average rating/count.
 
-This creates an information-regime gap relative to the simulator literature we are comparing
-against. AgentRecBench-style prompts include item-side fields such as average rating and review
-count, Agent4Rec item profiles include quality and popularity, and SimUSER uses aggregated item
-ratings / review-count visibility in parts of its setup. Without an explicit item-aggregate feature
-layer, our "metadata visibility" setting is underspecified: it is unclear whether a simulator was
-denied useful population context by design, or whether the feature simply has not been implemented.
-
-**Fix:** add a train-only item aggregate feature builder and make visibility explicit per task/run.
-At minimum, compute item `rating_count`, `mean_rating`, `rating_std`, `positive_rate`, and
-popularity rank/quantile from the training split only, join them onto validation/test candidate rows,
-and record whether these fields were hidden, used only for analysis, or exposed to a scorer/LLM
-prompt. Do not compute these aggregates from validation/test interactions or the full dataset unless
-the task intentionally defines a different "platform-visible global statistics" regime and records it
-in the manifest.
+**Fix:** define the main ML-1M visible item-card protocol before final reporting: e.g.
+`title+genres` versus `title+genres+average_rating+rating_count`, and optionally whether an
+Agent4Rec-style summary condition is in scope. Keep using train-only aggregates for our protocol
+unless a separate "public platform statistics" condition is intentionally defined. For rating
+regression with item stats, add a matched item-mean baseline before claiming user-conditioned
+reasoning.
