@@ -1,7 +1,7 @@
 1. 
     For LLM we need to extend history by adding different targets. E.g. it may need rating for better understanding of user, to predict interaction/preference. We actually can do this for some classical models by providing avg. rating feature or something like this.
 
-    **Answer:** Mostly implemented for LLMs: `history_context_columns` add train-only feedback such as `rating` to user history, while val/test candidates keep these columns missing. Classical avg-rating features are not implemented yet. For LLM numeric regression, out-of-range outputs should be treated as parse failures rather than clamped into the target range; e.g. MovieLens rating predictions must parse as a bare integer in `{1, 2, 3, 4, 5}`.
+    **Answer:** Mostly implemented for LLMs: `history_context_columns` add train-only feedback such as `rating` to user history, while val/test candidates keep these columns missing. Explicit ML-1M item-stats task variants now add train-only `item_rating_mean` and `item_rating_count` for LLM prompts, but broader aggregate features and a matched classical item-mean baseline are not implemented yet. For LLM numeric regression, out-of-range outputs should be treated as parse failures rather than clamped into the target range; e.g. MovieLens rating predictions must parse as a bare integer in `{1, 2, 3, 4, 5}`.
 2. 
     Alignment Task. We ask LLM to score watch/no watch for each candidate groups. We may provide or not information how many likes it should put (like 1 always in our 1:m val). Check if Agent4Rec or SimUser do it? It makes it closer to ranking evaluation. If we want to apply Popularity (or maybe other metrics) for such problem, we need to find threshold on val set, than apply it on test set? For classic ML its simpler, as we can just use standard threshold. 
 
@@ -54,18 +54,18 @@
     **LLM metric stability check.** Check whether LLM metrics are stable enough on smaller user samples. If bootstrap/subsampling shows acceptable uncertainty, 100 users may be enough for intermediate results instead of 1000 users.
 
 11.
-    **Missing item quality / popularity metadata.** We currently do not materialize item-level
-    aggregate features such as average rating or number of ratings/reviews. This is a real gap:
-    AgentRecBench exposes candidate item fields like average rating and review count, Agent4Rec
-    builds item profiles with quality and popularity, and SimUSER uses aggregated item ratings
-    plus review-count visibility in parts of its simulator analysis.
+    **Partially implemented item quality / popularity metadata.** We now materialize the minimal
+    item-level aggregate features for explicit ML-1M item-stats task variants:
+    train-only `item_rating_mean` and `item_rating_count`. LLM `*_with_item_stats_*` methods can
+    expose them in prompts as average rating and number of prior reviews. This addresses the first
+    average-rating / review-count visibility gap relative to AgentRecBench, Agent4Rec, and SimUSER.
 
-    We should add a train-only item aggregate feature layer, not just a standalone popularity
-    scorer. Minimal features: `rating_count`, `mean_rating`, `rating_std`, `positive_rate`,
-    `popularity_rank`, and `popularity_quantile`. For MovieLens, `mean_rating` is item quality /
-    consensus rating, while `rating_count` is popularity; these should not be collapsed into one
-    feature. For implicit-only datasets, `interaction_count` and positive-rate variants may be the
-    available proxies.
+    The remaining work is to extend this beyond the minimal MovieLens rating mean/count case, not
+    just rely on the standalone popularity scorer. Candidate features still worth adding:
+    `item_rating_std`, `item_positive_rate`, `item_popularity_rank`, `item_popularity_quantile`,
+    and implicit-dataset proxies such as `item_interaction_count`. For MovieLens,
+    `item_rating_mean` is item quality / consensus rating, while `item_rating_count` is popularity;
+    these should not be collapsed into one feature.
 
     Leakage rule: default aggregates must be computed from the training split only and joined onto
     validation/test candidate rows. If we want to simulate platform-visible public statistics

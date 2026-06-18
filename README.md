@@ -152,6 +152,11 @@ the full train split, while validation/test candidate construction is capped to 
 deterministic 1000 held-out users per split. Full-scale tasks remain available by
 omitting the `eval_users1000` part, e.g. `ml-1m_cap20_m1_seed0`.
 
+Explicit ML-1M item-stats task variants are also available, but are not defaults.
+They add train-only `item_rating_mean` and `item_rating_count` item features, e.g.
+`ml-1m_item_stats_cap20_eval_users1000_m1_seed0` for interaction prediction and
+`ml-1m_rating_item_stats_eval_users1000_seed0` for rating regression.
+
 Available interaction-prediction methods:
 
 | Method | Description |
@@ -162,6 +167,11 @@ Available interaction-prediction methods:
 | `llm_yes_no_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B yes/no scorer on the full selected task. |
 | `llm_yes_no_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B yes/no scorer on a small candidate-group subset. |
 | `llm_yes_no_vllm_llama33_70b_full` | vLLM Llama 3.3 70B yes/no scorer on the full selected task. |
+
+Each LLM yes/no method also has an explicit item-stats variant with `_with_item_stats`
+before `_smoke` / `_full`, for example
+`llm_yes_no_ollama_llama31_8b_with_item_stats_smoke`. Use these with item-stats
+task variants when the prompt should expose average rating and number of prior reviews.
 
 > [!NOTE]
 > LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; vLLM is expected at `http://127.0.0.1:8000/v1`.
@@ -178,6 +188,12 @@ Available regression-prediction methods:
 | `llm_regressor_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B integer-rating scorer on the full selected test split. |
 | `llm_regressor_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B integer-rating scorer on the first 25 test rows. |
 | `llm_regressor_vllm_llama33_70b_full` | vLLM Llama 3.3 70B integer-rating scorer on the full selected test split. |
+
+Each LLM regressor also has explicit `_with_item_stats_smoke` and
+`_with_item_stats_full` variants, for example
+`llm_regressor_vllm_llama33_70b_with_item_stats_full`. These are intended for
+`*_item_stats_*` tasks; the current classical regression baselines do not yet include
+a matched train-only item-mean comparator.
 
 ## Outputs
 

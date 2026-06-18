@@ -1,6 +1,6 @@
 ### TaskBuilder for In-Distribution Tasks
 
-Preprocessing after canonization should have 3 steps:
+Preprocessing after canonization has the following task-construction stages:
 1. **Filtering.** I can filter any dataset by any rules I like. It should be simply `DatasetFilter` class with method `filter`. That's it. It does not care about target. For `DatasetFilter` it is just filtering condition.
 2. **Splitters:** A splitter creates train/validation/test interaction splits. Examples:
     - RandomFractionSplitter: train/val/test by fractions, e.g. 70/10/20
@@ -8,6 +8,7 @@ Preprocessing after canonization should have 3 steps:
     - GlobalTemporalSplitter: shared time cutoffs across users.
     - leave-n-out variants may be added later.
 3. **CandidateSampler.**  It constructs explicit candidate rows when the task needs them. This is independent of whether we later compute pointwise metrics or ranking metrics. The same candidate table can be flattened for binary classification metrics or grouped by candidate group for ranking metrics.
+4. **Optional item feature enrichment.** Split-dependent item metadata, such as train-only item rating mean/count, must be fit on the train interactions only. In the current builders it is applied after split construction and candidate/eval row sampling, then joined through the item feature table before the final task dataframes are returned. These features are not canonical dataset metadata, so their source and scorer visibility should be recorded in the task/run manifest.
 While canonicalization creates standard target columns, candidate samplers may add rows that are not canonical interactions such as sampled non-interactions; in that case the sampler is responsible for assigning `target` and documenting the assumption.
 
 Task families:
