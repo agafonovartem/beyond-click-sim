@@ -182,6 +182,8 @@ Available regression-prediction methods:
 | --- | --- |
 | `mode_regressor` | Constant discrete baseline that predicts the most frequent train target; default regression method and headline metric `test.macro_by_user_mean.mae`. |
 | `mean_regressor` | Constant continuous baseline that predicts the train target mean; useful MAE/RMSE diagnostic but not a literal discrete rating response simulator. |
+| `item_mean_regressor` | Per-item continuous baseline that predicts the train target mean for the candidate item, with global mean fallback for cold items. |
+| `item_mode_regressor` | Per-item discrete baseline that predicts the train target mode for the candidate item, with global mode fallback for cold items. |
 | `user_mean_regressor` | Per-user continuous baseline that predicts the mean rating from the same train-history window shown to the LLM. |
 | `user_mode_regressor` | Per-user discrete baseline that predicts the most frequent rating from the same train-history window shown to the LLM. |
 | `llm_regressor_ollama_llama31_8b_smoke` | Local Ollama Llama 3.1 8B integer-rating scorer on the first 25 test rows. |
@@ -192,8 +194,8 @@ Available regression-prediction methods:
 Each LLM regressor also has explicit `_with_item_stats_smoke` and
 `_with_item_stats_full` variants, for example
 `llm_regressor_vllm_llama33_70b_with_item_stats_full`. These are intended for
-`*_item_stats_*` tasks; the current classical regression baselines do not yet include
-a matched train-only item-mean comparator.
+`*_item_stats_*` tasks; `item_mean_regressor` is the matched train-only item-mean
+comparator for ordinary rating tasks.
 
 ## Outputs
 

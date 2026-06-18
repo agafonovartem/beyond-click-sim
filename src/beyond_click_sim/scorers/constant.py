@@ -104,6 +104,138 @@ class ModeRegressor(Scorer):
         return pd.Series(self.mode_, index=X.index, name="score", dtype=float)
 
 
+class ItemMeanRegressor(Scorer):
+    """Predict each item's train target mean, with global mean for cold items."""
+
+    name = "item_mean_regressor"
+    stat_source = "train_targets_grouped_by_item"
+    cold_item_policy = "global_fallback"
+
+    def __init__(self, *, item_column: str = "item_id") -> None:
+        if not item_column:
+            raise ValueError("item_column must be non-empty")
+        self.item_column = item_column
+        self.fallback_scorer_: MeanRegressor | None = None
+        self.fallback_: float | None = None
+        self.item_mean_by_item_: dict[Any, float] | None = None
+        self.item_count_by_item_: dict[Any, int] | None = None
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "ItemMeanRegressor":
+        if len(X) != len(y):
+            raise ValueError("X and y must have the same length")
+        self._require_columns(X, [self.item_column])
+
+        fallback_scorer = MeanRegressor().fit(X, y)
+        targets = y.astype(float).reset_index(drop=True)
+        item_ids = X[self.item_column].reset_index(drop=True)
+        grouped = pd.DataFrame(
+            {"item_id": item_ids, "target": targets}
+        ).groupby("item_id", dropna=False)["target"]
+
+        self.fallback_scorer_ = fallback_scorer
+        self.fallback_ = fallback_scorer.mean_
+        self.item_mean_by_item_ = {
+            item_id: float(value) for item_id, value in grouped.mean().items()
+        }
+        self.item_count_by_item_ = {
+            item_id: int(value) for item_id, value in grouped.count().items()
+        }
+        return self
+
+    def score(self, X: pd.DataFrame) -> pd.Series:
+        if self.item_mean_by_item_ is None or self.fallback_ is None:
+            raise RuntimeError("ItemMeanRegressor is not fitted")
+        self._require_columns(X, [self.item_column])
+        return pd.Series(
+            [
+                self.item_mean_by_item_.get(item_id, self.fallback_)
+                for item_id in X[self.item_column]
+            ],
+            index=X.index,
+            name="score",
+            dtype=float,
+        )
+
+    def cold_item_rows(self, X: pd.DataFrame) -> int:
+        if self.item_count_by_item_ is None:
+            raise RuntimeError("ItemMeanRegressor is not fitted")
+        self._require_columns(X, [self.item_column])
+        return int((~X[self.item_column].isin(self.item_count_by_item_)).sum())
+
+    @staticmethod
+    def _require_columns(frame: pd.DataFrame, columns: list[str]) -> None:
+        missing = [column for column in columns if column not in frame.columns]
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
+
+
+class ItemModeRegressor(Scorer):
+    """Predict each item's train target mode, with global mode for cold items."""
+
+    name = "item_mode_regressor"
+    stat_source = "train_targets_grouped_by_item"
+    cold_item_policy = "global_fallback"
+    tie_break = "smallest"
+
+    def __init__(self, *, item_column: str = "item_id") -> None:
+        if not item_column:
+            raise ValueError("item_column must be non-empty")
+        self.item_column = item_column
+        self.fallback_scorer_: ModeRegressor | None = None
+        self.fallback_: float | None = None
+        self.item_mode_by_item_: dict[Any, float] | None = None
+        self.item_count_by_item_: dict[Any, int] | None = None
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "ItemModeRegressor":
+        if len(X) != len(y):
+            raise ValueError("X and y must have the same length")
+        self._require_columns(X, [self.item_column])
+
+        fallback_scorer = ModeRegressor().fit(X, y)
+        targets = y.astype(float).reset_index(drop=True)
+        item_ids = X[self.item_column].reset_index(drop=True)
+        grouped = pd.DataFrame(
+            {"item_id": item_ids, "target": targets}
+        ).groupby("item_id", dropna=False)["target"]
+
+        self.fallback_scorer_ = fallback_scorer
+        self.fallback_ = fallback_scorer.mode_
+        self.item_mode_by_item_ = {
+            item_id: smallest_tie_mode(values)
+            for item_id, values in grouped
+        }
+        self.item_count_by_item_ = {
+            item_id: int(value) for item_id, value in grouped.count().items()
+        }
+        return self
+
+    def score(self, X: pd.DataFrame) -> pd.Series:
+        if self.item_mode_by_item_ is None or self.fallback_ is None:
+            raise RuntimeError("ItemModeRegressor is not fitted")
+        self._require_columns(X, [self.item_column])
+        return pd.Series(
+            [
+                self.item_mode_by_item_.get(item_id, self.fallback_)
+                for item_id in X[self.item_column]
+            ],
+            index=X.index,
+            name="score",
+            dtype=float,
+        )
+
+    def cold_item_rows(self, X: pd.DataFrame) -> int:
+        if self.item_count_by_item_ is None:
+            raise RuntimeError("ItemModeRegressor is not fitted")
+        self._require_columns(X, [self.item_column])
+        return int((~X[self.item_column].isin(self.item_count_by_item_)).sum())
+
+    @staticmethod
+    def _require_columns(frame: pd.DataFrame, columns: list[str]) -> None:
+        missing = [column for column in columns if column not in frame.columns]
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
+
+
 class UserMeanRegressor(Scorer):
     """Predict each user's mean over the train-history window shown to the LLM."""
 

@@ -5,6 +5,10 @@ from pathlib import Path
 
 from beyond_click_sim.tasks import Task
 
+from runners.in_distribution.regression_prediction.methods.item import (
+    run_item_mean,
+    run_item_mode,
+)
 from runners.in_distribution.regression_prediction.methods.llm_regressor import (
     run_llama31_8b_full,
     run_llama31_8b_smoke,
@@ -28,6 +32,8 @@ MethodRunner = Callable[[Task, Path], dict[str, object]]
 METHOD_RUNNERS: dict[str, MethodRunner] = {
     "mean_regressor": run_mean,
     "mode_regressor": run_mode,
+    "item_mean_regressor": run_item_mean,
+    "item_mode_regressor": run_item_mode,
     "user_mean_regressor": run_user_mean,
     "user_mode_regressor": run_user_mode,
     "llm_regressor_ollama_llama31_8b_smoke": run_llama31_8b_smoke,

@@ -1,0 +1,119 @@
+{
+  "cold_item_rows": {
+    "test": 8,
+    "val": 2
+  },
+  "evaluated_splits": [
+    "val",
+    "test"
+  ],
+  "git_commit": "bbb902a3ffbd0d55a37b71c8e87ec261284da844",
+  "method": "item_mean_regressor",
+  "protocol": "regression",
+  "regression_evaluation": {
+    "aggregations": [
+      "micro",
+      "macro_by_user_mean"
+    ],
+    "main_metric": "test.macro_by_user_mean.mae",
+    "metrics": [
+      "mae",
+      "rmse"
+    ]
+  },
+  "scorer": {
+    "class": "ItemMeanRegressor",
+    "cold_item_policy": "global_fallback",
+    "fallback": {
+      "scorer": "MeanRegressor",
+      "value": 3.580365385584768
+    },
+    "item_column": "item_id",
+    "n_items_seen_train": 3664,
+    "stat_source": "train_targets_grouped_by_item"
+  },
+  "stage_times_seconds": {
+    "compute_metrics": 0.995,
+    "fit": 0.048,
+    "prepare_xy": 0.01,
+    "score_test": 0.015,
+    "score_val": 0.01,
+    "write_predictions": 0.018
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": null,
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "eval_sampler": {
+        "class": "PostSplitUserSampler",
+        "n_users": 1000,
+        "require_train_history": true,
+        "seed": 4,
+        "user_column": "user_id"
+      },
+      "eval_user_selection": {
+        "kind": "post_split",
+        "test": {
+          "eligible_users": 6040,
+          "rows_after": 34407,
+          "rows_before": 202451,
+          "selected_users": 1000
+        },
+        "val": {
+          "eligible_users": 6040,
+          "rows_after": 17564,
+          "rows_before": 103423,
+          "selected_users": 1000
+        }
+      },
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_feature_builder": null,
+      "items": 3883,
+      "protocol": "regression",
+      "rows": {
+        "test": 34407,
+        "train": 694335,
+        "val": 17564
+      },
+      "sampled_column": null,
+      "sampler": null,
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 4,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_rows_dropped": 0,
+      "target_source_column": "target_rating",
+      "users": {
+        "filtered": 6040,
+        "test": 1000,
+        "train": 6040,
+        "val": 1000
+      }
+    },
+    "name": "ml-1m_rating_eval_users1000_seed4"
+  }
+}

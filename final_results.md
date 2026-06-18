@@ -8,7 +8,7 @@ Notes:
 - Pop pointwise uses `popularity_f1_threshold`; pop ranking uses raw popularity scores via `popularity_ranking`.
 - Paper-table notebook: `notebooks/compare_popularity_llm_eval1000.ipynb` renders four compact seed-averaged tables: ML-1M pointwise, Steam pointwise, ML-1M ranking, and Steam ranking.
 - Raw-score pop ranking is included in the ranking tables from `metrics_ranking.json`.
-- Regression notebook: `notebooks/compare_regression_mean_eval1000.ipynb` currently renders the ML-1M rating `MeanRegressor` seed table and seed-averaged summary. `ModeRegressor` is the primary discrete constant baseline for simulator-style rating prediction; per-user prompt-window baselines are listed directly below.
+- Regression notebook: `notebooks/compare_regression_mean_eval1000.ipynb` renders the ML-1M rating regression run registry and seed-averaged summary. `ModeRegressor` is the primary discrete constant baseline for simulator-style rating prediction; per-user and per-item baselines are listed directly below.
 
 ## Regression Prediction
 
@@ -21,7 +21,7 @@ Protocol:
 - Filter: `MinUserInteractionsFilter(10)`.
 - Evaluation budget: post-split `PostSplitUserSampler(n_users=1000, seed=seed)`.
 - Candidate construction: none; no negatives, no `candidate_group`, no `sampled`.
-- Methods: `mode_regressor` fits the most frequent train rating and predicts a valid discrete rating; `mean_regressor` fits the continuous train target mean and is retained as a MAE/RMSE diagnostic. `user_mean_regressor` and `user_mode_regressor` use the same per-user last-20 train-history window in input order that is shown to `LLMRegressor`. Item-stats LLM variants additionally expose train-split-only item rating mean/count for history and candidate movies.
+- Methods: `mode_regressor` fits the most frequent train rating and predicts a valid discrete rating; `mean_regressor` fits the continuous train target mean and is retained as a MAE/RMSE diagnostic. `user_mean_regressor` and `user_mode_regressor` use the same per-user last-20 train-history window in input order that is shown to `LLMRegressor`. `item_mean_regressor` and `item_mode_regressor` fit train-target statistics per item and use the global train mean/mode for cold items. Item-stats LLM variants additionally expose train-split-only item rating mean/count for history and candidate movies.
 - Main metric: `test.macro_by_user_mean.mae`; micro MAE/RMSE are retained as secondary diagnostics.
 - Scope: 6040 filtered/train users and 3883 items for all seeds; test users are capped to 1000 after splitting.
 
@@ -42,6 +42,44 @@ Protocol:
 | seed | train rows | val rows | test rows | test users | mode | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
 | 0 | 694335 | 17629 | 34520 | 1000 | 4.0000 | 0.8364 | 1.0932 | 0.8468 | 1.1665 | `20260612T152221Z_ml-1m_rating_eval_users1000_seed0_mode_regressor` |
+
+#### ItemMeanRegressor
+
+| seed | train rows | val rows | test rows | test users | cold test rows | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 694335 | 17629 | 34520 | 1000 | 5 | 0.7912 | 0.9560 | 0.7755 | 0.9710 | `20260618T084646Z_ml-1m_rating_eval_users1000_seed0_item_mean_regressor` |
+| 1 | 694335 | 16574 | 32425 | 1000 | 5 | 0.7782 | 0.9397 | 0.7852 | 0.9826 | `20260618T084659Z_ml-1m_rating_eval_users1000_seed1_item_mean_regressor` |
+| 2 | 694335 | 16731 | 32738 | 1000 | 5 | 0.7825 | 0.9429 | 0.7807 | 0.9783 | `20260618T084712Z_ml-1m_rating_eval_users1000_seed2_item_mean_regressor` |
+| 3 | 694335 | 17388 | 34008 | 1000 | 7 | 0.7905 | 0.9543 | 0.7730 | 0.9692 | `20260618T084725Z_ml-1m_rating_eval_users1000_seed3_item_mean_regressor` |
+| 4 | 694335 | 17564 | 34407 | 1000 | 8 | 0.7982 | 0.9642 | 0.7920 | 0.9925 | `20260618T084738Z_ml-1m_rating_eval_users1000_seed4_item_mean_regressor` |
+
+Seed average over seeds 0-4:
+
+| metric | mean | std |
+|---|---:|---:|
+| test.macro_by_user_mean.mae | 0.7881 | 0.0079 |
+| test.macro_by_user_mean.rmse | 0.9514 | 0.0100 |
+| test.micro.mae | 0.7813 | 0.0076 |
+| test.micro.rmse | 0.9787 | 0.0094 |
+
+#### ItemModeRegressor
+
+| seed | train rows | val rows | test rows | test users | cold test rows | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 694335 | 17629 | 34520 | 1000 | 5 | 0.7782 | 1.0619 | 0.7644 | 1.0850 | `20260618T084647Z_ml-1m_rating_eval_users1000_seed0_item_mode_regressor` |
+| 1 | 694335 | 16574 | 32425 | 1000 | 5 | 0.7621 | 1.0427 | 0.7729 | 1.0962 | `20260618T084700Z_ml-1m_rating_eval_users1000_seed1_item_mode_regressor` |
+| 2 | 694335 | 16731 | 32738 | 1000 | 5 | 0.7630 | 1.0432 | 0.7725 | 1.0953 | `20260618T084713Z_ml-1m_rating_eval_users1000_seed2_item_mode_regressor` |
+| 3 | 694335 | 17388 | 34008 | 1000 | 7 | 0.7716 | 1.0592 | 0.7619 | 1.0862 | `20260618T084726Z_ml-1m_rating_eval_users1000_seed3_item_mode_regressor` |
+| 4 | 694335 | 17564 | 34407 | 1000 | 8 | 0.7797 | 1.0626 | 0.7790 | 1.1050 | `20260618T084739Z_ml-1m_rating_eval_users1000_seed4_item_mode_regressor` |
+
+Seed average over seeds 0-4:
+
+| metric | mean | std |
+|---|---:|---:|
+| test.macro_by_user_mean.mae | 0.7709 | 0.0082 |
+| test.macro_by_user_mean.rmse | 1.0539 | 0.0101 |
+| test.micro.mae | 0.7701 | 0.0069 |
+| test.micro.rmse | 1.0935 | 0.0082 |
 
 #### UserMeanRegressor
 

@@ -146,5 +146,6 @@ generic LLM improvement unless the table states that the prompt exposed average 
 `title+genres` versus `title+genres+average_rating+rating_count`, and optionally whether an
 Agent4Rec-style summary condition is in scope. Keep using train-only aggregates for our protocol
 unless a separate "public platform statistics" condition is intentionally defined. For rating
-regression with item stats, add a matched item-mean baseline before claiming user-conditioned
-reasoning.
+regression with item stats, compare against the matched train-only item baselines
+(`item_mean_regressor` / `item_mode_regressor`) before claiming user-conditioned reasoning beyond
+visible item-quality metadata.

@@ -1,7 +1,7 @@
 1. 
     For LLM we need to extend history by adding different targets. E.g. it may need rating for better understanding of user, to predict interaction/preference. We actually can do this for some classical models by providing avg. rating feature or something like this.
 
-    **Answer:** Mostly implemented for LLMs: `history_context_columns` add train-only feedback such as `rating` to user history, while val/test candidates keep these columns missing. Explicit ML-1M item-stats task variants now add train-only `item_rating_mean` and `item_rating_count` for LLM prompts, but broader aggregate features and a matched classical item-mean baseline are not implemented yet. For LLM numeric regression, out-of-range outputs should be treated as parse failures rather than clamped into the target range; e.g. MovieLens rating predictions must parse as a bare integer in `{1, 2, 3, 4, 5}`.
+    **Answer:** Mostly implemented for LLMs: `history_context_columns` add train-only feedback such as `rating` to user history, while val/test candidates keep these columns missing. Explicit ML-1M item-stats task variants now add train-only `item_rating_mean` and `item_rating_count` for LLM prompts. Matched classical item baselines are implemented as `item_mean_regressor` and `item_mode_regressor`, fit on train targets grouped by item with global fallback for cold items. Broader aggregate features are still future work. For LLM numeric regression, out-of-range outputs should be treated as parse failures rather than clamped into the target range; e.g. MovieLens rating predictions must parse as a bare integer in `{1, 2, 3, 4, 5}`.
 2. 
     Alignment Task. We ask LLM to score watch/no watch for each candidate groups. We may provide or not information how many likes it should put (like 1 always in our 1:m val). Check if Agent4Rec or SimUser do it? It makes it closer to ranking evaluation. If we want to apply Popularity (or maybe other metrics) for such problem, we need to find threshold on val set, than apply it on test set? For classic ML its simpler, as we can just use standard threshold. 
 
@@ -87,15 +87,17 @@
     **Matched baseline for item-stats rating regression.** If an LLM regression prompt exposes
     `item_rating_mean`, the information regime changes: the model receives the item's train-only
     mean rating, which is a very strong held-out-rating predictor and close to the classic
-    per-item-mean baseline. Existing regression baselines cover global mean/mode and user-history
-    mean/mode, but not train-only item mean.
+    per-item-mean baseline. Existing regression baselines now cover global mean/mode, user-history
+    mean/mode, and train-only item mean/mode.
 
     Therefore, any `llm_regressor_*_with_item_stats_*` result is hard to interpret unless it is
     compared against a matched item-mean regressor using the same train-only aggregate source and
     the same missing-item fallback policy. Otherwise an apparent LLM gain may only show that we
     handed the model item quality metadata, not that it performed useful user-conditioned reasoning.
 
-    Minimal diagnostic: add an `item_mean_regressor` baseline that fits per-item mean rating on
-    `task.train`, predicts that mean for warm test items, and uses an explicit fallback for items
-    without train ratings. For simulator-style integer-rating comparison, also decide whether to
-    report a rounded/clipped valid-rating variant alongside the continuous MAE/RMSE diagnostic.
+    Implemented diagnostic: `item_mean_regressor` fits per-item mean rating on `task.train`,
+    predicts that mean for warm validation/test items, and uses global train mean fallback for items
+    without train ratings. `item_mode_regressor` is the discrete companion with global train mode
+    fallback and smallest-value tie-break. Remaining optional question: decide whether a
+    rounded/clipped valid-rating variant of item mean is worth reporting alongside the continuous
+    MAE/RMSE diagnostic.

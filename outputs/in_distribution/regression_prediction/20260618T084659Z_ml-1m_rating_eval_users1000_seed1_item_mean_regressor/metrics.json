@@ -1,0 +1,58 @@
+{
+  "cold_item_rows": {
+    "test": 5,
+    "val": 4
+  },
+  "evaluated_splits": [
+    "val",
+    "test"
+  ],
+  "main_metric": "test.macro_by_user_mean.mae",
+  "method": "item_mean_regressor",
+  "protocol": "regression",
+  "regression_evaluation": {
+    "aggregations": [
+      "micro",
+      "macro_by_user_mean"
+    ],
+    "metrics": [
+      "mae",
+      "rmse"
+    ]
+  },
+  "stage_times_seconds": {
+    "compute_metrics": 1.001,
+    "fit": 0.047,
+    "prepare_xy": 0.008,
+    "score_test": 0.014,
+    "score_val": 0.008,
+    "write_predictions": 0.019
+  },
+  "task": "ml-1m_rating_eval_users1000_seed1",
+  "test": {
+    "macro_by_user_mean": {
+      "mae": 0.7781922881489243,
+      "n": 32425,
+      "n_users": 1000,
+      "rmse": 0.9397075371148171
+    },
+    "micro": {
+      "mae": 0.785231619562955,
+      "n": 32425,
+      "rmse": 0.9826245182647014
+    }
+  },
+  "val": {
+    "macro_by_user_mean": {
+      "mae": 0.7944989332169294,
+      "n": 16574,
+      "n_users": 1000,
+      "rmse": 0.9428479495844984
+    },
+    "micro": {
+      "mae": 0.7880887430822067,
+      "n": 16574,
+      "rmse": 0.9812817003903771
+    }
+  }
+}
