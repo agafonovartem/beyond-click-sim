@@ -1,0 +1,54 @@
+{
+  "evaluated_splits": [
+    "val",
+    "test"
+  ],
+  "main_metric": "test.macro_by_user_mean.mae",
+  "method": "user_mode_regressor",
+  "protocol": "regression",
+  "regression_evaluation": {
+    "aggregations": [
+      "micro",
+      "macro_by_user_mean"
+    ],
+    "metrics": [
+      "mae",
+      "rmse"
+    ]
+  },
+  "stage_times_seconds": {
+    "compute_metrics": 0.985,
+    "fit": 1.101,
+    "prepare_xy": 0.009,
+    "score_test": 0.016,
+    "score_val": 0.008,
+    "write_predictions": 0.019
+  },
+  "task": "ml-1m_rating_eval_users1000_seed4",
+  "test": {
+    "macro_by_user_mean": {
+      "mae": 0.9100397729017374,
+      "n": 34407,
+      "n_users": 1000,
+      "rmse": 1.208029088508347
+    },
+    "micro": {
+      "mae": 0.9141163135408492,
+      "n": 34407,
+      "rmse": 1.2748759953192155
+    }
+  },
+  "val": {
+    "macro_by_user_mean": {
+      "mae": 0.9014107555411767,
+      "n": 17564,
+      "n_users": 1000,
+      "rmse": 1.1816690542152852
+    },
+    "micro": {
+      "mae": 0.9097585971304942,
+      "n": 17564,
+      "rmse": 1.2751456215597894
+    }
+  }
+}

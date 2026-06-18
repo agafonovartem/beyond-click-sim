@@ -4,10 +4,10 @@ import pandas as pd
 import pytest
 
 from beyond_click_sim.scorers import (
-    HistoryMeanRegressor,
-    HistoryModeRegressor,
     MeanRegressor,
     ModeRegressor,
+    UserMeanRegressor,
+    UserModeRegressor,
 )
 from beyond_click_sim.scorers.constant import (
     select_user_history_positions,
@@ -110,7 +110,7 @@ def test_select_user_history_rows_keeps_last_rows_in_input_order() -> None:
     ) == {"u1": [2, 3, 5], "u2": [1, 4]}
 
 
-def test_history_mean_regressor_predicts_user_prompt_window_mean() -> None:
+def test_user_mean_regressor_predicts_user_prompt_window_mean() -> None:
     X_train = pd.DataFrame(
         {
             "user_id": ["u1", "u1", "u1", "u1", "u2", "u2"],
@@ -119,20 +119,20 @@ def test_history_mean_regressor_predicts_user_prompt_window_mean() -> None:
     )
     X_test = pd.DataFrame({"user_id": ["u1", "u2", "u1"]}, index=["a", "b", "c"])
 
-    scorer = HistoryMeanRegressor(
+    scorer = UserMeanRegressor(
         history_value_column="rating",
         max_history_items=3,
     ).fit(X_train, pd.Series([5, 1, 4, 2, 1, 3]))
     scores = scorer.score(X_test)
 
-    assert scorer.history_mean_by_user_ == {"u1": pytest.approx(7 / 3), "u2": 2.0}
-    assert scorer.history_count_by_user_ == {"u1": 3, "u2": 2}
+    assert scorer.user_mean_by_user_ == {"u1": pytest.approx(7 / 3), "u2": 2.0}
+    assert scorer.user_count_by_user_ == {"u1": 3, "u2": 2}
     assert scores.tolist() == pytest.approx([7 / 3, 2.0, 7 / 3])
     assert list(scores.index) == ["a", "b", "c"]
     assert scores.name == "score"
 
 
-def test_history_mode_regressor_predicts_user_prompt_window_mode() -> None:
+def test_user_mode_regressor_predicts_user_prompt_window_mode() -> None:
     X_train = pd.DataFrame(
         {
             "user_id": ["u1", "u1", "u1", "u1", "u2", "u2"],
@@ -141,56 +141,56 @@ def test_history_mode_regressor_predicts_user_prompt_window_mode() -> None:
     )
     X_test = pd.DataFrame({"user_id": ["u1", "u2"]}, index=["a", "b"])
 
-    scorer = HistoryModeRegressor(
+    scorer = UserModeRegressor(
         history_value_column="rating",
         max_history_items=4,
     ).fit(X_train, pd.Series([1, 5, 5, 1, 4, 2]))
     scores = scorer.score(X_test)
 
-    assert scorer.history_mode_by_user_ == {"u1": 1.0, "u2": 2.0}
-    assert scorer.history_count_by_user_ == {"u1": 4, "u2": 2}
+    assert scorer.user_mode_by_user_ == {"u1": 1.0, "u2": 2.0}
+    assert scorer.user_count_by_user_ == {"u1": 4, "u2": 2}
     assert scorer.tie_break == "smallest"
     assert scores.tolist() == [1.0, 2.0]
     assert list(scores.index) == ["a", "b"]
 
 
-def test_history_regressors_require_fit_before_score() -> None:
+def test_user_regressors_require_fit_before_score() -> None:
     X_test = pd.DataFrame({"user_id": ["u1"]})
 
     with pytest.raises(RuntimeError, match="not fitted"):
-        HistoryMeanRegressor(history_value_column="rating").score(X_test)
+        UserMeanRegressor(history_value_column="rating").score(X_test)
 
     with pytest.raises(RuntimeError, match="not fitted"):
-        HistoryModeRegressor(history_value_column="rating").score(X_test)
+        UserModeRegressor(history_value_column="rating").score(X_test)
 
 
-def test_history_regressors_reject_unknown_score_users() -> None:
+def test_user_regressors_reject_unknown_score_users() -> None:
     X_train = pd.DataFrame({"user_id": ["u1"], "rating": [5]})
     y_train = pd.Series([5])
     X_test = pd.DataFrame({"user_id": ["u2"]})
 
     with pytest.raises(ValueError, match="Missing fitted history"):
-        HistoryMeanRegressor(history_value_column="rating").fit(X_train, y_train).score(X_test)
+        UserMeanRegressor(history_value_column="rating").fit(X_train, y_train).score(X_test)
 
     with pytest.raises(ValueError, match="Missing fitted history"):
-        HistoryModeRegressor(history_value_column="rating").fit(X_train, y_train).score(X_test)
+        UserModeRegressor(history_value_column="rating").fit(X_train, y_train).score(X_test)
 
 
-def test_history_regressors_reject_invalid_fit_inputs() -> None:
+def test_user_regressors_reject_invalid_fit_inputs() -> None:
     with pytest.raises(ValueError, match="same length"):
-        HistoryMeanRegressor(history_value_column="rating").fit(
+        UserMeanRegressor(history_value_column="rating").fit(
             pd.DataFrame({"user_id": ["u1"], "rating": [5]}),
             pd.Series([5, 4]),
         )
 
     with pytest.raises(ValueError, match="Missing required columns"):
-        HistoryModeRegressor(history_value_column="rating").fit(
+        UserModeRegressor(history_value_column="rating").fit(
             pd.DataFrame({"user_id": ["u1"]}),
             pd.Series([5]),
         )
 
     with pytest.raises(ValueError, match="History values contain NA"):
-        HistoryMeanRegressor(history_value_column="rating").fit(
+        UserMeanRegressor(history_value_column="rating").fit(
             pd.DataFrame({"user_id": ["u1"], "rating": [pd.NA]}),
             pd.Series([5]),
         )

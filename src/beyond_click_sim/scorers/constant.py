@@ -104,10 +104,10 @@ class ModeRegressor(Scorer):
         return pd.Series(self.mode_, index=X.index, name="score", dtype=float)
 
 
-class HistoryMeanRegressor(Scorer):
-    """Predict each user's mean over the same train-history window shown to the LLM."""
+class UserMeanRegressor(Scorer):
+    """Predict each user's mean over the train-history window shown to the LLM."""
 
-    name = "history_mean_regressor"
+    name = "user_mean_regressor"
     history_selection = "last_rows_in_input_order"
 
     def __init__(
@@ -127,10 +127,10 @@ class HistoryMeanRegressor(Scorer):
         self.history_value_column = history_value_column
         self.user_column = user_column
         self.max_history_items = max_history_items
-        self.history_mean_by_user_: dict[Any, float] | None = None
-        self.history_count_by_user_: dict[Any, int] | None = None
+        self.user_mean_by_user_: dict[Any, float] | None = None
+        self.user_count_by_user_: dict[Any, int] | None = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "HistoryMeanRegressor":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "UserMeanRegressor":
         if len(X) != len(y):
             raise ValueError("X and y must have the same length")
         self._require_columns(X, [self.user_column, self.history_value_column])
@@ -149,19 +149,19 @@ class HistoryMeanRegressor(Scorer):
             counts[user_id] = int(len(values))
 
         if not means:
-            raise ValueError("Cannot fit HistoryMeanRegressor on empty history")
+            raise ValueError("Cannot fit UserMeanRegressor on empty user history")
 
-        self.history_mean_by_user_ = means
-        self.history_count_by_user_ = counts
+        self.user_mean_by_user_ = means
+        self.user_count_by_user_ = counts
         return self
 
     def score(self, X: pd.DataFrame) -> pd.Series:
-        if self.history_mean_by_user_ is None:
-            raise RuntimeError("HistoryMeanRegressor is not fitted")
+        if self.user_mean_by_user_ is None:
+            raise RuntimeError("UserMeanRegressor is not fitted")
         self._require_columns(X, [self.user_column])
-        self._require_known_users(X, self.history_mean_by_user_)
+        self._require_known_users(X, self.user_mean_by_user_)
         return pd.Series(
-            [self.history_mean_by_user_[user_id] for user_id in X[self.user_column]],
+            [self.user_mean_by_user_[user_id] for user_id in X[self.user_column]],
             index=X.index,
             name="score",
             dtype=float,
@@ -186,10 +186,10 @@ class HistoryMeanRegressor(Scorer):
             raise ValueError(f"Missing required columns: {missing}")
 
 
-class HistoryModeRegressor(HistoryMeanRegressor):
-    """Predict each user's mode over the same train-history window shown to the LLM."""
+class UserModeRegressor(UserMeanRegressor):
+    """Predict each user's mode over the train-history window shown to the LLM."""
 
-    name = "history_mode_regressor"
+    name = "user_mode_regressor"
     tie_break = "smallest"
 
     def __init__(
@@ -204,9 +204,9 @@ class HistoryModeRegressor(HistoryMeanRegressor):
             user_column=user_column,
             max_history_items=max_history_items,
         )
-        self.history_mode_by_user_: dict[Any, float] | None = None
+        self.user_mode_by_user_: dict[Any, float] | None = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "HistoryModeRegressor":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "UserModeRegressor":
         if len(X) != len(y):
             raise ValueError("X and y must have the same length")
         self._require_columns(X, [self.user_column, self.history_value_column])
@@ -225,19 +225,19 @@ class HistoryModeRegressor(HistoryMeanRegressor):
             counts[user_id] = int(len(values))
 
         if not modes:
-            raise ValueError("Cannot fit HistoryModeRegressor on empty history")
+            raise ValueError("Cannot fit UserModeRegressor on empty user history")
 
-        self.history_mode_by_user_ = modes
-        self.history_count_by_user_ = counts
+        self.user_mode_by_user_ = modes
+        self.user_count_by_user_ = counts
         return self
 
     def score(self, X: pd.DataFrame) -> pd.Series:
-        if self.history_mode_by_user_ is None:
-            raise RuntimeError("HistoryModeRegressor is not fitted")
+        if self.user_mode_by_user_ is None:
+            raise RuntimeError("UserModeRegressor is not fitted")
         self._require_columns(X, [self.user_column])
-        self._require_known_users(X, self.history_mode_by_user_)
+        self._require_known_users(X, self.user_mode_by_user_)
         return pd.Series(
-            [self.history_mode_by_user_[user_id] for user_id in X[self.user_column]],
+            [self.user_mode_by_user_[user_id] for user_id in X[self.user_column]],
             index=X.index,
             name="score",
             dtype=float,

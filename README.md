@@ -182,8 +182,8 @@ Available regression-prediction methods:
 | --- | --- |
 | `mode_regressor` | Constant discrete baseline that predicts the most frequent train target; default regression method and headline metric `test.macro_by_user_mean.mae`. |
 | `mean_regressor` | Constant continuous baseline that predicts the train target mean; useful MAE/RMSE diagnostic but not a literal discrete rating response simulator. |
-| `history_mean_regressor` | Per-user continuous baseline that predicts the mean rating from the same train-history window shown to the LLM. |
-| `history_mode_regressor` | Per-user discrete baseline that predicts the most frequent rating from the same train-history window shown to the LLM. |
+| `user_mean_regressor` | Per-user continuous baseline that predicts the mean rating from the same train-history window shown to the LLM. |
+| `user_mode_regressor` | Per-user discrete baseline that predicts the most frequent rating from the same train-history window shown to the LLM. |
 | `llm_regressor_ollama_llama31_8b_smoke` | Local Ollama Llama 3.1 8B integer-rating scorer on the first 25 test rows. |
 | `llm_regressor_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B integer-rating scorer on the full selected test split. |
 | `llm_regressor_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B integer-rating scorer on the first 25 test rows. |
