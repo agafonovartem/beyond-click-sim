@@ -3,14 +3,14 @@
   "evaluated_splits": [
     "test"
   ],
-  "git_commit": "64ee7a11b996455733575ab2b8781be60ac058ce",
+  "git_commit": "01978c66db6fe3c17cd0e58ad7cd42fec313846a",
   "limits": {
     "max_llm_attempts": 5,
     "max_rows": null,
     "max_workers": 32
   },
   "llm_errors": 0,
-  "method": "llm_regressor_vllm_llama33_70b_full",
+  "method": "llm_regressor_vllm_llama33_70b_with_item_stats_full",
   "protocol": "regression",
   "regression_evaluation": {
     "aggregations": [
@@ -28,22 +28,31 @@
   "scorer": {
     "class": "LLMRegressor",
     "client_name": "vllm_local",
+    "column_labels": {
+      "item_rating_count": "number of prior reviews",
+      "item_rating_mean": "average rating",
+      "rating": "user rating"
+    },
     "max_history_items": 20,
     "max_tokens": 64,
     "model": "llama-3.3-70b-instruct",
     "prompt_columns": {
       "candidate_description_columns": [
         "item_title",
-        "item_genres"
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count"
       ],
       "history_description_columns": [
         "item_title",
         "item_genres",
-        "rating"
+        "rating",
+        "item_rating_mean",
+        "item_rating_count"
       ]
     },
     "target": {
-      "description": "Predict the integer MovieLens rating this user would give to the candidate movie on a 1 to 5 scale.",
+      "description": "Predict the integer rating this user would give to this movie on a 1 to 5 scale.",
       "name": "rating",
       "output_format": "bare_integer",
       "valid_values": [
@@ -54,7 +63,8 @@
         5
       ]
     },
-    "temperature": 0.0
+    "temperature": 0.0,
+    "uses_item_stats": true
   },
   "task": {
     "manifest": {
@@ -91,7 +101,9 @@
         "user_zip_code",
         "item_raw_item_id",
         "item_title",
-        "item_genres"
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count"
       ],
       "filter": {
         "class": "MinUserInteractionsFilter",
@@ -101,6 +113,19 @@
       "history_context_columns": [
         "rating"
       ],
+      "item_feature_builder": {
+        "class": "TrainItemRatingStatistics",
+        "count_column": "rating_count",
+        "items_total": 3883,
+        "items_with_statistics": 3662,
+        "mean_column": "rating_mean",
+        "missing_policy": {
+          "rating_count": 0,
+          "rating_mean": "nan"
+        },
+        "source": "train_split_only",
+        "value_column": "rating"
+      },
       "items": 3883,
       "protocol": "regression",
       "rows": {
@@ -129,6 +154,6 @@
         "val": 1000
       }
     },
-    "name": "ml-1m_rating_eval_users1000_seed0"
+    "name": "ml-1m_rating_item_stats_eval_users1000_seed0"
   }
 }

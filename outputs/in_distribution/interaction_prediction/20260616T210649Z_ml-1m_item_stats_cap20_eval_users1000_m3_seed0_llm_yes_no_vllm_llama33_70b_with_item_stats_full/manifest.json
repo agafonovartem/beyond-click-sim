@@ -1,0 +1,141 @@
+{
+  "candidate_groups": {
+    "requested": {
+      "groups": 7293,
+      "positives_max": 5,
+      "positives_mean": 4.733305909776498,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 18.933223639105993,
+      "rows_min": 4,
+      "sampled_max": 15,
+      "sampled_mean": 14.199917729329494,
+      "sampled_min": 3
+    },
+    "scored": {
+      "groups": 7293,
+      "positives_max": 5,
+      "positives_mean": 4.733305909776498,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 18.933223639105993,
+      "rows_min": 4,
+      "sampled_max": 15,
+      "sampled_mean": 14.199917729329494,
+      "sampled_min": 3
+    }
+  },
+  "decision_rule": {
+    "kind": "hard_binary_yes_no_parser",
+    "threshold": null
+  },
+  "git_commit": "01978c66db6fe3c17cd0e58ad7cd42fec313846a",
+  "limits": {
+    "max_candidate_groups": null,
+    "max_llm_attempts": 5,
+    "max_workers": 32
+  },
+  "llm_errors": 0,
+  "method": "llm_yes_no_vllm_llama33_70b_with_item_stats_full",
+  "scorer": {
+    "class": "LLMInteractionYesNoScorer",
+    "client_name": "vllm_local",
+    "column_labels": {
+      "item_rating_count": "number of prior reviews",
+      "item_rating_mean": "average rating",
+      "rating": "user rating"
+    },
+    "max_history_items": 20,
+    "max_tokens": 256,
+    "model": "llama-3.3-70b-instruct",
+    "prompt_columns": {
+      "candidate_description_columns": [
+        "item_title",
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count"
+      ],
+      "history_description_columns": [
+        "item_title",
+        "item_genres",
+        "rating",
+        "item_rating_mean",
+        "item_rating_count"
+      ]
+    },
+    "temperature": 0.0,
+    "uses_item_stats": true
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_feature_builder": {
+        "class": "TrainItemRatingStatistics",
+        "count_column": "rating_count",
+        "items_total": 3883,
+        "items_with_statistics": 3662,
+        "mean_column": "rating_mean",
+        "missing_policy": {
+          "rating_count": 0,
+          "rating_mean": "nan"
+        },
+        "source": "train_split_only",
+        "value_column": "rating"
+      },
+      "items": 3883,
+      "rows": {
+        "test": 138080,
+        "train": 694335,
+        "val": 70516
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedUserInteractionCandidateSampler",
+        "item_column": "item_id",
+        "max_eval_users": 1000,
+        "negative_ratio": 3,
+        "sampled_column": "sampled",
+        "seed": 0,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 0,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": 6040
+    },
+    "name": "ml-1m_interaction_item_stats_cap20_eval_users1000_m3_seed0"
+  }
+}

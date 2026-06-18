@@ -1,0 +1,38 @@
+{
+  "coverage": 1.0,
+  "evaluated_splits": [
+    "test"
+  ],
+  "llm_errors": 0,
+  "main_metric": "test.macro_by_user_mean.mae",
+  "max_rows": null,
+  "max_workers": 32,
+  "method": "llm_regressor_vllm_llama33_70b_full",
+  "protocol": "regression",
+  "regression_evaluation": {
+    "aggregations": [
+      "micro",
+      "macro_by_user_mean"
+    ],
+    "metrics": [
+      "mae",
+      "rmse"
+    ]
+  },
+  "requested_rows": 34520,
+  "scored_rows": 34520,
+  "task": "ml-1m_rating_eval_users1000_seed0",
+  "test": {
+    "macro_by_user_mean": {
+      "mae": 0.799539230538549,
+      "n": 34520,
+      "n_users": 1000,
+      "rmse": 1.0804479159171891
+    },
+    "micro": {
+      "mae": 0.8057358053302434,
+      "n": 34520,
+      "rmse": 1.1166598928672753
+    }
+  }
+}

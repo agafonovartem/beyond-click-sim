@@ -7,7 +7,7 @@
   "main_metric": "test.macro_by_user_mean.mae",
   "max_rows": null,
   "max_workers": 32,
-  "method": "llm_regressor_vllm_llama33_70b_full",
+  "method": "llm_regressor_vllm_llama33_70b_with_item_stats_full",
   "protocol": "regression",
   "regression_evaluation": {
     "aggregations": [
@@ -21,18 +21,18 @@
   },
   "requested_rows": 34520,
   "scored_rows": 34520,
-  "task": "ml-1m_rating_eval_users1000_seed0",
+  "task": "ml-1m_rating_item_stats_eval_users1000_seed0",
   "test": {
     "macro_by_user_mean": {
-      "mae": 0.8042683922491801,
+      "mae": 0.7522766068599356,
       "n": 34520,
       "n_users": 1000,
-      "rmse": 1.0861814029231673
+      "rmse": 1.0276972730530571
     },
     "micro": {
-      "mae": 0.8095886442641946,
+      "mae": 0.7491888760139049,
       "n": 34520,
-      "rmse": 1.1236811504718944
+      "rmse": 1.0600454744394177
     }
   }
 }

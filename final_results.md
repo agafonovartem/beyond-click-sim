@@ -21,7 +21,7 @@ Protocol:
 - Filter: `MinUserInteractionsFilter(10)`.
 - Evaluation budget: post-split `PostSplitUserSampler(n_users=1000, seed=seed)`.
 - Candidate construction: none; no negatives, no `candidate_group`, no `sampled`.
-- Methods: `mode_regressor` fits the most frequent train rating and predicts a valid discrete rating; `mean_regressor` fits the continuous train target mean and is retained as a MAE/RMSE diagnostic. `history_mean_regressor` and `history_mode_regressor` use the same last-20 train-history window in input order that is shown to `LLMRegressor`.
+- Methods: `mode_regressor` fits the most frequent train rating and predicts a valid discrete rating; `mean_regressor` fits the continuous train target mean and is retained as a MAE/RMSE diagnostic. `history_mean_regressor` and `history_mode_regressor` use the same last-20 train-history window in input order that is shown to `LLMRegressor`. Item-stats LLM variants additionally expose train-split-only item rating mean/count for history and candidate movies.
 - Main metric: `test.macro_by_user_mean.mae`; micro MAE/RMSE are retained as secondary diagnostics.
 - Scope: 6040 filtered/train users and 3883 items for all seeds; test users are capped to 1000 after splitting.
 
@@ -29,7 +29,13 @@ Protocol:
 
 | seed | train rows | test rows | test users | llm errors | scored/requested | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 0 | 694335 | 34520 | 1000 | 0 | 34520/34520 | 0.8043 | 1.0862 | 0.8096 | 1.1237 | `20260612T154600Z_ml-1m_rating_eval_users1000_seed0_llm_regressor_vllm_llama33_70b_full` |
+| 0 | 694335 | 34520 | 1000 | 0 | 34520/34520 | 0.7995 | 1.0804 | 0.8057 | 1.1167 | `20260615T103530Z_ml-1m_rating_eval_users1000_seed0_llm_regressor_vllm_llama33_70b_full` |
+
+#### LLMRegressor with item stats
+
+| seed | train rows | test rows | test users | llm errors | scored/requested | macro MAE | macro RMSE | micro MAE | micro RMSE | run |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 694335 | 34520 | 1000 | 0 | 34520/34520 | 0.7523 | 1.0277 | 0.7492 | 1.0600 | `20260616T141222Z_ml-1m_rating_item_stats_eval_users1000_seed0_llm_regressor_vllm_llama33_70b_with_item_stats_full` |
 
 #### ModeRegressor
 
@@ -107,6 +113,20 @@ Seed average over seeds 0-4:
 | 3 | 0 | complete | 0 | 7293/7293 | 0.4968 | user_group | 0.4029 | 0.3689 | `20260611T180320Z_ml-1m_cap20_eval_users1000_m3_seed0_llm_yes_no_vllm_llama33_70b_full` |
 | 9 | 0 | complete | 0 | 17517/17517 | 0.2683 | user_group | 0.3019 | 0.1669 | `20260611T211709Z_ml-1m_cap20_eval_users1000_m9_seed0_llm_yes_no_vllm_llama33_70b_full` |
 | 19 | 0 | complete | 0 | 34520/34520 | 0.1531 | user_group | 0.2454 | 0.0875 | `20260612T045107Z_ml-1m_cap20_eval_users1000_m19_seed0_llm_yes_no_vllm_llama33_70b_full` |
+
+#### LLM yes no with item stats
+
+Item-stats variants expose train-split-only item rating mean/count in the history and candidate movie metadata.
+
+| m | seed | status | llm_errors | groups scored/requested | pointwise F1 | pointwise scope | ranking NDCG@5 | HR@1 | run |
+|---:|---:|---|---:|---:|---:|---|---:|---:|---|
+| 1 | 0 | complete | 0 | 3887/3887 | 0.7488 | user_group | 0.7393 | 0.7286 | `20260616T163905Z_ml-1m_item_stats_cap20_eval_users1000_m1_seed0_llm_yes_no_vllm_llama33_70b_with_item_stats_full` |
+| 2 | 0 | complete | 0 | 6173/6173 | 0.6535 | user_group | 0.5890 | 0.5636 | `20260616T144158Z_ml-1m_item_stats_cap20_eval_users1000_m2_seed0_llm_yes_no_vllm_llama33_70b_with_item_stats_full` |
+| 3 | 0 | complete | 0 | 7293/7293 | 0.5731 | user_group | 0.4884 | 0.4564 | `20260616T210649Z_ml-1m_item_stats_cap20_eval_users1000_m3_seed0_llm_yes_no_vllm_llama33_70b_with_item_stats_full` |
+| 9 | 0 | complete | 0 | 17517/17517 | 0.3290 | user_group | 0.3791 | 0.2139 | `20260617T040420Z_ml-1m_item_stats_cap20_eval_users1000_m9_seed0_llm_yes_no_vllm_llama33_70b_with_item_stats_full` |
+| 19 | 0 | partial | 1 | 34519/34520 | 0.1941 | user_group | 0.3131 | 0.1143 | `20260616T195740Z_ml-1m_item_stats_cap20_eval_users1000_m19_seed0_llm_yes_no_vllm_llama33_70b_with_item_stats_full` |
+
+For `m=19`, one candidate group (`candidate:user:5486:chunk:3`) failed after five parse attempts because candidate label `C17` was missing from the LLM output; metrics are computed on scored groups.
 
 #### Pop
 
