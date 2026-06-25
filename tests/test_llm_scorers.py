@@ -367,7 +367,44 @@ def test_parse_regression_value_response_rejects_out_of_range_integer(text: str)
         parse_regression_value_response(text, valid_values=(1, 2, 3, 4, 5))
 
 
-def test_llm_regressor_scores_rows_with_integer_values() -> None:
+def test_llm_interaction_scorer_forwards_extra_body_to_create() -> None:
+    X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["Toy Story"]})
+    X_test = pd.DataFrame(
+        {"user_id": ["u1"], "candidate_group": ["g1"], "item_title": ["Lion King"]}
+    )
+    client = FakeClient(["C1: yes"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        item_description_columns=("item_title",),
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    )
+    scorer.fit(X_train, pd.Series([1]))
+    scorer.score(X_test)
+
+    assert client.completions.calls[0]["extra_body"] == {
+        "chat_template_kwargs": {"enable_thinking": False}
+    }
+
+
+def test_llm_interaction_scorer_omits_extra_body_when_none() -> None:
+    X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["Toy Story"]})
+    X_test = pd.DataFrame(
+        {"user_id": ["u1"], "candidate_group": ["g1"], "item_title": ["Lion King"]}
+    )
+    client = FakeClient(["C1: yes"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        item_description_columns=("item_title",),
+        extra_body=None,
+    )
+    scorer.fit(X_train, pd.Series([1]))
+    scorer.score(X_test)
+
+    assert "extra_body" not in client.completions.calls[0]
     X_train = pd.DataFrame(
         {
             "user_id": ["u1", "u1", "u1"],
