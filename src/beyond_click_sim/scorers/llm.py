@@ -67,6 +67,7 @@ class LLMInteractionYesNoScorer(Scorer):
         temperature: float = 0.0,
         max_tokens: int = 512,
         column_labels: dict[str, str] | None = None,
+        extra_body: dict | None = None,
     ) -> None:
         if candidate_description_columns is None:
             candidate_description_columns = item_description_columns
@@ -92,6 +93,7 @@ class LLMInteractionYesNoScorer(Scorer):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.column_labels = {} if column_labels is None else dict(column_labels)
+        self.extra_body = extra_body
         self.history_by_user_: dict[Any, list[str]] | None = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "LLMInteractionYesNoScorer":
@@ -168,6 +170,7 @@ class LLMInteractionYesNoScorer(Scorer):
                 messages=messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
+                **({"extra_body": self.extra_body} if self.extra_body else {}),
             )
             # print(response)
             parsed = parse_yes_no_response(

@@ -24,6 +24,8 @@ from beyond_click_sim.tasks.item_statistics import (
     PREFIXED_ITEM_RATING_STATS_COLUMNS,
     TrainItemRatingStatistics,
 )
+from beyond_click_sim.tasks.policies import Policy, PopularityPolicy, RandomPolicy
+from beyond_click_sim.tasks.policy_ranking import PolicyRankingTaskBuilder
 from beyond_click_sim.tasks.regression import RegressionPredictionTaskBuilder
 from beyond_click_sim.tasks.samplers import (
     CappedUserInteractionCandidateSampler,
@@ -40,11 +42,15 @@ __all__ = [
     "ItemFeatureBuilder",
     "MinUserInteractionsFilter",
     "NonInteractionCandidateSampler",
+    "Policy",
+    "PolicyRankingTaskBuilder",
+    "PopularityPolicy",
     "PostSplitUserSampler",
     "PREFIXED_ITEM_RATING_COUNT_COLUMN",
     "PREFIXED_ITEM_RATING_MEAN_COLUMN",
     "PREFIXED_ITEM_RATING_STATS_COLUMNS",
     "RandomFractionSplitter",
+    "RandomPolicy",
     "RegressionPredictionTaskBuilder",
     "SampleUsersFilter",
     "SequentialDatasetFilter",
