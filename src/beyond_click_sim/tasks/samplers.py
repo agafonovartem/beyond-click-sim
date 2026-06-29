@@ -169,7 +169,9 @@ class CappedUserInteractionCandidateSampler(CandidateSampler):
     sampler does not discard positives.
 
     `max_eval_users` is an evaluation budget: when provided, sample that many
-    held-out users first, then build all candidate groups for their positives.
+    held-out users first. `max_candidate_groups_per_user` is a second budget:
+    when provided, build at most that many candidate groups per selected user
+    after the usual seeded positive shuffle and cap-based chunking.
     """
 
     def __init__(
@@ -177,6 +179,7 @@ class CappedUserInteractionCandidateSampler(CandidateSampler):
         negative_ratio: int,
         total_items: int = 20,
         max_eval_users: int | None = None,
+        max_candidate_groups_per_user: int | None = None,
         seed: int = 0,
         user_column: str = "user_id",
         item_column: str = "item_id",
@@ -188,6 +191,7 @@ class CappedUserInteractionCandidateSampler(CandidateSampler):
         self.negative_ratio = negative_ratio
         self.total_items = total_items
         self.max_eval_users = max_eval_users
+        self.max_candidate_groups_per_user = max_candidate_groups_per_user
         self.user_column = user_column
         self.item_column = item_column
         self.target_column = target_column
@@ -210,6 +214,13 @@ class CappedUserInteractionCandidateSampler(CandidateSampler):
             raise ValueError("total_items must fit at least one positive group.")
         if self.max_eval_users is not None and self.max_eval_users < 1:
             raise ValueError("max_eval_users must be positive when provided.")
+        if (
+            self.max_candidate_groups_per_user is not None
+            and self.max_candidate_groups_per_user < 1
+        ):
+            raise ValueError(
+                "max_candidate_groups_per_user must be positive when provided."
+            )
 
         output_columns = [
             self.user_column,
@@ -253,9 +264,11 @@ class CappedUserInteractionCandidateSampler(CandidateSampler):
                 len(stable_positive_items),
             )
 
-            for chunk_position, selected_positives in enumerate(
-                _chunks(shuffled_positives, max_positive_items)
-            ):
+            positive_chunks = _chunks(shuffled_positives, max_positive_items)
+            if self.max_candidate_groups_per_user is not None:
+                positive_chunks = positive_chunks[: self.max_candidate_groups_per_user]
+
+            for chunk_position, selected_positives in enumerate(positive_chunks):
                 group_id = self._candidate_group_id(
                     user_id=user_id,
                     chunk_position=chunk_position,

@@ -53,6 +53,18 @@
 10.
     **LLM metric stability check.** Check whether LLM metrics are stable enough on smaller user samples. If bootstrap/subsampling shows acceptable uncertainty, 100 users may be enough for intermediate results instead of 1000 users.
 
+    **Current reduced protocol decision.** New interaction-prediction defaults should use
+    `eval_users1000_cg5`: for each seed in `{0, 1, 2}`, build the usual per-user interaction
+    split, sample the same deterministic 1000 eligible users for validation and test, then keep up
+    to 5 cap20 candidate groups per selected user in each split. The user set is the same because
+    the validation/test eligible user pools coincide under the current per-user split and the
+    sampler uses the same seed for both splits; the held-out interactions and candidate groups are
+    still split-specific. A candidate group is constructed by the standard `k` positives plus
+    `k * m` negatives rule with
+    `k = floor(20 / (m + 1))`; `cg5` caps candidate groups, not items and not positives directly.
+    Report mean plus standard deviation over the seed-level headline metric. Within each seed,
+    all compared methods should evaluate the same materialized task.
+
 11.
     **Partially implemented item quality / popularity metadata.** We now materialize the minimal
     item-level aggregate features for explicit ML-1M item-stats task variants:

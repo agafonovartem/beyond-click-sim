@@ -423,6 +423,53 @@ def test_capped_user_candidate_sampler_limits_eval_users_before_chunking() -> No
     assert groups_per_user.eq(3).all()
 
 
+def test_capped_user_candidate_sampler_limits_candidate_groups_per_user() -> None:
+    positives = pd.DataFrame(
+        {
+            "interaction_id": [f"r{idx}" for idx in range(1, 18)],
+            "user_id": ["u1"] * 10 + ["u2"] * 7,
+            "item_id": [f"i{idx}" for idx in range(1, 18)],
+        }
+    )
+    interactions = positives[["interaction_id", "user_id", "item_id"]].copy()
+    items = pd.DataFrame({"item_id": [f"i{idx}" for idx in range(1, 80)]})
+    sampler = CappedUserInteractionCandidateSampler(
+        negative_ratio=1,
+        total_items=4,
+        max_candidate_groups_per_user=2,
+        seed=0,
+    )
+
+    sampled = sampler.sample(positives, interactions=interactions, items=items)
+    sampled_reversed = sampler.sample(
+        positives.iloc[::-1].reset_index(drop=True),
+        interactions=interactions,
+        items=items,
+    )
+
+    groups_per_user = (
+        sampled[["user_id", "candidate_group"]]
+        .drop_duplicates()
+        .groupby("user_id")
+        .size()
+        .to_dict()
+    )
+    assert groups_per_user == {"u1": 2, "u2": 2}
+    assert sampled["target"].sum() == 8
+    assert (
+        sampled[["user_id", "candidate_group", "item_id", "target", "sampled"]]
+        .sort_values(["user_id", "candidate_group", "item_id"])
+        .reset_index(drop=True)
+        .equals(
+            sampled_reversed[
+                ["user_id", "candidate_group", "item_id", "target", "sampled"]
+            ]
+            .sort_values(["user_id", "candidate_group", "item_id"])
+            .reset_index(drop=True)
+        )
+    )
+
+
 def test_capped_user_candidate_sampler_is_stable_to_positive_row_order() -> None:
     positives = pd.DataFrame(
         {
@@ -482,6 +529,31 @@ def test_capped_user_candidate_sampler_shuffles_rows_within_candidate_group() ->
 
     assert sampled["candidate_group"].nunique() == 1
     assert sampled["target"].tolist() != [1, 1] + [0] * 18
+
+
+def test_alignment_task_manifest_records_candidate_group_cap(tmp_path: Path) -> None:
+    dataset = _write_toy_canonical_dataset(tmp_path)
+
+    task = AlignmentInteractionTaskBuilder(
+        name="toy-interaction-cg1",
+        dataset_filter=MinUserInteractionsFilter(min_interactions=4),
+        splitter=RandomFractionSplitter(
+            train_fraction=0.5,
+            val_fraction=0.25,
+            test_fraction=0.25,
+            seed=0,
+        ),
+        sampler=CappedUserInteractionCandidateSampler(
+            negative_ratio=1,
+            total_items=4,
+            max_eval_users=2,
+            max_candidate_groups_per_user=1,
+            seed=0,
+        ),
+    ).build(dataset)
+
+    assert task.manifest["sampler"]["max_eval_users"] == 2
+    assert task.manifest["sampler"]["max_candidate_groups_per_user"] == 1
 
 
 def _sampled_pairs(frame: pd.DataFrame) -> set[tuple[object, object]]:

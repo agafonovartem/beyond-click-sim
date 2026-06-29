@@ -117,7 +117,7 @@ Run one popularity-baseline interaction task:
 
 ```bash
 uv run python -m runners.in_distribution.interaction_prediction.run \
-  --tasks ml-1m_cap20_eval_users1000_m1_seed0 \
+  --tasks ml-1m_cap20_eval_users1000_cg5_m1_seed0 \
   --methods popularity_f1_threshold
 ```
 
@@ -135,7 +135,7 @@ Run an Ollama LLM smoke test:
 ollama pull llama3.1:8b
 
 uv run python -m runners.in_distribution.interaction_prediction.run \
-  --tasks ml-1m_cap20_eval_users1000_m1_seed0 \
+  --tasks ml-1m_cap20_eval_users1000_cg5_m1_seed0 \
   --methods llm_yes_no_ollama_llama31_8b_smoke
 ```
 
@@ -143,19 +143,31 @@ Run a vLLM-backed Llama 3.3 70B smoke test:
 
 ```bash
 uv run python -m runners.in_distribution.interaction_prediction.run \
-  --tasks ml-1m_cap20_eval_users1000_m1_seed0 \
+  --tasks ml-1m_cap20_eval_users1000_cg5_m1_seed0 \
   --methods llm_yes_no_vllm_llama33_70b_smoke
 ```
 
-The default interaction tasks use `eval_users1000`: classic scorers are trained on
-the full train split, while validation/test candidate construction is capped to a
-deterministic 1000 held-out users per split. Full-scale tasks remain available by
-omitting the `eval_users1000` part, e.g. `ml-1m_cap20_m1_seed0`.
+The default interaction tasks use the reduced `eval_users1000_cg5` protocol:
+classic scorers are trained on the full train split, while validation/test
+candidate construction is capped to a deterministic 1000 held-out users per
+split and up to 5 candidate groups per selected user. Reduced defaults cover
+seeds 0, 1, and 2. Older `eval_users1000` tasks without the per-user
+candidate-group cap remain available by explicit name, and full-scale tasks
+remain available by omitting the `eval_users1000` part, e.g.
+`ml-1m_cap20_m1_seed0`.
 
 Explicit ML-1M item-stats task variants are also available, but are not defaults.
 They add train-only `item_rating_mean` and `item_rating_count` item features, e.g.
-`ml-1m_item_stats_cap20_eval_users1000_m1_seed0` for interaction prediction and
-`ml-1m_rating_item_stats_eval_users1000_seed0` for rating regression.
+`ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed0` for reduced interaction
+prediction and `ml-1m_rating_item_stats_eval_users1000_seed0` for rating
+regression. Use ML-1M item-stats interaction tasks with LLM
+`*_with_item_stats_*` methods when the prompt should expose average rating and
+number of prior reviews.
+
+The current reduced interaction reporting protocol is to run seeds 0, 1, and 2
+and report mean plus standard deviation over the seed-level headline test
+metric. All methods compared within one seed should use the same materialized
+task so model differences are paired on the same users and candidate groups.
 
 Available interaction-prediction methods:
 
