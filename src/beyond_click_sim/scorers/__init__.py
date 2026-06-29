@@ -9,12 +9,23 @@ from beyond_click_sim.scorers.constant import (
     UserMeanRegressor,
     UserModeRegressor,
 )
-from beyond_click_sim.scorers.llm import LLMInteractionYesNoScorer, LLMRegressor
+from beyond_click_sim.scorers.agent4rec import (
+    Agent4RecProfileGenerator,
+    Agent4RecUserProfile,
+    Agent4RecYesNoScorer,
+)
+from beyond_click_sim.scorers.history import (
+    LLMInteractionYesNoScorer,
+    LLMRegressor,
+)
 from beyond_click_sim.scorers.popularity import PopularityScorer
 
 __all__ = [
     "ItemMeanRegressor",
     "ItemModeRegressor",
+    "Agent4RecProfileGenerator",
+    "Agent4RecUserProfile",
+    "Agent4RecYesNoScorer",
     "LLMInteractionYesNoScorer",
     "LLMRegressor",
     "MeanRegressor",

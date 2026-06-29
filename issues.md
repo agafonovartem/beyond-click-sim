@@ -149,3 +149,44 @@ unless a separate "public platform statistics" condition is intentionally define
 regression with item stats, compare against the matched train-only item baselines
 (`item_mean_regressor` / `item_mode_regressor`) before claiming user-conditioned reasoning beyond
 visible item-quality metadata.
+
+## 8. Agent4Rec yes/no scorer is currently traits-only and MovieLens-specific
+
+The current `Agent4RecYesNoScorer` implementation is only the first prompt/profile variant. It
+builds deterministic Agent4Rec social traits (`activity`, `conformity`, `diversity`) from the
+train split and uses them in the system prompt, but it does **not** yet implement the LLM-generated
+`taste` profile. Therefore the planned Agent4Rec profile ablations are incomplete:
+
+- `traits` only — currently implemented;
+- `taste` only — not implemented yet;
+- `traits + taste` — not implemented yet.
+
+The scorer also intentionally omits Agent4Rec's `Summary` field in `##recommended list##`. The
+released Agent4Rec alignment code shows title, `History ratings`, and `Summary`, but `Summary`
+comes from `movies_augmentation.csv`, an undocumented external augmentation rather than a
+reproducible MovieLens field. Our current prompt uses title, train-only `History ratings`
+(`item_rating_mean`), and genres; this is a cleaner but not exact reproduction of their visible
+item card.
+
+Finally, the prompt wording is still hard-coded to the MovieLens/movie domain (`movie
+recommendation system`, `movie tastes`, `watch`, `movie-watching habits`). That is acceptable for
+the first ML-1M Agent4Rec-style scorer, but it is not a reusable generic yes/no simulator for
+Steam or other domains.
+
+**Fix:** implement a cached train-only `taste` generator and expose the three ablation variants
+explicitly in method names/manifests. Keep `Summary` out unless we add a reproducible summary
+artifact with clear provenance. Before applying Agent4Rec-style prompts outside ML-1M, introduce
+domain/task wording parameters such as item type, action verb, taste label, and system-domain
+description.
+
+## 9. Agent4Rec vs history LLM comparison currently mixes multiple axes
+
+Current `agent4rec_yes_no` and `llm_yes_no` runs are not a controlled comparison of "profile
+module versus history prompt". They differ in several places at once: Agent4Rec uses social-trait
+profile text instead of per-user history, different generation settings, a larger token budget, and
+an item card that includes train-only `History ratings` (`item_rating_mean`). Any metric delta
+between these methods therefore cannot be attributed cleanly to Agent4Rec-style profiles.
+
+**Fix:** compare Agent4Rec against matched baselines: same temperature/token budget, same visible
+item-card fields (including an `llm_yes_no_with_item_stats` baseline), and, if needed, a no-history
+LLM variant. Record the controlled comparison axis explicitly in the manifest.

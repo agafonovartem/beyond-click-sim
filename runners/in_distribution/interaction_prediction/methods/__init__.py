@@ -5,6 +5,12 @@ from pathlib import Path
 
 from beyond_click_sim.tasks import Task
 
+from runners.in_distribution.interaction_prediction.methods.agent4rec_yes_no import (
+    run_llama31_8b_full as run_agent4rec_llama31_8b_full,
+    run_llama31_8b_smoke as run_agent4rec_llama31_8b_smoke,
+    run_llama33_70b_full as run_agent4rec_llama33_70b_full,
+    run_llama33_70b_smoke as run_agent4rec_llama33_70b_smoke,
+)
 from runners.in_distribution.interaction_prediction.methods.llm_yes_no import (
     run_llama31_8b_full,
     run_llama31_8b_smoke,
@@ -26,6 +32,10 @@ MethodRunner = Callable[[Task, Path], dict[str, object]]
 METHOD_RUNNERS: dict[str, MethodRunner] = {
     "popularity_f1_threshold": run_popularity,
     "popularity_ranking": run_popularity_ranking,
+    "agent4rec_yes_no_ollama_llama31_8b_smoke": run_agent4rec_llama31_8b_smoke,
+    "agent4rec_yes_no_ollama_llama31_8b_full": run_agent4rec_llama31_8b_full,
+    "agent4rec_yes_no_vllm_llama33_70b_smoke": run_agent4rec_llama33_70b_smoke,
+    "agent4rec_yes_no_vllm_llama33_70b_full": run_agent4rec_llama33_70b_full,
     "llm_yes_no_ollama_llama31_8b_smoke": run_llama31_8b_smoke,
     "llm_yes_no_ollama_llama31_8b_full": run_llama31_8b_full,
     "llm_yes_no_ollama_llama31_8b_with_item_stats_smoke": (
