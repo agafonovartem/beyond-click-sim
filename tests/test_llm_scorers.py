@@ -9,6 +9,7 @@ from beyond_click_sim.scorers import LLMInteractionYesNoScorer, LLMRegressor
 from beyond_click_sim.scorers.constant import select_user_history_positions
 from beyond_click_sim.scorers.llm import (
     parse_regression_value_response,
+    parse_single_yes_no_response,
     parse_yes_no_response,
 )
 
@@ -627,3 +628,145 @@ def test_llm_regressor_rejects_invalid_config_and_inputs() -> None:
         )
     with pytest.raises(ValueError, match="Missing required columns"):
         scorer.fit(pd.DataFrame({"user_id": ["u1"]}), pd.Series([1]))
+
+
+# ---------------------------------------------------------------------------
+# parse_single_yes_no_response
+# ---------------------------------------------------------------------------
+
+def test_parse_single_yes_no_response_accepts_yes_and_no() -> None:
+    assert parse_single_yes_no_response("yes") == 1.0
+    assert parse_single_yes_no_response("no") == 0.0
+
+
+def test_parse_single_yes_no_response_is_case_insensitive() -> None:
+    assert parse_single_yes_no_response("YES") == 1.0
+    assert parse_single_yes_no_response("No") == 0.0
+
+
+def test_parse_single_yes_no_response_strips_whitespace() -> None:
+    assert parse_single_yes_no_response("  yes  \n") == 1.0
+
+
+def test_parse_single_yes_no_response_rejects_invalid() -> None:
+    with pytest.raises(ValueError, match="bare 'yes' or 'no'"):
+        parse_single_yes_no_response("maybe")
+
+
+# ---------------------------------------------------------------------------
+# LLMInteractionYesNoScorer — itemwise prompt style
+# ---------------------------------------------------------------------------
+
+def test_llm_interaction_scorer_rejects_invalid_prompt_style() -> None:
+    with pytest.raises(ValueError, match="prompt_style"):
+        LLMInteractionYesNoScorer(
+            client=FakeClient([]),
+            model="fake-model",
+            item_description_columns=("item_title",),
+            prompt_style="unknown",
+        )
+
+
+def test_llm_interaction_scorer_itemwise_uses_new_prompt_templates() -> None:
+    X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["Toy Story"]})
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "item_title": ["Lion King"],
+        }
+    )
+    client = FakeClient(["yes"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        item_description_columns=("item_title",),
+        prompt_style="itemwise",
+    )
+    scorer.fit(X_train, pd.Series([1]))
+    scores = scorer.score(X_test)
+
+    assert scores.tolist() == [1.0]
+    messages = client.completions.calls[0]["messages"]
+    system_prompt = messages[0]["content"]
+    user_prompt = messages[1]["content"]
+    assert "exactly one word: yes or no" in system_prompt
+    assert "Recommended item:" in user_prompt
+    assert "Would the user interact" in user_prompt
+    assert "C1" not in user_prompt
+
+
+def test_llm_interaction_scorer_itemwise_formats_candidate_without_label_prefix() -> None:
+    X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["Toy Story"], "item_genre": ["Animation"]})
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "item_title": ["Lion King"],
+            "item_genre": ["Animation"],
+        }
+    )
+    client = FakeClient(["yes"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        item_description_columns=("item_title", "item_genre"),
+        prompt_style="itemwise",
+    )
+    scorer.fit(X_train, pd.Series([1]))
+    scorer.score(X_test)
+
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "C1." not in user_prompt
+    assert "item_title: Lion King; item_genre: Animation" in user_prompt
+
+
+def test_llm_interaction_scorer_itemwise_scores_each_item_separately() -> None:
+    X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["Toy Story"]})
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "candidate_group": ["g1", "g2"],
+            "item_title": ["Lion King", "Godfather"],
+        },
+        index=["a", "b"],
+    )
+    client = FakeClient(["yes", "no"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        item_description_columns=("item_title",),
+        prompt_style="itemwise",
+    )
+    scorer.fit(X_train, pd.Series([1]))
+    scores = scorer.score(X_test)
+
+    assert scores.tolist() == [1.0, 0.0]
+    assert list(scores.index) == ["a", "b"]
+    assert len(client.completions.calls) == 2
+
+
+def test_llm_interaction_scorer_itemwise_rejects_group_size_gt_1() -> None:
+    X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["Toy Story"]})
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "candidate_group": ["g1", "g1"],
+            "item_title": ["Lion King", "Godfather"],
+        }
+    )
+    client = FakeClient(["yes"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        item_description_columns=("item_title",),
+        prompt_style="itemwise",
+    )
+    scorer.fit(X_train, pd.Series([1]))
+
+    with pytest.raises(ValueError, match="exactly one row"):
+        scorer.score(X_test)

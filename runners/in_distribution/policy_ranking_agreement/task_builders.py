@@ -9,7 +9,7 @@ from beyond_click_sim.tasks import (
     RandomFractionSplitter,
     Task,
 )
-from beyond_click_sim.tasks.policies import ALSPolicy, PopularityPolicy, RandomPolicy
+from beyond_click_sim.tasks.policies import ALSPolicy, BPRPolicy, ItemKNNPolicy, LightGCNPolicy, PopularityPolicy, RandomPolicy
 from beyond_click_sim.tasks.policy_ranking import PolicyRankingTaskBuilder
 
 
@@ -27,7 +27,14 @@ DATASET_HISTORY_CONTEXT_COLUMNS: dict[str, tuple[str, ...]] = {
     "steam": ("playtime_forever",),
 }
 
-POLICIES = [RandomPolicy(k=POLICY_K, seed=0), PopularityPolicy(k=POLICY_K, seed=0), ALSPolicy(k=POLICY_K, n_factors=64, iterations=20, seed=0)]
+POLICIES = [
+    RandomPolicy(k=POLICY_K, seed=0),
+    PopularityPolicy(k=POLICY_K, seed=0),
+    ItemKNNPolicy(k=POLICY_K, n_neighbors=20, seed=0),
+    ALSPolicy(k=POLICY_K, n_factors=64, iterations=20, seed=0),
+    BPRPolicy(k=POLICY_K, n_factors=64, learning_rate=0.01, regularization=0.01, iterations=100, seed=0),
+    LightGCNPolicy(k=POLICY_K, n_factors=64, n_layers=3, learning_rate=0.001, regularization=1e-4, iterations=200, seed=0),
+]
 
 
 def build_policy_ranking_task(

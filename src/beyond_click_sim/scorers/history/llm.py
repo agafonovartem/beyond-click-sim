@@ -12,6 +12,8 @@ from beyond_click_sim.scorers.constant import select_user_history_positions
 from beyond_click_sim.scorers.history.prompts import (
     INTERACTION_YES_NO_SYSTEM_PROMPT,
     INTERACTION_YES_NO_USER_PROMPT_TEMPLATE,
+    POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT,
+    POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE,
     REGRESSION_SYSTEM_PROMPT,
     REGRESSION_USER_PROMPT_TEMPLATE,
 )
@@ -68,6 +70,7 @@ class LLMInteractionYesNoScorer(Scorer):
         max_tokens: int = 512,
         column_labels: dict[str, str] | None = None,
         extra_body: dict | None = None,
+        prompt_style: str = "batch",
     ) -> None:
         if candidate_description_columns is None:
             candidate_description_columns = item_description_columns
@@ -81,6 +84,8 @@ class LLMInteractionYesNoScorer(Scorer):
             raise ValueError("candidate_description_columns must be non-empty")
         if max_history_items is not None and max_history_items < 0:
             raise ValueError("max_history_items must be non-negative")
+        if prompt_style not in ("batch", "itemwise"):
+            raise ValueError(f"prompt_style must be 'batch' or 'itemwise', got {prompt_style!r}")
 
         self.client = client
         self.model = model
@@ -94,6 +99,7 @@ class LLMInteractionYesNoScorer(Scorer):
         self.max_tokens = max_tokens
         self.column_labels = {} if column_labels is None else dict(column_labels)
         self.extra_body = extra_body
+        self.prompt_style = prompt_style
         self.history_by_user_: dict[Any, list[str]] | None = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "LLMInteractionYesNoScorer":
@@ -158,26 +164,46 @@ class LLMInteractionYesNoScorer(Scorer):
             if len(user_ids) != 1:
                 raise ValueError("Each candidate group must contain exactly one user")
 
-            labels = [f"C{position}" for position in range(1, len(group) + 1)]
-            messages = self._build_messages(
-                user_id=user_ids.iloc[0],
-                candidates=group,
-                labels=labels,
-            )
-            # print(messages)
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                **({"extra_body": self.extra_body} if self.extra_body else {}),
-            )
-            # print(response)
-            parsed = parse_yes_no_response(
-                _chat_completion_text(response),
-                labels=labels,
-            )
-            scores.loc[group.index] = [parsed[label] for label in labels]
+            if self.prompt_style == "itemwise":
+                if len(group) != 1:
+                    raise ValueError(
+                        "prompt_style='itemwise' requires groups of exactly one row; "
+                        f"got {len(group)} rows in group"
+                    )
+                candidate_row = next(group.itertuples(index=False))
+                messages = self._build_itemwise_messages(
+                    user_id=user_ids.iloc[0],
+                    candidate=candidate_row,
+                )
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    **({"extra_body": self.extra_body} if self.extra_body else {}),
+                )
+                scores.loc[group.index[0]] = parse_single_yes_no_response(
+                    _chat_completion_text(response)
+                )
+            else:
+                labels = [f"C{position}" for position in range(1, len(group) + 1)]
+                messages = self._build_messages(
+                    user_id=user_ids.iloc[0],
+                    candidates=group,
+                    labels=labels,
+                )
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    **({"extra_body": self.extra_body} if self.extra_body else {}),
+                )
+                parsed = parse_yes_no_response(
+                    _chat_completion_text(response),
+                    labels=labels,
+                )
+                scores.loc[group.index] = [parsed[label] for label in labels]
 
         return scores
 
@@ -207,6 +233,26 @@ class LLMInteractionYesNoScorer(Scorer):
             {"role": "user", "content": user_prompt},
         ]
 
+    def _build_itemwise_messages(
+        self,
+        *,
+        user_id: Any,
+        candidate: Any,
+    ) -> list[dict[str, str]]:
+        history = self.history_by_user_.get(user_id, []) if self.history_by_user_ else []
+        candidate_fields = self._format_item_fields(
+            row=candidate,
+            columns=self.candidate_description_columns,
+        )
+        user_prompt = POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE.format(
+            history="\n".join(history) if history else "- No interaction history available.",
+            candidate=candidate_fields,
+        )
+        return [
+            {"role": "system", "content": POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
     def _format_item_description(
         self,
         *,
@@ -223,6 +269,22 @@ class LLMInteractionYesNoScorer(Scorer):
             parts.append(f"{column_label}: {_format_prompt_value(value)}")
         description = "; ".join(parts) if parts else "no item description"
         return f"{label}. {description}"
+
+    def _format_item_fields(
+        self,
+        *,
+        row: Any,
+        columns: tuple[str, ...],
+    ) -> str:
+        """Format item fields as a semicolon-separated string without a label prefix."""
+        parts = []
+        for column in columns:
+            value = getattr(row, column)
+            if pd.isna(value) or value == "":
+                continue
+            column_label = self.column_labels.get(column, column)
+            parts.append(f"{column_label}: {_format_prompt_value(value)}")
+        return "; ".join(parts) if parts else "no item description"
 
     @staticmethod
     def _require_columns(frame: pd.DataFrame, columns: list[str]) -> None:
@@ -261,6 +323,22 @@ def parse_yes_no_response(text: str, *, labels: Sequence[str]) -> dict[str, floa
     if missing:
         raise ValueError(f"Missing candidate labels: {missing}")
     return parsed
+
+
+def parse_single_yes_no_response(text: str) -> float:
+    """Parse a bare yes/no response into a numeric score (1.0 or 0.0).
+
+    Accepts a response that is exactly the word 'yes' or 'no' (case-insensitive,
+    surrounding whitespace stripped). Raises ValueError for anything else.
+    """
+    answer = text.strip().lower()
+    if answer == "yes":
+        return 1.0
+    if answer == "no":
+        return 0.0
+    raise ValueError(
+        f"Expected a bare 'yes' or 'no' response, got: {text!r}"
+    )
 
 
 def _chat_completion_text(response: Any) -> str:

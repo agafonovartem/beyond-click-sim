@@ -9,6 +9,7 @@ from beyond_click_sim.scorers.history import (
     LLMInteractionYesNoScorer,
     LLMRegressor,
     parse_regression_value_response,
+    parse_single_yes_no_response,
     parse_yes_no_response,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "LLMInteractionYesNoScorer",
     "LLMRegressor",
     "parse_regression_value_response",
+    "parse_single_yes_no_response",
     "parse_yes_no_response",
 ]

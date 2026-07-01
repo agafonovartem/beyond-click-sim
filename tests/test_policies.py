@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from beyond_click_sim.tasks.policies import ALSPolicy, PopularityPolicy, RandomPolicy
+from beyond_click_sim.tasks.policies import ALSPolicy, BPRPolicy, ItemKNNPolicy, LightGCNPolicy, PopularityPolicy, RandomPolicy
 
 
 def _items(*ids):
@@ -25,6 +25,12 @@ def test_policy_rejects_non_positive_k():
         PopularityPolicy(k=0)
     with pytest.raises(ValueError):
         ALSPolicy(k=0)
+    with pytest.raises(ValueError):
+        ItemKNNPolicy(k=0)
+    with pytest.raises(ValueError):
+        BPRPolicy(k=0)
+    with pytest.raises(ValueError):
+        LightGCNPolicy(k=0)
 
 
 # ---------------------------------------------------------------------------
@@ -245,3 +251,255 @@ class TestALSPolicy:
     def test_rejects_non_positive_iterations(self):
         with pytest.raises(ValueError, match="iterations"):
             ALSPolicy(k=5, iterations=0)
+
+
+# ---------------------------------------------------------------------------
+# ItemKNNPolicy
+# ---------------------------------------------------------------------------
+
+class TestItemKNNPolicy:
+    def setup_method(self):
+        # Strong CF signal: u2..u5 all interacted with A and C.
+        # u1 has only seen A — ItemKNN should place C at rank 1 for u1 because
+        # A and C have very high cosine similarity (they co-occur across 4 users).
+        # B and D only co-occur via u6, so they are dissimilar to A and C.
+        self.items = _items("A", "B", "C", "D")
+        self.train = _interactions(
+            ("u1", "A"),
+            ("u2", "A"), ("u2", "C"),
+            ("u3", "A"), ("u3", "C"),
+            ("u4", "A"), ("u4", "C"),
+            ("u5", "A"), ("u5", "C"),
+            ("u6", "B"), ("u6", "D"),
+        )
+        self.users = pd.DataFrame({"user_id": ["u1", "u2"]})
+        self.policy = ItemKNNPolicy(k=3, n_neighbors=5, seed=0)
+
+    def _fit(self):
+        return self.policy.fit(self.train, items=self.items)
+
+    def test_output_columns(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        assert set(recs.columns) == {"user_id", "item_id", "policy", "rank"}
+
+    def test_cf_signal_rank1(self):
+        # u1 has only seen A; C co-occurs with A most strongly → C should be rank 1
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        u1_rank1 = recs[(recs["user_id"] == "u1") & (recs["rank"] == 1)]
+        assert len(u1_rank1) == 1
+        assert u1_rank1.iloc[0]["item_id"] == "C"
+
+    def test_excludes_seen_items(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        u1_items = set(recs[recs["user_id"] == "u1"]["item_id"])
+        assert "A" not in u1_items
+        u2_items = set(recs[recs["user_id"] == "u2"]["item_id"])
+        assert "A" not in u2_items
+        assert "C" not in u2_items
+
+    def test_at_most_k_per_user(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        for user_id in self.users["user_id"]:
+            assert len(recs[recs["user_id"] == user_id]) <= self.policy.k
+
+    def test_policy_name(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        assert (recs["policy"] == "ItemKNNPolicy").all()
+
+    def test_cold_start_user_gets_no_recs(self):
+        unknown = pd.DataFrame({"user_id": ["unknown"]})
+        recs = self._fit().recommend(
+            unknown, train_interactions=self.train, items=self.items
+        )
+        assert recs.empty
+
+    def test_rejects_non_positive_n_neighbors(self):
+        with pytest.raises(ValueError, match="n_neighbors"):
+            ItemKNNPolicy(k=5, n_neighbors=0)
+
+
+# ---------------------------------------------------------------------------
+# BPRPolicy
+# ---------------------------------------------------------------------------
+
+class TestBPRPolicy:
+    def setup_method(self):
+        # Same CF fixture as TestALSPolicy: u2..u5 co-interact with A and C,
+        # u1 only with A. BPR should rank C highest for u1.
+        self.items = _items("A", "B", "C", "D")
+        self.train = _interactions(
+            ("u1", "A"),
+            ("u2", "A"), ("u2", "C"),
+            ("u3", "A"), ("u3", "C"),
+            ("u4", "A"), ("u4", "C"),
+            ("u5", "A"), ("u5", "C"),
+            ("u6", "B"), ("u6", "D"),
+        )
+        self.users = pd.DataFrame({"user_id": ["u1", "u2"]})
+        # Higher learning_rate and more iterations for convergence on tiny data.
+        self.policy = BPRPolicy(
+            k=3, n_factors=4, learning_rate=0.05, iterations=300, seed=0
+        )
+
+    def _fit(self):
+        return self.policy.fit(self.train, items=self.items)
+
+    def test_output_columns(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        assert set(recs.columns) == {"user_id", "item_id", "policy", "rank"}
+
+    def test_cf_signal_rank1(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        u1_rank1 = recs[(recs["user_id"] == "u1") & (recs["rank"] == 1)]
+        assert len(u1_rank1) == 1
+        assert u1_rank1.iloc[0]["item_id"] == "C"
+
+    def test_excludes_seen_items(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        u1_items = set(recs[recs["user_id"] == "u1"]["item_id"])
+        assert "A" not in u1_items
+        u2_items = set(recs[recs["user_id"] == "u2"]["item_id"])
+        assert "A" not in u2_items
+        assert "C" not in u2_items
+
+    def test_at_most_k_per_user(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        for user_id in self.users["user_id"]:
+            assert len(recs[recs["user_id"] == user_id]) <= self.policy.k
+
+    def test_policy_name(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        assert (recs["policy"] == "BPRPolicy").all()
+
+    def test_cold_start_user_gets_no_recs(self):
+        unknown = pd.DataFrame({"user_id": ["unknown"]})
+        recs = self._fit().recommend(
+            unknown, train_interactions=self.train, items=self.items
+        )
+        assert recs.empty
+
+    def test_deterministic(self):
+        policy = self._fit()
+        r1 = policy.recommend(self.users, train_interactions=self.train, items=self.items)
+        r2 = policy.recommend(self.users, train_interactions=self.train, items=self.items)
+        pd.testing.assert_frame_equal(r1, r2)
+
+    def test_rejects_non_positive_n_factors(self):
+        with pytest.raises(ValueError, match="n_factors"):
+            BPRPolicy(k=5, n_factors=0)
+
+    def test_rejects_non_positive_iterations(self):
+        with pytest.raises(ValueError, match="iterations"):
+            BPRPolicy(k=5, iterations=0)
+
+
+# ---------------------------------------------------------------------------
+# LightGCNPolicy
+# ---------------------------------------------------------------------------
+
+class TestLightGCNPolicy:
+    def setup_method(self):
+        # Same CF fixture as TestALSPolicy / TestBPRPolicy.
+        # u2..u5 co-interact with A and C; u1 only with A; u6 with B and D.
+        # LightGCN propagates neighborhood info so A and C share similar embeddings,
+        # making C the top recommendation for u1.
+        self.items = _items("A", "B", "C", "D")
+        self.train = _interactions(
+            ("u1", "A"),
+            ("u2", "A"), ("u2", "C"),
+            ("u3", "A"), ("u3", "C"),
+            ("u4", "A"), ("u4", "C"),
+            ("u5", "A"), ("u5", "C"),
+            ("u6", "B"), ("u6", "D"),
+        )
+        self.users = pd.DataFrame({"user_id": ["u1", "u2"]})
+        # Higher learning_rate and more iterations than defaults: GCN propagation
+        # on a tiny 4-item graph needs more steps to produce a clear CF ranking.
+        self.policy = LightGCNPolicy(
+            k=3, n_factors=8, n_layers=2, learning_rate=0.05, iterations=500, seed=0
+        )
+
+    def _fit(self):
+        return self.policy.fit(self.train, items=self.items)
+
+    def test_output_columns(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        assert set(recs.columns) == {"user_id", "item_id", "policy", "rank"}
+
+    def test_cf_signal_rank1(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        u1_rank1 = recs[(recs["user_id"] == "u1") & (recs["rank"] == 1)]
+        assert len(u1_rank1) == 1
+        assert u1_rank1.iloc[0]["item_id"] == "C"
+
+    def test_excludes_seen_items(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        u1_items = set(recs[recs["user_id"] == "u1"]["item_id"])
+        assert "A" not in u1_items
+        u2_items = set(recs[recs["user_id"] == "u2"]["item_id"])
+        assert "A" not in u2_items
+        assert "C" not in u2_items
+
+    def test_at_most_k_per_user(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        for user_id in self.users["user_id"]:
+            assert len(recs[recs["user_id"] == user_id]) <= self.policy.k
+
+    def test_policy_name(self):
+        recs = self._fit().recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        assert (recs["policy"] == "LightGCNPolicy").all()
+
+    def test_cold_start_user_gets_no_recs(self):
+        unknown = pd.DataFrame({"user_id": ["unknown"]})
+        recs = self._fit().recommend(
+            unknown, train_interactions=self.train, items=self.items
+        )
+        assert recs.empty
+
+    def test_deterministic(self):
+        policy = self._fit()
+        r1 = policy.recommend(self.users, train_interactions=self.train, items=self.items)
+        r2 = policy.recommend(self.users, train_interactions=self.train, items=self.items)
+        pd.testing.assert_frame_equal(r1, r2)
+
+    def test_rejects_non_positive_n_factors(self):
+        with pytest.raises(ValueError, match="n_factors"):
+            LightGCNPolicy(k=5, n_factors=0)
+
+    def test_rejects_non_positive_n_layers(self):
+        with pytest.raises(ValueError, match="n_layers"):
+            LightGCNPolicy(k=5, n_layers=0)
+
+    def test_rejects_non_positive_iterations(self):
+        with pytest.raises(ValueError, match="iterations"):
+            LightGCNPolicy(k=5, iterations=0)

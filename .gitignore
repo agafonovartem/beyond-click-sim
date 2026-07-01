@@ -10,6 +10,7 @@ __pycache__/
 !.env.example
 /data/
 *.parquet
+.vscode/
 
 # Generated outputs are large. Track only compact run provenance/metric JSONs.
 /outputs/*
