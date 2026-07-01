@@ -22,6 +22,23 @@ The text before each colon must match these labels:
 Fill each line after the colon with either yes or no."""
 
 
+POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT = """You are simulating a user's response to a recommendation.
+Given the user's interaction history and one recommended item, predict whether the user would interact with it.
+Use only the provided history and item information.
+Answer with exactly one word: yes or no."""
+
+
+POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE = """User interaction history:
+{history}
+
+Recommended item:
+{candidate}
+
+Would the user interact with this recommendation?
+
+Answer: yes or no."""
+
+
 REGRESSION_SYSTEM_PROMPT = """You are simulating a user's numeric response in a recommender system.
 Given the user's interaction history and one candidate item, predict the user's numeric response.
 Use only the provided history and candidate information.
