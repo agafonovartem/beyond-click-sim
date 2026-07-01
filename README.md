@@ -162,7 +162,9 @@ They add train-only `item_rating_mean` and `item_rating_count` item features, e.
 prediction and `ml-1m_rating_item_stats_eval_users1000_seed0` for rating
 regression. Use ML-1M item-stats interaction tasks with LLM
 `*_with_item_stats_*` methods when the prompt should expose average rating and
-number of prior reviews.
+number of prior reviews. The current Agent4Rec yes/no methods also require
+ML-1M item-stats interaction tasks because their candidate prompt includes
+train-only `History ratings` (`item_rating_mean`).
 
 The current reduced interaction reporting protocol is to run seeds 0, 1, and 2
 and report mean plus standard deviation over the seed-level headline test
@@ -179,14 +181,31 @@ Available interaction-prediction methods:
 | `llm_yes_no_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B yes/no scorer on the full selected task. |
 | `llm_yes_no_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B yes/no scorer on a small candidate-group subset. |
 | `llm_yes_no_vllm_llama33_70b_full` | vLLM Llama 3.3 70B yes/no scorer on the full selected task. |
+| `llm_yes_no_vllm_qwen36_27b_smoke` | vLLM Qwen3.6 27B yes/no scorer on a small candidate-group subset, with Qwen thinking disabled. |
+| `llm_yes_no_vllm_qwen36_27b_full` | vLLM Qwen3.6 27B yes/no scorer on the full selected task, with Qwen thinking disabled. |
+| `agent4rec_yes_no_ollama_llama31_8b_smoke` | Local Ollama Llama 3.1 8B Agent4Rec-style yes/no scorer on a small candidate-group subset. |
+| `agent4rec_yes_no_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B Agent4Rec-style yes/no scorer on the full selected task. |
+| `agent4rec_yes_no_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B Agent4Rec-style yes/no scorer on a small candidate-group subset. |
+| `agent4rec_yes_no_vllm_llama33_70b_full` | vLLM Llama 3.3 70B Agent4Rec-style yes/no scorer on the full selected task. |
+| `agent4rec_yes_no_vllm_qwen36_27b_port8001_smoke` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8001` endpoint on a small candidate-group subset. |
+| `agent4rec_yes_no_vllm_qwen36_27b_port8001_full` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8001` endpoint on the full selected task. |
+| `agent4rec_yes_no_vllm_qwen36_27b_port8002_smoke` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8002` endpoint on a small candidate-group subset. |
+| `agent4rec_yes_no_vllm_qwen36_27b_port8002_full` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8002` endpoint on the full selected task. |
 
 Each LLM yes/no method also has an explicit item-stats variant with `_with_item_stats`
 before `_smoke` / `_full`, for example
 `llm_yes_no_ollama_llama31_8b_with_item_stats_smoke`. Use these with item-stats
 task variants when the prompt should expose average rating and number of prior reviews.
 
+The current Agent4Rec yes/no methods are ML-1M-only first versions. They build a
+train-only traits profile (`activity`, `conformity`, `diversity`) and use an
+Agent4Rec-style movie prompt with labeled candidate parsing. They do not yet
+include LLM-generated `taste` profiles or item `Summary` fields. Treat direct
+comparisons against `llm_yes_no_*` as exploratory unless temperature, token
+budget, visible item fields, and history/profile representation are controlled.
+
 > [!NOTE]
-> LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; vLLM is expected at `http://127.0.0.1:8000/v1`.
+> LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; the default vLLM client is expected at `http://127.0.0.1:8000/v1`. Some Agent4Rec Qwen methods intentionally target additional local vLLM ports `8001` and `8002`.
 
 Available regression-prediction methods:
 
@@ -300,6 +319,7 @@ Before trusting a result, inspect:
 - [`in_distribution_scenarios.md`](in_distribution_scenarios.md) - task formulation notes for in-distribution evaluation.
 - [`issues.md`](issues.md) - known defects in the current experimental pipeline.
 - [`notes.md`](notes.md) - active research and implementation notes.
+- [`vllm_start_mbz_instruction.md`](vllm_start_mbz_instruction.md) - local vLLM startup notes for MBZUAI servers.
 
 ## Development notes
 
