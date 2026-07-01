@@ -8,6 +8,8 @@ from openai import OpenAI
 
 OLLAMA_LOCAL_BASE_URL = "http://localhost:11434/v1"
 VLLM_LOCAL_BASE_URL = "http://127.0.0.1:8000/v1"
+VLLM_LOCAL_8001_BASE_URL = "http://127.0.0.1:8001/v1"
+VLLM_LOCAL_8002_BASE_URL = "http://127.0.0.1:8002/v1"
 
 
 def openai_client() -> Any:
@@ -39,6 +41,10 @@ def make_llm_client(client_name: str) -> Any:
         return ollama_client()
     if client_name == "vllm_local":
         return vllm_client(base_url=VLLM_LOCAL_BASE_URL)
+    if client_name == "vllm_local_8001":
+        return vllm_client(base_url=VLLM_LOCAL_8001_BASE_URL)
+    if client_name == "vllm_local_8002":
+        return vllm_client(base_url=VLLM_LOCAL_8002_BASE_URL)
     if client_name == "openai":
         return openai_client()
     raise ValueError(f"Unsupported LLM client: {client_name!r}")

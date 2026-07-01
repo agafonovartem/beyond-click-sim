@@ -56,9 +56,13 @@ def test_make_llm_client_uses_fixed_named_clients(monkeypatch) -> None:
 
     llm_clients.make_llm_client("ollama_local")
     llm_clients.make_llm_client("vllm_local")
+    llm_clients.make_llm_client("vllm_local_8001")
+    llm_clients.make_llm_client("vllm_local_8002")
 
     assert dotenv_calls == []
     assert FakeOpenAI.calls == [
         {"base_url": "http://localhost:11434/v1", "api_key": "ollama"},
         {"base_url": "http://127.0.0.1:8000/v1", "api_key": "EMPTY"},
+        {"base_url": "http://127.0.0.1:8001/v1", "api_key": "EMPTY"},
+        {"base_url": "http://127.0.0.1:8002/v1", "api_key": "EMPTY"},
     ]

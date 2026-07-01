@@ -44,6 +44,10 @@ OLLAMA_LLAMA31_8B_MODEL = "llama3.1:8b"
 VLLM_LLAMA33_70B_METHOD_NAME = "llm_yes_no_vllm_llama33_70b"
 VLLM_LLAMA33_70B_CLIENT = "vllm_local"
 VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
+VLLM_QWEN36_27B_METHOD_NAME = "llm_yes_no_vllm_qwen36_27b"
+VLLM_QWEN36_27B_CLIENT = "vllm_local"
+VLLM_QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
+QWEN_EXTRA_BODY: dict = {"chat_template_kwargs": {"enable_thinking": False}}
 MAX_HISTORY_ITEMS = 20
 TEMPERATURE = 0.0
 MAX_TOKENS = 256
@@ -184,6 +188,66 @@ def run_llama33_70b_with_item_stats_full(
     )
 
 
+def run_qwen36_27b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen36_27b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_with_item_stats_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        use_item_stats=True,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen36_27b_full(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_full",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen36_27b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_with_item_stats_full",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        use_item_stats=True,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
 def run_method(
     task: Task,
     output_dir: Path,
@@ -198,6 +262,7 @@ def run_method(
     max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
     use_item_stats: bool = False,
+    extra_body: dict | None = None,
 ) -> dict[str, object]:
     """Run the yes/no LLM scorer for pointwise interaction alignment."""
 
@@ -233,6 +298,7 @@ def run_method(
         max_history_items=max_history_items,
         temperature=temperature,
         max_tokens=max_tokens,
+        extra_body=extra_body,
     ).fit(X_train, y_train)
 
     scores, errors = _score_groups(
@@ -304,6 +370,7 @@ def run_method(
             "prompt_columns": prompt_columns,
             "column_labels": column_labels,
             "uses_item_stats": use_item_stats,
+            "extra_body": extra_body,
         },
         "decision_rule": {
             "kind": "hard_binary_yes_no_parser",

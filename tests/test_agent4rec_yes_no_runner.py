@@ -179,3 +179,57 @@ def test_agent4rec_yes_no_runner_requires_item_rating_mean(
             max_llm_attempts=1,
             max_workers=1,
         )
+
+
+def test_agent4rec_qwen_port_wrappers_use_port_clients(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(agent4rec_yes_no, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    agent4rec_yes_no.run_qwen36_27b_port8001_full(task, tmp_path)
+    agent4rec_yes_no.run_qwen36_27b_port8002_full(task, tmp_path)
+    agent4rec_yes_no.run_qwen36_27b_port8001_smoke(task, tmp_path)
+    agent4rec_yes_no.run_qwen36_27b_port8002_smoke(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": "agent4rec_yes_no_vllm_qwen36_27b_port8001_full",
+            "client_name": "vllm_local_8001",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": None,
+            "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": "agent4rec_yes_no_vllm_qwen36_27b_port8002_full",
+            "client_name": "vllm_local_8002",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": None,
+            "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": "agent4rec_yes_no_vllm_qwen36_27b_port8001_smoke",
+            "client_name": "vllm_local_8001",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": 25,
+            "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": "agent4rec_yes_no_vllm_qwen36_27b_port8002_smoke",
+            "client_name": "vllm_local_8002",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": 25,
+            "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+    ]

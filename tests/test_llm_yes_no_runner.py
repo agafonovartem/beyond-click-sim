@@ -188,3 +188,59 @@ def test_llm_yes_no_runner_requires_item_stats_columns_when_enabled(
             max_workers=1,
             use_item_stats=True,
         )
+
+
+def test_llm_yes_no_qwen_wrappers_disable_thinking(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_yes_no, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    llm_yes_no.run_qwen36_27b_full(task, tmp_path)
+    llm_yes_no.run_qwen36_27b_with_item_stats_full(task, tmp_path)
+    llm_yes_no.run_qwen36_27b_smoke(task, tmp_path)
+    llm_yes_no.run_qwen36_27b_with_item_stats_smoke(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": "llm_yes_no_vllm_qwen36_27b_full",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": None,
+            "max_workers": llm_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": "llm_yes_no_vllm_qwen36_27b_with_item_stats_full",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": None,
+            "max_workers": llm_yes_no.VLLM_MAX_WORKERS,
+            "use_item_stats": True,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": "llm_yes_no_vllm_qwen36_27b_smoke",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": 25,
+            "max_workers": llm_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": "llm_yes_no_vllm_qwen36_27b_with_item_stats_smoke",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": 25,
+            "max_workers": llm_yes_no.VLLM_MAX_WORKERS,
+            "use_item_stats": True,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+    ]
