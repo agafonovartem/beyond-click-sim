@@ -19,12 +19,12 @@ from typing import Any, Literal
 
 import pandas as pd
 
-from beyond_click_sim.evaluation import (
-    binary_classification_metrics,
-    grouped_binary_classification_metrics,
-    grouped_ranking_metrics,
-    user_grouped_binary_classification_metrics,
-    user_grouped_ranking_metrics,
+from runners.in_distribution.interaction_prediction.methods.common import (
+    failure_as_negative_pointwise_metrics,
+    pointwise_metrics_for_split,
+    ranking_metrics_for_split,
+    ranking_metrics_with_failed_groups_as_zero,
+    score_coverage_summary,
 )
 from runners.in_distribution.interaction_prediction.metrics import (
     POINTWISE_MAIN_METRIC,
@@ -178,28 +178,23 @@ def evaluate_ranking_metrics_payload(
     updated = _ranking_base_payload(base_metrics)
     for split in _split_order(predictions["split"]):
         split_frame = predictions[predictions["split"].eq(split)]
-        split_frame = split_frame[split_frame["score"].notna()]
-        if split_frame.empty:
+        valid_frame = split_frame[split_frame["score"].notna()]
+        if valid_frame.empty:
             raise ValueError(f"No valid ranking scores for split {split!r}")
-        y_true = split_frame["target"]
-        scores = split_frame["score"]
-        updated[str(split)] = {
-            "macro_by_group": grouped_ranking_metrics(
-                y_true,
-                scores,
-                split_frame["candidate_group"],
-                ks=RANKING_KS,
-                tie_policy=RANKING_TIE_POLICY,
-            ),
-            "macro_by_user_group_mean": user_grouped_ranking_metrics(
-                y_true,
-                scores,
-                split_frame["candidate_group"],
-                split_frame["user_id"],
-                ks=RANKING_KS,
-                tie_policy=RANKING_TIE_POLICY,
-            ),
-        }
+        updated[str(split)] = ranking_metrics_for_split(
+            X=valid_frame,
+            y=valid_frame["target"],
+            scores=valid_frame["score"],
+            candidate_group_column="candidate_group",
+        )
+        updated[f"{split}_failure_as_zero_group"] = (
+            ranking_metrics_with_failed_groups_as_zero(
+                X=split_frame,
+                y=split_frame["target"],
+                scores=split_frame["score"],
+                candidate_group_column="candidate_group",
+            )
+        )
 
     return updated
 
@@ -212,25 +207,25 @@ def _evaluate_pointwise_predictions(
 
     for split in _split_order(predictions["split"]):
         split_frame = predictions[predictions["split"].eq(split)]
-        split_frame = split_frame[split_frame["prediction"].notna()]
-        if split_frame.empty:
+        valid_frame = split_frame[split_frame["prediction"].notna()]
+        if valid_frame.empty:
             raise ValueError(f"No valid pointwise predictions for split {split!r}")
-        y_true = split_frame["target"]
-        y_pred = split_frame["prediction"]
-        updated[str(split)] = {
-            "macro_by_group": grouped_binary_classification_metrics(
-                y_true,
-                y_pred,
-                split_frame["candidate_group"],
-            ),
-            "macro_by_user_group_mean": user_grouped_binary_classification_metrics(
-                y_true,
-                y_pred,
-                split_frame["candidate_group"],
-                split_frame["user_id"],
-            ),
-            "micro": binary_classification_metrics(y_true, y_pred),
-        }
+        updated[str(split)] = pointwise_metrics_for_split(
+            X=valid_frame,
+            y=valid_frame["target"],
+            predictions=valid_frame["prediction"],
+            candidate_group_column="candidate_group",
+        )
+        if "score" in split_frame.columns:
+            updated[f"{split}_failure_as_negative"] = (
+                failure_as_negative_pointwise_metrics(
+                    X=split_frame,
+                    y=split_frame["target"],
+                    scores=split_frame["score"],
+                    candidate_group_column="candidate_group",
+                )
+            )
+            updated["coverage"] = score_coverage_summary(split_frame["score"])
 
 
 def discover_run_dirs(paths: list[Path], *, recursive: bool) -> list[Path]:

@@ -102,6 +102,14 @@ def test_agent4rec_yes_no_runner_writes_profile_manifest(
     assert result["scored_rows"] == 2
     assert result["requested_rows"] == 2
     assert result["llm_errors"] == 0
+    assert result["test_failure_as_negative"]["micro"]["n"] == 2
+    assert result["coverage"] == {
+        "requested_rows": 2,
+        "scored_rows": 2,
+        "failed_rows": 0,
+        "scored_fraction": 1.0,
+        "failed_fraction": 0.0,
+    }
 
     predictions = pd.read_parquet(tmp_path / "predictions.parquet")
     assert predictions["score"].tolist() == [1.0, 0.0]
@@ -121,6 +129,12 @@ def test_agent4rec_yes_no_runner_writes_profile_manifest(
         manifest["decision_rule"]["parser_contract"]
         == "agent4rec_labeled_id_movie_watch_reason"
     )
+    ranking_metrics = json.loads(
+        (tmp_path / "metrics_ranking.json").read_text(encoding="utf-8")
+    )
+    assert ranking_metrics["test_failure_as_zero_group"]["macro_by_group"][
+        "failed_groups"
+    ] == 0
 
     system_prompt = client.completions.calls[0]["messages"][0]["content"]
     user_prompt = client.completions.calls[0]["messages"][1]["content"]

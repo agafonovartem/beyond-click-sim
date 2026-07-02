@@ -106,6 +106,15 @@ def test_llm_yes_no_runner_retries_and_keeps_failed_rows(
     assert result["candidate_groups"]["requested"]["groups"] == 2
     assert result["candidate_groups"]["scored"]["groups"] == 1
     assert result["test"]["micro"]["n"] == 2
+    assert result["test_failure_as_negative"]["micro"]["n"] == 4
+    assert result["test_failure_as_negative"]["micro"]["n_predicted_positive"] == 1
+    assert result["coverage"] == {
+        "requested_rows": 4,
+        "scored_rows": 2,
+        "failed_rows": 2,
+        "scored_fraction": 0.5,
+        "failed_fraction": 0.5,
+    }
 
     predictions = pd.read_parquet(tmp_path / "predictions.parquet")
     assert len(predictions) == 4
@@ -137,6 +146,15 @@ def test_llm_yes_no_runner_retries_and_keeps_failed_rows(
     first_prompt = client.completions.calls[0]["messages"][1]["content"]
     assert "H1. item_title: Toy Story; item_genres: Animation; rating: 5" in first_prompt
     assert "user rating" not in first_prompt
+
+    ranking_metrics = json.loads(
+        (tmp_path / "metrics_ranking.json").read_text(encoding="utf-8")
+    )
+    assert ranking_metrics["test"]["macro_by_group"]["n_groups"] == 1
+    strict_ranking = ranking_metrics["test_failure_as_zero_group"]["macro_by_group"]
+    assert strict_ranking["n_groups"] == 2
+    assert strict_ranking["failed_groups"] == 1
+    assert strict_ranking["failure_policy"] == "failed_group_zero"
 
 
 def test_llm_yes_no_runner_requires_item_stats_columns_when_enabled(

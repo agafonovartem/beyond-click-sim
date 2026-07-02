@@ -7,11 +7,6 @@ from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
 
-from beyond_click_sim.evaluation import (
-    binary_classification_metrics,
-    grouped_binary_classification_metrics,
-    user_grouped_binary_classification_metrics,
-)
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMInteractionYesNoScorer
 from beyond_click_sim.tasks import Task
@@ -22,9 +17,13 @@ from runners.in_distribution.llm_item_stats import (
 from runners.in_distribution.interaction_prediction.methods.common import (
     candidate_group_summary,
     current_git_commit,
+    failure_as_negative_pointwise_metrics,
     limit_candidate_groups,
+    pointwise_metrics_for_split,
     prediction_frame,
     ranking_metrics_for_split,
+    ranking_metrics_with_failed_groups_as_zero,
+    score_coverage_summary,
     task_xy,
     write_json,
 )
@@ -327,22 +326,28 @@ def run_method(
     valid_X = X_test.loc[valid].copy()
     valid_y = y_test.loc[valid].copy()
     valid_predictions = valid_scores.astype(bool).rename("prediction")
-    macro_metrics = grouped_binary_classification_metrics(
-        valid_y,
-        valid_predictions,
-        valid_X[candidate_group_column],
+    parsed_only_metrics = pointwise_metrics_for_split(
+        X=valid_X,
+        y=valid_y,
+        predictions=valid_predictions,
+        candidate_group_column=candidate_group_column,
     )
-    user_group_metrics = user_grouped_binary_classification_metrics(
-        valid_y,
-        valid_predictions,
-        valid_X[candidate_group_column],
-        valid_X["user_id"],
+    failure_as_negative_metrics = failure_as_negative_pointwise_metrics(
+        X=X_test,
+        y=y_test,
+        scores=scores,
+        candidate_group_column=candidate_group_column,
     )
-    micro_metrics = binary_classification_metrics(valid_y, valid_predictions)
     ranking_metrics = ranking_metrics_for_split(
         X=valid_X,
         y=valid_y,
         scores=valid_scores,
+        candidate_group_column=candidate_group_column,
+    )
+    failure_as_zero_ranking_metrics = ranking_metrics_with_failed_groups_as_zero(
+        X=X_test,
+        y=y_test,
+        scores=scores,
         candidate_group_column=candidate_group_column,
     )
     requested_candidate_groups = candidate_group_summary(
@@ -357,6 +362,7 @@ def run_method(
         candidate_group_column=candidate_group_column,
         sampled_column=task.schema.sampled_column,
     )
+    coverage = score_coverage_summary(scores)
 
     root = repo_root()
     manifest = {
@@ -397,11 +403,9 @@ def run_method(
         "method": method_name,
         "task": task.name,
         "main_metric": POINTWISE_MAIN_METRIC,
-        "test": {
-            "macro_by_group": macro_metrics,
-            "macro_by_user_group_mean": user_group_metrics,
-            "micro": micro_metrics,
-        },
+        "test": parsed_only_metrics,
+        "test_failure_as_negative": failure_as_negative_metrics,
+        "coverage": coverage,
         "llm_errors": len(errors),
         "scored_rows": int(valid.sum()),
         "requested_rows": int(len(X_test)),
@@ -422,6 +426,8 @@ def run_method(
             "tie_policy": RANKING_TIE_POLICY,
         },
         "test": ranking_metrics,
+        "test_failure_as_zero_group": failure_as_zero_ranking_metrics,
+        "coverage": coverage,
         "llm_errors": len(errors),
         "scored_rows": int(valid.sum()),
         "requested_rows": int(len(X_test)),

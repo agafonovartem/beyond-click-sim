@@ -80,6 +80,8 @@ def test_evaluate_run_predictions_migrates_fixed_prediction_run(tmp_path: Path) 
     assert migrated_metrics["test"]["macro_by_user_group_mean"]["n_users"] == 2
     assert migrated_metrics["test"]["macro_by_user_group_mean"]["n_groups"] == 3
     assert migrated_metrics["test"]["micro"]["n"] == 6
+    assert migrated_metrics["test_failure_as_negative"]["micro"]["n"] == 6
+    assert migrated_metrics["coverage"]["scored_fraction"] == 1.0
 
     ranking_metrics = _read_json(run_dir / RANKING_METRICS_FILENAME)
     assert ranking_metrics["protocol"] == "ranking"
@@ -91,6 +93,9 @@ def test_evaluate_run_predictions_migrates_fixed_prediction_run(tmp_path: Path) 
         ((0.5 + 0.5) / 2 + 1.0) / 2
     )
     assert ranking_metrics["test"]["macro_by_user_group_mean"]["n_users"] == 2
+    assert ranking_metrics["test_failure_as_zero_group"]["macro_by_group"][
+        "failed_groups"
+    ] == 0
 
 
 def test_evaluate_run_predictions_skips_threshold_selected_run(tmp_path: Path) -> None:
@@ -199,7 +204,18 @@ def test_evaluate_payloads_skip_null_llm_predictions() -> None:
 
     assert pointwise_metrics["test"]["micro"]["n"] == 2
     assert pointwise_metrics["test"]["macro_by_group"]["n_groups"] == 1
+    assert pointwise_metrics["test_failure_as_negative"]["micro"]["n"] == 4
+    assert pointwise_metrics["test_failure_as_negative"]["micro"][
+        "n_predicted_positive"
+    ] == 1
+    assert pointwise_metrics["coverage"]["failed_rows"] == 2
     assert ranking_metrics["test"]["macro_by_group"]["n_groups"] == 1
+    assert ranking_metrics["test_failure_as_zero_group"]["macro_by_group"][
+        "n_groups"
+    ] == 2
+    assert ranking_metrics["test_failure_as_zero_group"]["macro_by_group"][
+        "failed_groups"
+    ] == 1
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
