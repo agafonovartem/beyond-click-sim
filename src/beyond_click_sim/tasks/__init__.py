@@ -1,6 +1,12 @@
 """Task construction contracts."""
 
 from beyond_click_sim.tasks.alignment import AlignmentInteractionTaskBuilder
+from beyond_click_sim.tasks.cold_start import (
+    ColdStartSplitFrames,
+    ColdStartTask,
+    ColdStartTaskBuilder,
+    ColdUserHoldoutSplitter,
+)
 from beyond_click_sim.tasks.base import (
     CandidateSampler,
     DatasetFilter,
@@ -38,6 +44,10 @@ __all__ = [
     "AlignmentInteractionTaskBuilder",
     "CandidateSampler",
     "CappedUserInteractionCandidateSampler",
+    "ColdStartSplitFrames",
+    "ColdStartTask",
+    "ColdStartTaskBuilder",
+    "ColdUserHoldoutSplitter",
     "DatasetFilter",
     "ItemFeatureBuilder",
     "MinUserInteractionsFilter",

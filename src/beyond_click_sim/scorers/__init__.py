@@ -20,9 +20,11 @@ from beyond_click_sim.scorers.history import (
     LLMInteractionYesNoScorer,
     LLMRegressor,
 )
+from beyond_click_sim.scorers.item_knn import ColdItemKNNScorer
 from beyond_click_sim.scorers.popularity import PopularityScorer
 
 __all__ = [
+    "ColdItemKNNScorer",
     "ItemMeanRegressor",
     "ItemModeRegressor",
     "Agent4RecProfileGenerator",

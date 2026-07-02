@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from pathlib import Path
+
+from beyond_click_sim.tasks.cold_start import ColdStartTask
+
+from runners.in_distribution.cold_start.methods.llm_yes_no import (
+    run_llama31_8b_full,
+    run_llama31_8b_smoke,
+    run_llama33_70b_full,
+    run_llama33_70b_smoke,
+    run_qwen36_27b_full,
+    run_qwen36_27b_smoke,
+)
+from runners.in_distribution.cold_start.methods.item_knn import (
+    run as run_item_knn,
+    run_smoke as run_item_knn_smoke,
+    run_ranking as run_item_knn_ranking,
+    run_ranking_smoke as run_item_knn_ranking_smoke,
+)
+from runners.in_distribution.cold_start.methods.popularity import (
+    run as run_popularity,
+    run_ranking as run_popularity_ranking,
+)
+
+
+MethodRunner = Callable[[ColdStartTask, Path], dict[str, object]]
+
+METHOD_RUNNERS: dict[str, MethodRunner] = {
+    "popularity_f1_threshold": run_popularity,
+    "popularity_ranking": run_popularity_ranking,
+    "item_knn_cold_start": run_item_knn,
+    "item_knn_cold_start_smoke": run_item_knn_smoke,
+    "item_knn_cold_start_ranking": run_item_knn_ranking,
+    "item_knn_cold_start_ranking_smoke": run_item_knn_ranking_smoke,
+    "llm_yes_no_ollama_llama31_8b_smoke": run_llama31_8b_smoke,
+    "llm_yes_no_ollama_llama31_8b_full": run_llama31_8b_full,
+    "llm_yes_no_vllm_llama33_70b_smoke": run_llama33_70b_smoke,
+    "llm_yes_no_vllm_llama33_70b_full": run_llama33_70b_full,
+    "llm_yes_no_vllm_qwen36_27b_smoke": run_qwen36_27b_smoke,
+    "llm_yes_no_vllm_qwen36_27b_full": run_qwen36_27b_full,
+}
