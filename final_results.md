@@ -152,13 +152,33 @@ Protocol:
 
 - Candidate construction: for ratio `m`, each candidate group uses `k = floor(20 / (m + 1))` held-out positives plus `k * m` sampled non-interactions when enough positives are available; `cg5` caps candidate groups per selected user, not items or positives directly.
 
-- Methods currently final under this reduced protocol: `popularity_f1_threshold` and `popularity_ranking`. LLM/Agent4Rec interaction results from the older uncapped `eval_users1000` protocol are intentionally not listed here; current-protocol LLM runs are pending.
+- Methods currently final under this reduced protocol: `popularity_f1_threshold`, `popularity_ranking`, selected Qwen-family history+item-stats runs, and selected Qwen3-8B Agent4Rec taste runs. Older uncapped `eval_users1000` LLM/Agent4Rec interaction results are intentionally not listed here.
 
 - Main pointwise metric: `test.macro_by_user_group_mean.f1`; threshold is selected on validation by `macro_by_user_group_mean_f1`.
 
 - Main ranking metric: `test.macro_by_user_group_mean.ndcg@5`; HR@1 and score-tie fraction are retained as diagnostics.
 
 - Scope: train uses all filtered users; validation/test evaluate deterministic 1000-user subsets for each split. Candidate counts differ by dataset, ratio, and seed because `cap20` is not fixed-20 for every ratio.
+
+#### LLM/Agent4Rec strict seed averages
+
+These rows match the paper table convention for LLM-based methods: pointwise F1 uses `test_failure_as_negative.macro_by_user_group_mean.f1`, and NDCG@5 uses `test_failure_as_zero_group.macro_by_user_group_mean.ndcg@5`. Agent4Rec rows always include train-only item statistics in candidate descriptions; taste profiles use `gpt-4o-mini`.
+
+| dataset | method | backbone | m | seeds | NDCG@5 mean | NDCG@5 std | F1 mean | F1 std | run root |
+|---|---|---|---:|---|---:|---:|---:|---:|---|
+| ml-1m | History + item stats | Qwen3.6-27B | 1 | 0,1,2 | 0.807 | 0.001 | 0.756 | 0.006 | `outputs/in_distribution/interaction_prediction/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed*/llm_yes_no_vllm_qwen36_27b_port8001_with_item_stats_full` |
+| ml-1m | History + item stats | Qwen3-8B | 1 | 0,1,2 | 0.757 | 0.003 | 0.565 | 0.003 | `outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full` |
+| ml-1m | History + item stats | Qwen3-8B | 3 | 0,1,2 | 0.509 | 0.003 | 0.463 | 0.005 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | History + item stats | Qwen3-8B | 9 | 0,1,2 | 0.404 | 0.002 | 0.310 | 0.003 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | History + item stats | Qwen3-8B | 19 | 0,1,2 | 0.333 | 0.004 | 0.204 | 0.004 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec taste + item stats | Qwen3-8B | 3 | 0,1,2 | 0.470 | 0.003 | 0.467 | 0.002 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec taste + item stats | Qwen3-8B | 9 | 0,1,2 | 0.375 | 0.002 | 0.305 | 0.002 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+
+Additional complete ablation not shown in the current paper table:
+
+| dataset | method | backbone | m | seeds | NDCG@5 mean | NDCG@5 std | F1 mean | F1 std | run root |
+|---|---|---|---:|---|---:|---:|---:|---:|---|
+| ml-1m | History, no item stats | Qwen3-8B | 1 | 0,1,2 | 0.665 | 0.004 | 0.559 | 0.005 | `outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full` |
 
 #### Pointwise F1 seed averages
 
