@@ -9,9 +9,22 @@ from openai import OpenAI
 
 
 OLLAMA_LOCAL_BASE_URL = "http://localhost:11434/v1"
-VLLM_LOCAL_BASE_URL = "http://127.0.0.1:8000/v1"
-VLLM_LOCAL_8001_BASE_URL = "http://127.0.0.1:8001/v1"
-VLLM_LOCAL_8002_BASE_URL = "http://127.0.0.1:8002/v1"
+VLLM_LOCAL_BASE_URL = os.environ.get(
+    "BEYOND_CLICK_SIM_VLLM_LOCAL_BASE_URL",
+    "http://127.0.0.1:8000/v1",
+)
+VLLM_LOCAL_8001_BASE_URL = os.environ.get(
+    "BEYOND_CLICK_SIM_VLLM_LOCAL_8001_BASE_URL",
+    "http://127.0.0.1:8001/v1",
+)
+VLLM_LOCAL_8002_BASE_URL = os.environ.get(
+    "BEYOND_CLICK_SIM_VLLM_LOCAL_8002_BASE_URL",
+    "http://127.0.0.1:8002/v1",
+)
+VLLM_LOCAL_8003_BASE_URL = os.environ.get(
+    "BEYOND_CLICK_SIM_VLLM_LOCAL_8003_BASE_URL",
+    "http://127.0.0.1:8003/v1",
+)
 OPENAI_VK_PROXY_BASE_URL = "https://ai-proxy.vk.team/v1"
 OPENAI_VK_PROXY_API_KEY_ENV = "OPENAI_VK_PROXY_API_KEY"
 
@@ -64,6 +77,8 @@ def make_llm_client(client_name: str) -> Any:
         return vllm_client(base_url=VLLM_LOCAL_8001_BASE_URL)
     if client_name == "vllm_local_8002":
         return vllm_client(base_url=VLLM_LOCAL_8002_BASE_URL)
+    if client_name == "vllm_local_8003":
+        return vllm_client(base_url=VLLM_LOCAL_8003_BASE_URL)
     if client_name == "openai":
         return openai_client()
     if client_name == "openai_vk_proxy":

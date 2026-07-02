@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
+import time
 from types import SimpleNamespace
 
 import pandas as pd
@@ -38,6 +40,19 @@ class FakeChatCompletions:
 class FakeClient:
     def __init__(self, responses: list[str]) -> None:
         completions = FakeChatCompletions(responses)
+        self.chat = SimpleNamespace(completions=completions)
+        self.completions = completions
+
+
+class SlowFakeChatCompletions(FakeChatCompletions):
+    def create(self, **kwargs: object):
+        time.sleep(0.05)
+        return super().create(**kwargs)
+
+
+class SlowFakeClient(FakeClient):
+    def __init__(self, responses: list[str]) -> None:
+        completions = SlowFakeChatCompletions(responses)
         self.chat = SimpleNamespace(completions=completions)
         self.completions = completions
 
@@ -189,6 +204,63 @@ def test_build_taste_generates_and_reuses_jsonl_cache(tmp_path) -> None:
     assert rows[0]["history_titles"] == ["Toy Story", "Heat"]
 
 
+def test_build_taste_serializes_shared_jsonl_cache_writes(tmp_path) -> None:
+    cache_path = tmp_path / "taste.jsonl"
+    taste_client = SlowFakeClient(
+        [
+            "TASTE: I enjoy animated family movies.\n"
+            "REASON: I gave high ratings to animated movies.\n"
+            "HIGH RATINGS: animated family movies\n"
+            "LOW RATINGS: crime movies"
+        ]
+    )
+    history_rows = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "item_id": ["i1", "i2"],
+            "item_title": ["Toy Story", "Heat"],
+            "rating": [5, 2],
+        }
+    )
+    profiles = {"u1": Agent4RecUserProfile(user_id="u1")}
+    histories = {
+        "u1": UserHistory(
+            user_id="u1",
+            rows=history_rows,
+            item_ids=("i1", "i2"),
+        )
+    }
+
+    def build() -> dict[str, Agent4RecUserProfile]:
+        generator = Agent4RecProfileGenerator(
+            profile_components=("taste",),
+            taste_client=taste_client,
+            taste_client_name="openai",
+            taste_model="gpt-4o-mini",
+            taste_cache_path=cache_path,
+        )
+        return generator.build_taste(
+            profiles=profiles,
+            histories=histories,
+            user_ids=["u1"],
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(build) for _ in range(2)]
+        results = [future.result() for future in futures]
+
+    assert [result["u1"].taste for result in results] == [
+        " I enjoy animated family movies.",
+        " I enjoy animated family movies.",
+    ]
+    assert len(taste_client.completions.calls) == 1
+    rows = [
+        json.loads(line)
+        for line in cache_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(rows) == 1
+
+
 def test_build_taste_uses_playtime_prompt_for_steam_like_histories(tmp_path) -> None:
     cache_path = tmp_path / "taste.jsonl"
     taste_client = FakeClient(
@@ -250,24 +322,15 @@ def test_build_taste_uses_playtime_prompt_for_steam_like_histories(tmp_path) -> 
     assert rows[0]["prompt_kind"] == "playtime"
 
 
-def test_build_taste_rejects_duplicate_cache_keys(tmp_path) -> None:
+def test_load_taste_cache_keeps_first_duplicate_cache_key(tmp_path) -> None:
     cache_path = tmp_path / "taste.jsonl"
-    row = {"cache_key": "duplicate", "taste": "taste"}
+    row = {"cache_key": "duplicate", "taste": "first"}
+    duplicate_row = {"cache_key": "duplicate", "taste": "second"}
     cache_path.write_text(
-        json.dumps(row) + "\n" + json.dumps(row) + "\n",
+        json.dumps(row) + "\n" + json.dumps(duplicate_row) + "\n",
         encoding="utf-8",
     )
-    generator = Agent4RecProfileGenerator(
-        profile_components=("traits", "taste"),
-        taste_client=FakeClient([]),
-        taste_client_name="openai",
-        taste_model="gpt-4o-mini",
-        taste_cache_path=cache_path,
-    )
 
-    with pytest.raises(ValueError, match="Duplicate Agent4Rec taste cache key"):
-        generator.build_taste(
-            profiles={},
-            histories={},
-            user_ids=[],
-        )
+    cache = Agent4RecProfileGenerator._load_taste_cache(cache_path)
+
+    assert cache == {"duplicate": row}

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import fcntl
 import hashlib
 import json
 from pathlib import Path
 import re
+import threading
 from typing import Any
 
 import pandas as pd
@@ -25,6 +28,8 @@ AGENT4REC_PROFILE_COMPONENTS = ("taste", "traits")
 _SUPPORTED_AGENT4REC_PROFILE_COMPONENTS = frozenset(AGENT4REC_PROFILE_COMPONENTS)
 _SUPPORTED_TASTE_PROMPT_KINDS = frozenset({"rating", "playtime"})
 AGENT4REC_DIVERSITY_TOP_MASS = 0.80
+_TASTE_CACHE_THREAD_LOCKS: dict[Path, threading.Lock] = {}
+_TASTE_CACHE_THREAD_LOCKS_GUARD = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -240,47 +245,50 @@ class Agent4RecProfileGenerator:
             raise RuntimeError("taste_cache_path is not configured")
 
         requested_user_ids = list(dict.fromkeys(user_ids))
-        cache = self._load_taste_cache(self.taste_cache_path)
         updated_profiles = dict(profiles)
         hits = 0
         misses = 0
 
-        for user_id in requested_user_ids:
-            if user_id not in updated_profiles:
-                raise ValueError(f"No fitted Agent4Rec profile for user: {user_id!r}")
-            if user_id not in histories:
-                raise ValueError(f"No fitted taste history for user: {user_id!r}")
-
-            history = histories[user_id]
-            cache_key = self._taste_cache_key(
-                user_id=user_id,
-                history_item_ids=history.item_ids,
-            )
-            if cache_key in cache:
-                cached = cache[cache_key]
-                taste = str(cached.get("taste", ""))
-                if not taste.strip():
+        with self._taste_cache_lock(self.taste_cache_path):
+            cache = self._load_taste_cache(self.taste_cache_path)
+            for user_id in requested_user_ids:
+                if user_id not in updated_profiles:
                     raise ValueError(
-                        f"Cached Agent4Rec taste is empty for user: {user_id!r}"
+                        f"No fitted Agent4Rec profile for user: {user_id!r}"
                     )
-                hits += 1
-            else:
-                parsed = self._generate_taste(user_id=user_id, history=history)
-                taste = parsed.taste
-                row = self._taste_cache_row(
-                    user_id=user_id,
-                    history=history,
-                    cache_key=cache_key,
-                    parsed=parsed,
-                )
-                self._append_taste_cache_row(self.taste_cache_path, row)
-                cache[cache_key] = row
-                misses += 1
+                if user_id not in histories:
+                    raise ValueError(f"No fitted taste history for user: {user_id!r}")
 
-            updated_profiles[user_id] = self._with_taste(
-                updated_profiles[user_id],
-                taste=taste,
-            )
+                history = histories[user_id]
+                cache_key = self._taste_cache_key(
+                    user_id=user_id,
+                    history_item_ids=history.item_ids,
+                )
+                if cache_key in cache:
+                    cached = cache[cache_key]
+                    taste = str(cached.get("taste", ""))
+                    if not taste.strip():
+                        raise ValueError(
+                            f"Cached Agent4Rec taste is empty for user: {user_id!r}"
+                        )
+                    hits += 1
+                else:
+                    parsed = self._generate_taste(user_id=user_id, history=history)
+                    taste = parsed.taste
+                    row = self._taste_cache_row(
+                        user_id=user_id,
+                        history=history,
+                        cache_key=cache_key,
+                        parsed=parsed,
+                    )
+                    self._append_taste_cache_row(self.taste_cache_path, row)
+                    cache[cache_key] = row
+                    misses += 1
+
+                updated_profiles[user_id] = self._with_taste(
+                    updated_profiles[user_id],
+                    taste=taste,
+                )
 
         self.taste_cache_stats_ = {
             "requested_users": len(requested_user_ids),
@@ -683,10 +691,10 @@ class Agent4RecProfileGenerator:
                         f"Malformed Agent4Rec taste cache row {line_number}: missing cache_key"
                     )
                 if cache_key in rows:
-                    raise ValueError(
-                        "Duplicate Agent4Rec taste cache key in "
-                        f"{path}: {cache_key}"
-                    )
+                    # Older parallel runs could leave duplicate rows in the shared
+                    # JSONL cache. Keep the first complete taste profile so a stale
+                    # cache artifact does not fail an otherwise reproducible run.
+                    continue
                 rows[str(cache_key)] = row
         return rows
 
@@ -695,6 +703,25 @@ class Agent4RecProfileGenerator:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    @contextmanager
+    def _taste_cache_lock(path: Path) -> Iterator[None]:
+        resolved_path = path.resolve()
+        with _TASTE_CACHE_THREAD_LOCKS_GUARD:
+            thread_lock = _TASTE_CACHE_THREAD_LOCKS.setdefault(
+                resolved_path,
+                threading.Lock(),
+            )
+        with thread_lock:
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+            lock_path = resolved_path.with_name(f"{resolved_path.name}.lock")
+            with lock_path.open("a", encoding="utf-8") as lock_handle:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
     @staticmethod
     def _require_columns(frame: pd.DataFrame, columns: list[str]) -> None:
