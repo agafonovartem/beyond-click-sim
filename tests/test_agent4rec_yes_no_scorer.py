@@ -165,6 +165,8 @@ def test_agent4rec_user_prompt_can_use_game_field() -> None:
 
     assert "Please judge all games in the ##recommended list##" in prompt
     assert "Use this format: ID: [candidate id]; GAME: [game name]; WATCH:" in prompt
+    assert "Judge each game using your available profile" in prompt
+    assert "Judge each movie using your available profile" not in prompt
 
     taste_prompt = agent4rec_user_prompt(
         candidates="C1. <- Portal ->",

@@ -27,6 +27,9 @@ _AGENT4REC_ENTITY_TASTE_USER_INSTRUCTION_TEMPLATE = (
 _AGENT4REC_PROFILE_USER_INSTRUCTION = (
     "Judge each movie using your available profile and the candidate information."
 )
+_AGENT4REC_ENTITY_PROFILE_USER_INSTRUCTION_TEMPLATE = (
+    "Judge each {entity_name} using your available profile and the candidate information."
+)
 _AGENT4REC_TASTE_RATING_INSTRUCTION = (
     "Rate the movie according to your taste."
 )
@@ -145,7 +148,13 @@ def agent4rec_user_prompt(
             )
         )
         if taste
-        else _AGENT4REC_PROFILE_USER_INSTRUCTION
+        else (
+            _AGENT4REC_PROFILE_USER_INSTRUCTION
+            if use_original_movie_wording
+            else _AGENT4REC_ENTITY_PROFILE_USER_INSTRUCTION_TEMPLATE.format(
+                entity_name=entity_name,
+            )
+        )
     )
     return AGENT4REC_FORCED_ITEMS_USER_PROMPT_TEMPLATE.format(
         candidates=candidates,

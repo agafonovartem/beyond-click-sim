@@ -380,6 +380,8 @@ def test_agent4rec_yes_no_runner_supports_steam_traits_only(
     assert "Your conformity trait is described as:" not in system_prompt
     assert "C1. <- Portal 2 -> <- genres:" in user_prompt
     assert "Use this format: ID: [candidate id]; GAME: [game name]; WATCH:" in user_prompt
+    assert "Judge each game using your available profile" in user_prompt
+    assert "Judge each movie using your available profile" not in user_prompt
 
 
 def test_agent4rec_yes_no_runner_supports_steam_taste_profiles(
