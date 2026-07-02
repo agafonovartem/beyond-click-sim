@@ -166,6 +166,18 @@ def test_agent4rec_user_prompt_can_use_game_field() -> None:
     assert "Please judge all games in the ##recommended list##" in prompt
     assert "Use this format: ID: [candidate id]; GAME: [game name]; WATCH:" in prompt
 
+    taste_prompt = agent4rec_user_prompt(
+        candidates="C1. <- Portal ->",
+        taste="puzzle games",
+        entity_field="GAME",
+        entity_name="game",
+        entity_plural="games",
+    )
+    assert "You only choose games which align with your taste" in taste_prompt
+    assert "You only watch movies which align with your taste" not in taste_prompt
+    assert "If you don't want to choose a game" in taste_prompt
+    assert "If you don't want to watch a game" not in taste_prompt
+
 
 def test_agent4rec_yes_no_scorer_uses_profile_prompt() -> None:
     X_train = pd.DataFrame(

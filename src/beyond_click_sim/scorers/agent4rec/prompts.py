@@ -21,6 +21,9 @@ _AGENT4REC_DIVERSITY_EXPLANATION = (
 _AGENT4REC_TASTE_USER_INSTRUCTION = (
     "You only watch movies which align with your taste."
 )
+_AGENT4REC_ENTITY_TASTE_USER_INSTRUCTION_TEMPLATE = (
+    "You only choose {entity_plural} which align with your taste."
+)
 _AGENT4REC_PROFILE_USER_INSTRUCTION = (
     "Judge each movie using your available profile and the candidate information."
 )
@@ -114,7 +117,7 @@ AGENT4REC_FORCED_ITEMS_USER_PROMPT_TEMPLATE = """##recommended list##
 Please judge all {entity_plural} in the ##recommended list## and explain why.
 {profile_instruction}
 Use this format: ID: [candidate id]; {entity_field}: [{entity_name} name]; WATCH: [yes or no]; REASON: [brief reason]
-You must judge all the {entity_plural}. If you don't want to watch a {entity_name}, use WATCH: no; REASON: [brief reason]
+You must judge all the {entity_plural}. If you don't want to {negative_action} a {entity_name}, use WATCH: no; REASON: [brief reason]
 Each response should be on one line. Do not include any additional information or explanations and stay grounded in reality."""
 
 
@@ -128,8 +131,19 @@ def agent4rec_user_prompt(
 ) -> str:
     """Build the Agent4Rec forced-items user prompt for available profile parts."""
 
+    use_original_movie_wording = (
+        entity_field == "MOVIE"
+        and entity_name == "movie"
+        and entity_plural == "movies"
+    )
     profile_instruction = (
-        _AGENT4REC_TASTE_USER_INSTRUCTION
+        (
+            _AGENT4REC_TASTE_USER_INSTRUCTION
+            if use_original_movie_wording
+            else _AGENT4REC_ENTITY_TASTE_USER_INSTRUCTION_TEMPLATE.format(
+                entity_plural=entity_plural,
+            )
+        )
         if taste
         else _AGENT4REC_PROFILE_USER_INSTRUCTION
     )
@@ -139,6 +153,7 @@ def agent4rec_user_prompt(
         entity_name=entity_name,
         entity_plural=entity_plural,
         profile_instruction=profile_instruction,
+        negative_action="watch" if use_original_movie_wording else "choose",
     )
 
 

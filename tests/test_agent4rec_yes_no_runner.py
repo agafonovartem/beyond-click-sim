@@ -462,6 +462,10 @@ def test_agent4rec_yes_no_runner_supports_steam_taste_profiles(
     taste_prompt = taste_client.completions.calls[0]["messages"][1]["content"]
     assert "game playtime history" in taste_prompt
     assert "Portal (genres: Action; tags: Puzzle)" in taste_prompt
+    scoring_prompt = scoring_client.completions.calls[0]["messages"][1]["content"]
+    assert "You only choose games which align with your taste" in scoring_prompt
+    assert "You only watch movies which align with your taste" not in scoring_prompt
+    assert "If you don't want to choose a game" in scoring_prompt
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     taste_manifest = manifest["scorer"]["profile_generator"]["taste"]
     assert taste_manifest["prompt_kind"] == "playtime"
