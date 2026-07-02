@@ -382,11 +382,31 @@ def test_agent4rec_yes_no_runner_supports_steam_traits_only(
     assert "Use this format: ID: [candidate id]; GAME: [game name]; WATCH:" in user_prompt
 
 
-def test_agent4rec_yes_no_runner_rejects_steam_taste_profiles(
+def test_agent4rec_yes_no_runner_supports_steam_taste_profiles(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: FakeClient([]))
+    scoring_client = FakeClient(
+        ["ID: C1; GAME: Portal 2; WATCH: yes; REASON: puzzle taste"]
+    )
+    taste_client = FakeClient(
+        [
+            "TASTE: I enjoy puzzle games.\n"
+            "REASON: I spent time with puzzle games.\n"
+            "HIGH PLAYTIME: puzzle games\n"
+            "LOW PLAYTIME: competitive games"
+        ]
+    )
+
+    def fake_make_llm_client(client_name: str) -> FakeClient:
+        if client_name == "openai":
+            return taste_client
+        if client_name == "fake":
+            return scoring_client
+        raise AssertionError(client_name)
+
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", fake_make_llm_client)
+    cache_path = tmp_path / "steam-taste.jsonl"
     task = Task(
         name="steam_toy",
         train=pd.DataFrame(
@@ -422,20 +442,30 @@ def test_agent4rec_yes_no_runner_rejects_steam_taste_profiles(
         manifest={"dataset": "steam", "dataset_version": "v1", "splitter": {"seed": 0}},
     )
 
-    with pytest.raises(ValueError, match="MovieLens-style 1-5 rating histories"):
-        agent4rec_yes_no.run_method(
-            task,
-            tmp_path,
-            method_name="agent4rec_yes_no_steam_taste_test",
-            client_name="fake",
-            model="fake-model",
-            max_candidate_groups=None,
-            max_llm_attempts=1,
-            max_workers=1,
-            profile_components=("traits", "taste"),
-            taste_client_name="openai",
-            taste_model="gpt-4o-mini",
-        )
+    result = agent4rec_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="agent4rec_yes_no_steam_taste_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        profile_components=("taste",),
+        taste_client_name="openai",
+        taste_model="gpt-4o-mini",
+        taste_cache_path=cache_path,
+    )
+
+    assert result["scored_rows"] == 1
+    assert len(taste_client.completions.calls) == 1
+    taste_prompt = taste_client.completions.calls[0]["messages"][1]["content"]
+    assert "game playtime history" in taste_prompt
+    assert "Portal (genres: Action; tags: Puzzle)" in taste_prompt
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    taste_manifest = manifest["scorer"]["profile_generator"]["taste"]
+    assert taste_manifest["prompt_kind"] == "playtime"
+    assert taste_manifest["prompt_version"] == "agent4rec_playtime_v1"
 
 
 def test_agent4rec_qwen_port_wrappers_use_port_clients(

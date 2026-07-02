@@ -102,7 +102,13 @@ class LLMInteractionYesNoScorer(Scorer):
         self.prompt_style = prompt_style
         self.history_by_user_: dict[Any, list[str]] | None = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "LLMInteractionYesNoScorer":
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        *,
+        history_user_ids: Sequence[Any] | None = None,
+    ) -> "LLMInteractionYesNoScorer":
         """Store formatted train rows as per-user interaction history.
 
         The target is intentionally ignored in v1: the train table is assumed to
@@ -113,10 +119,15 @@ class LLMInteractionYesNoScorer(Scorer):
         if len(X) != len(y):
             raise ValueError("X and y must have the same length")
         self._require_columns(X, [self.user_column, *self.history_description_columns])
+        history_rows = (
+            X
+            if history_user_ids is None
+            else X[X[self.user_column].isin(history_user_ids)].copy()
+        )
 
         history_by_user: dict[Any, list[str]] = {}
         for user_id, history in select_history_by_user(
-            X,
+            history_rows,
             user_column=self.user_column,
             item_column=None,
             max_history_items=self.max_history_items,

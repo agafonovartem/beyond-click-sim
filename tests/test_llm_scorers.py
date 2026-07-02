@@ -186,6 +186,30 @@ def test_llm_interaction_scorer_can_keep_full_history() -> None:
     }
 
 
+def test_llm_interaction_scorer_can_fit_selected_user_histories() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u2"],
+            "item_title": ["Toy Story", "Portal"],
+        }
+    )
+
+    scorer = LLMInteractionYesNoScorer(
+        client=FakeClient([]),
+        model="fake-model",
+        item_description_columns=("item_title",),
+    )
+    scorer.fit(
+        X_train,
+        pd.Series([1, 1]),
+        history_user_ids=["u2"],
+    )
+
+    assert scorer.history_by_user_ == {
+        "u2": ["H1. item_title: Portal"],
+    }
+
+
 def test_llm_interaction_scorer_prompt_lists_all_candidate_labels() -> None:
     X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["Toy Story"]})
     X_test = pd.DataFrame(

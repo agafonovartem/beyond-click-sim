@@ -15,6 +15,9 @@ from beyond_click_sim.scorers.agent4rec.profiles import (
     AGENT4REC_GAME_DIVERSITY_DESCRIPTIONS,
 )
 from beyond_click_sim.scorers.agent4rec.prompts import AGENT4REC_TASTE_PROMPT_VERSION
+from beyond_click_sim.scorers.agent4rec.prompts import (
+    AGENT4REC_PLAYTIME_TASTE_PROMPT_VERSION,
+)
 from beyond_click_sim.tasks import PREFIXED_ITEM_RATING_MEAN_COLUMN, Task
 from runners.in_distribution.interaction_prediction.methods.common import (
     candidate_group_summary,
@@ -89,8 +92,11 @@ DATASET_PROFILE_GENERATOR_KWARGS = {
     "ml-1m": {},
     "steam": {
         "genre_column": "item_genres_json",
+        "tag_column": "item_tags_json",
         "title_column": "item_title",
+        "playtime_column": "playtime_forever",
         "include_conformity": False,
+        "taste_prompt_kind": "playtime",
         "activity_descriptions": AGENT4REC_GAME_ACTIVITY_DESCRIPTIONS,
         "diversity_descriptions": AGENT4REC_GAME_DIVERSITY_DESCRIPTIONS,
     },
@@ -107,7 +113,11 @@ DATASET_PROMPT_KWARGS = {
 }
 DATASET_SUPPORTS_TASTE = {
     "ml-1m": True,
-    "steam": False,
+    "steam": True,
+}
+DATASET_TASTE_PROMPT_VERSION = {
+    "ml-1m": AGENT4REC_TASTE_PROMPT_VERSION,
+    "steam": AGENT4REC_PLAYTIME_TASTE_PROMPT_VERSION,
 }
 
 
@@ -289,7 +299,7 @@ def run_method(
     taste_temperature: float = TASTE_TEMPERATURE,
     taste_max_tokens: int | None = TASTE_MAX_TOKENS,
     taste_max_attempts: int = MAX_LLM_ATTEMPTS,
-    taste_prompt_version: str = AGENT4REC_TASTE_PROMPT_VERSION,
+    taste_prompt_version: str | None = None,
     taste_cache_path: Path | None = None,
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based yes/no scorer."""
@@ -327,6 +337,8 @@ def run_method(
             raise ValueError("taste_client_name is required for taste profiles")
         if not taste_model:
             raise ValueError("taste_model is required for taste profiles")
+        if taste_prompt_version is None:
+            taste_prompt_version = DATASET_TASTE_PROMPT_VERSION[dataset_name]
         if taste_cache_path is None:
             taste_cache_path = agent4rec_taste_cache_path(
                 task,
@@ -335,6 +347,8 @@ def run_method(
             )
         taste_client = make_llm_client(taste_client_name)
     else:
+        if taste_prompt_version is None:
+            taste_prompt_version = DATASET_TASTE_PROMPT_VERSION[dataset_name]
         taste_client = None
 
     profile_generator = Agent4RecProfileGenerator(

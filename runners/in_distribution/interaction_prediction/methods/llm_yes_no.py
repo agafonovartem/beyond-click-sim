@@ -288,6 +288,7 @@ def run_method(
         candidate_group_column=candidate_group_column,
         max_candidate_groups=max_candidate_groups,
     )
+    history_user_ids = X_test["user_id"].drop_duplicates().tolist()
 
     scorer = LLMInteractionYesNoScorer(
         client=make_llm_client(client_name),
@@ -299,7 +300,7 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
-    ).fit(X_train, y_train)
+    ).fit(X_train, y_train, history_user_ids=history_user_ids)
 
     scores, errors = _score_groups(
         scorer,

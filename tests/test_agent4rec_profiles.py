@@ -113,6 +113,19 @@ def test_parse_agent4rec_modify_taste_response_matches_original_join_style() -> 
     assert parsed.low_rating == " crime movies"
 
 
+def test_parse_agent4rec_modify_taste_response_accepts_playtime_fields() -> None:
+    parsed = parse_agent4rec_modify_taste_response(
+        "TASTE: I enjoy puzzle platformers.\n"
+        "REASON: I spent a long time with puzzle games.\n"
+        "HIGH PLAYTIME: puzzle and co-op games\n"
+        "LOW PLAYTIME: competitive shooters"
+    )
+
+    assert parsed.taste == " I enjoy puzzle platformers."
+    assert parsed.high_rating == " puzzle and co-op games"
+    assert parsed.low_rating == " competitive shooters"
+
+
 def test_parse_agent4rec_modify_taste_response_requires_taste() -> None:
     with pytest.raises(ValueError, match="does not contain TASTE"):
         parse_agent4rec_modify_taste_response("REASON: nothing useful")
@@ -174,6 +187,67 @@ def test_build_taste_generates_and_reuses_jsonl_cache(tmp_path) -> None:
     assert rows[0]["history_item_ids"] == ["i1", "i2"]
     assert rows[0]["history_ratings"] == [5, 2]
     assert rows[0]["history_titles"] == ["Toy Story", "Heat"]
+
+
+def test_build_taste_uses_playtime_prompt_for_steam_like_histories(tmp_path) -> None:
+    cache_path = tmp_path / "taste.jsonl"
+    taste_client = FakeClient(
+        [
+            "TASTE: I enjoy puzzle and co-op games.\n"
+            "REASON: I spent a long time with puzzle games.\n"
+            "HIGH PLAYTIME: puzzle and co-op games\n"
+            "LOW PLAYTIME: competitive shooters"
+        ]
+    )
+    generator = Agent4RecProfileGenerator(
+        profile_components=("taste",),
+        genre_column="item_genres_json",
+        tag_column="item_tags_json",
+        title_column="item_title",
+        playtime_column="playtime_forever",
+        taste_prompt_kind="playtime",
+        taste_client=taste_client,
+        taste_client_name="openai",
+        taste_model="gpt-4o-mini",
+        taste_cache_path=cache_path,
+        taste_prompt_version="agent4rec_playtime_v1",
+    )
+    history_rows = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1"],
+            "item_id": ["g1", "g2", "g3"],
+            "item_title": ["Portal", "Dota 2", "Stardew Valley"],
+            "item_genres_json": ['["Action"]', '["Action"]', '["RPG"]'],
+            "item_tags_json": ['["Puzzle"]', '["MOBA"]', '["Farming Sim"]'],
+            "playtime_forever": [600, 0, 180],
+        }
+    )
+    profiles = {"u1": Agent4RecUserProfile(user_id="u1")}
+    histories = {
+        "u1": UserHistory(
+            user_id="u1",
+            rows=history_rows,
+            item_ids=("g1", "g2", "g3"),
+        )
+    }
+
+    updated = generator.build_taste(
+        profiles=profiles,
+        histories=histories,
+        user_ids=["u1"],
+    )
+
+    assert updated["u1"].taste == " I enjoy puzzle and co-op games."
+    taste_prompt = taste_client.completions.calls[0]["messages"][1]["content"]
+    assert "game playtime history" in taste_prompt
+    assert "high playtime" in taste_prompt
+    assert "Portal (genres: Action; tags: Puzzle)" in taste_prompt
+    rows = [
+        json.loads(line)
+        for line in cache_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert rows[0]["history_playtime"] == [600, 0, 180]
+    assert rows[0]["prompt_kind"] == "playtime"
 
 
 def test_build_taste_rejects_duplicate_cache_keys(tmp_path) -> None:

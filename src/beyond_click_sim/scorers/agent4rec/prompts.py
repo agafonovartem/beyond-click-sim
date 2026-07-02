@@ -174,9 +174,14 @@ def agent4rec_rating_user_prompt(
 
 
 AGENT4REC_TASTE_PROMPT_VERSION = "agent4rec_modify_v1"
+AGENT4REC_PLAYTIME_TASTE_PROMPT_VERSION = "agent4rec_playtime_v1"
 
 AGENT4REC_TASTE_SYSTEM_PROMPT = """
 I want you to act as an agent. You will act as a movie taste analyst roleplaying the user using the first person pronoun "I".
+"""
+
+AGENT4REC_PLAYTIME_TASTE_SYSTEM_PROMPT = """
+I want you to act as an agent. You will act as a game taste analyst roleplaying the user using the first person pronoun "I".
 """
 
 AGENT4REC_TASTE_MODIFY_USER_PROMPT_TEMPLATE = """
@@ -207,6 +212,33 @@ Answer should not be a combination of above two parts and not contain other word
 
 """
 
+AGENT4REC_PLAYTIME_TASTE_USER_PROMPT_TEMPLATE = """
+Given a user's game playtime history:
+
+user has zero playtime for following games: {zero_playtime_games}
+user has low playtime for following games (1-119 minutes): {low_playtime_games}
+user has medium playtime for following games (120-599 minutes): {medium_playtime_games}
+user has high playtime for following games (600+ minutes): {high_playtime_games}
+
+My first request is "I need help creating game taste for a user given the game-playtime history. (in no particular order)" Generate as many TASTE-REASON pairs as possible, taste should focus on the games' genres and tags.
+Strictly follow the output format below:
+
+TASTE: <-descriptive taste->
+REASON: <-brief reason->
+
+TASTE: <-descriptive taste->
+REASON: <-brief reason->
+.....
+
+Secondly, analyze what kinds of games the user tends to play for a long time, and what kinds of games the user owns but barely plays.
+Strictly follow the output format below:
+HIGH PLAYTIME: <-conclusion of games with high or medium playtime->
+LOW PLAYTIME: <-conclusion of games with zero or low playtime->
+Answer should not be a combination of above two parts and not contain other words and should not contain game names.
+
+
+"""
+
 
 def agent4rec_taste_modify_user_prompt(
     *,
@@ -220,6 +252,20 @@ def agent4rec_taste_modify_user_prompt(
         rating_3_movies=_format_rating_movies(rating_movies.get(3, ())),
         rating_4_movies=_format_rating_movies(rating_movies.get(4, ())),
         rating_5_movies=_format_rating_movies(rating_movies.get(5, ())),
+    )
+
+
+def agent4rec_playtime_taste_user_prompt(
+    *,
+    playtime_games: Mapping[str, Sequence[str]],
+) -> str:
+    """Build a Steam/playtime taste-generation prompt."""
+
+    return AGENT4REC_PLAYTIME_TASTE_USER_PROMPT_TEMPLATE.format(
+        zero_playtime_games=_format_rating_movies(playtime_games.get("zero", ())),
+        low_playtime_games=_format_rating_movies(playtime_games.get("low", ())),
+        medium_playtime_games=_format_rating_movies(playtime_games.get("medium", ())),
+        high_playtime_games=_format_rating_movies(playtime_games.get("high", ())),
     )
 
 

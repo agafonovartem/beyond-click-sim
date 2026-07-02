@@ -12,8 +12,10 @@ from typing import Any
 import pandas as pd
 
 from beyond_click_sim.scorers.agent4rec.prompts import (
+    AGENT4REC_PLAYTIME_TASTE_SYSTEM_PROMPT,
     AGENT4REC_TASTE_PROMPT_VERSION,
     AGENT4REC_TASTE_SYSTEM_PROMPT,
+    agent4rec_playtime_taste_user_prompt,
     agent4rec_taste_modify_user_prompt,
 )
 from beyond_click_sim.scorers.history.selection import UserHistory
@@ -21,6 +23,7 @@ from beyond_click_sim.scorers.history.selection import UserHistory
 
 AGENT4REC_PROFILE_COMPONENTS = ("taste", "traits")
 _SUPPORTED_AGENT4REC_PROFILE_COMPONENTS = frozenset(AGENT4REC_PROFILE_COMPONENTS)
+_SUPPORTED_TASTE_PROMPT_KINDS = frozenset({"rating", "playtime"})
 AGENT4REC_DIVERSITY_TOP_MASS = 0.80
 
 
@@ -90,7 +93,9 @@ class Agent4RecProfileGenerator:
         user_column: str = "user_id",
         item_column: str = "item_id",
         rating_column: str = "rating",
+        playtime_column: str = "playtime_forever",
         genre_column: str = "item_genres",
+        tag_column: str | None = None,
         title_column: str = "item_title",
         include_conformity: bool = True,
         activity_descriptions: dict[int, str] | None = None,
@@ -101,6 +106,7 @@ class Agent4RecProfileGenerator:
         taste_model: str | None = None,
         taste_cache_path: Path | str | None = None,
         taste_prompt_version: str = AGENT4REC_TASTE_PROMPT_VERSION,
+        taste_prompt_kind: str = "rating",
         taste_temperature: float = 0.0,
         taste_max_tokens: int | None = None,
         taste_max_attempts: int = 5,
@@ -123,12 +129,19 @@ class Agent4RecProfileGenerator:
             raise ValueError(
                 f"profile_components contains duplicates: {profile_components_tuple}"
             )
+        if taste_prompt_kind not in _SUPPORTED_TASTE_PROMPT_KINDS:
+            raise ValueError(
+                "Unsupported Agent4Rec taste_prompt_kind: "
+                f"{taste_prompt_kind!r}. Supported: {sorted(_SUPPORTED_TASTE_PROMPT_KINDS)}"
+            )
 
         self.profile_components = profile_components_tuple
         self.user_column = user_column
         self.item_column = item_column
         self.rating_column = rating_column
+        self.playtime_column = playtime_column
         self.genre_column = genre_column
+        self.tag_column = tag_column
         self.title_column = title_column
         self.include_conformity = include_conformity
         self.activity_descriptions = (
@@ -153,6 +166,7 @@ class Agent4RecProfileGenerator:
             None if taste_cache_path is None else Path(taste_cache_path)
         )
         self.taste_prompt_version = taste_prompt_version
+        self.taste_prompt_kind = taste_prompt_kind
         self.taste_temperature = taste_temperature
         self.taste_max_tokens = taste_max_tokens
         self.taste_max_attempts = taste_max_attempts
@@ -285,7 +299,9 @@ class Agent4RecProfileGenerator:
             "user_column": self.user_column,
             "item_column": self.item_column,
             "rating_column": self.rating_column,
+            "playtime_column": self.playtime_column,
             "genre_column": self.genre_column,
+            "tag_column": self.tag_column,
             "title_column": self.title_column,
             "include_conformity": self.include_conformity,
             "diversity_top_mass": AGENT4REC_DIVERSITY_TOP_MASS,
@@ -299,6 +315,7 @@ class Agent4RecProfileGenerator:
                 "max_tokens": self.taste_max_tokens,
                 "max_attempts": self.taste_max_attempts,
                 "prompt_version": self.taste_prompt_version,
+                "prompt_kind": self.taste_prompt_kind,
                 "cache_path": (
                     None
                     if self.taste_cache_path is None
@@ -488,12 +505,22 @@ class Agent4RecProfileGenerator:
         ) from last_error
 
     def _taste_messages(self, history: UserHistory) -> list[dict[str, str]]:
-        rating_movies = self._rating_movies(history)
-        user_prompt = agent4rec_taste_modify_user_prompt(
-            rating_movies=rating_movies,
-        )
+        if self.taste_prompt_kind == "rating":
+            rating_movies = self._rating_movies(history)
+            user_prompt = agent4rec_taste_modify_user_prompt(
+                rating_movies=rating_movies,
+            )
+            system_prompt = AGENT4REC_TASTE_SYSTEM_PROMPT
+        elif self.taste_prompt_kind == "playtime":
+            playtime_games = self._playtime_games(history)
+            user_prompt = agent4rec_playtime_taste_user_prompt(
+                playtime_games=playtime_games,
+            )
+            system_prompt = AGENT4REC_PLAYTIME_TASTE_SYSTEM_PROMPT
+        else:
+            raise RuntimeError(f"Unsupported taste_prompt_kind: {self.taste_prompt_kind}")
         return [
-            {"role": "system", "content": AGENT4REC_TASTE_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
@@ -524,6 +551,57 @@ class Agent4RecProfileGenerator:
             rating_movies[rating].append(str(raw_title).strip())
         return rating_movies
 
+    def _playtime_games(self, history: UserHistory) -> dict[str, list[str]]:
+        required_columns = [self.playtime_column, self.title_column]
+        if self.genre_column:
+            required_columns.append(self.genre_column)
+        if self.tag_column:
+            required_columns.append(self.tag_column)
+        self._require_columns(history.rows, required_columns)
+
+        playtime_games: dict[str, list[str]] = {
+            "zero": [],
+            "low": [],
+            "medium": [],
+            "high": [],
+        }
+        for _, row in history.rows.iterrows():
+            raw_playtime = row[self.playtime_column]
+            if pd.isna(raw_playtime):
+                raise ValueError(
+                    "Missing playtime in Agent4Rec taste history for user: "
+                    f"{history.user_id!r}"
+                )
+            raw_title = row[self.title_column]
+            if pd.isna(raw_title) or str(raw_title).strip() == "":
+                continue
+
+            playtime = float(raw_playtime)
+            if playtime <= 0:
+                bucket = "zero"
+            elif playtime < 120:
+                bucket = "low"
+            elif playtime < 600:
+                bucket = "medium"
+            else:
+                bucket = "high"
+            playtime_games[bucket].append(self._history_item_description(row))
+        return playtime_games
+
+    def _history_item_description(self, row: pd.Series) -> str:
+        parts = [str(row[self.title_column]).strip()]
+        if self.genre_column and self.genre_column in row.index:
+            genres = _split_genres(row[self.genre_column])
+            if genres:
+                parts.append(f"genres: {', '.join(genres[:8])}")
+        if self.tag_column and self.tag_column in row.index:
+            tags = _split_genres(row[self.tag_column])
+            if tags:
+                parts.append(f"tags: {', '.join(tags[:8])}")
+        if len(parts) == 1:
+            return parts[0]
+        return f"{parts[0]} ({'; '.join(parts[1:])})"
+
     def _taste_cache_row(
         self,
         *,
@@ -536,10 +614,7 @@ class Agent4RecProfileGenerator:
             "cache_key": cache_key,
             "user_id": _json_safe(user_id),
             "history_item_ids": [_json_safe(item_id) for item_id in history.item_ids],
-            "history_ratings": [
-                _json_safe(value)
-                for value in history.rows[self.rating_column].tolist()
-            ],
+            **self._taste_cache_history_values(history),
             "history_titles": [
                 _json_safe(value)
                 for value in history.rows[self.title_column].tolist()
@@ -551,8 +626,26 @@ class Agent4RecProfileGenerator:
             "raw_response": parsed.raw_response,
             "model": self.taste_model,
             "prompt_version": self.taste_prompt_version,
+            "prompt_kind": self.taste_prompt_kind,
             "created_at_utc": datetime.now(UTC).isoformat(),
         }
+
+    def _taste_cache_history_values(self, history: UserHistory) -> dict[str, Any]:
+        if self.taste_prompt_kind == "rating":
+            return {
+                "history_ratings": [
+                    _json_safe(value)
+                    for value in history.rows[self.rating_column].tolist()
+                ]
+            }
+        if self.taste_prompt_kind == "playtime":
+            return {
+                "history_playtime": [
+                    _json_safe(value)
+                    for value in history.rows[self.playtime_column].tolist()
+                ]
+            }
+        raise RuntimeError(f"Unsupported taste_prompt_kind: {self.taste_prompt_kind}")
 
     @staticmethod
     def _taste_cache_key(
@@ -647,8 +740,8 @@ def parse_agent4rec_modify_taste_response(text: str) -> Agent4RecTasteProfile:
 
     taste = "| ".join(re.findall(r"TASTE:(.+)", text))
     reason = "| ".join(re.findall(r"REASON:(.+)", text))
-    high_rating = "| ".join(re.findall(r"HIGH RATINGS:(.+)", text))
-    low_rating = "| ".join(re.findall(r"LOW RATINGS:(.+)", text))
+    high_rating = "| ".join(re.findall(r"HIGH (?:RATINGS|PLAYTIME):(.+)", text))
+    low_rating = "| ".join(re.findall(r"LOW (?:RATINGS|PLAYTIME):(.+)", text))
     if not taste.strip():
         raise ValueError("Agent4Rec taste response does not contain TASTE")
     return Agent4RecTasteProfile(
