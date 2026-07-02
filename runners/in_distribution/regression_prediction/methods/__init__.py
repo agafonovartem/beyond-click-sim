@@ -5,6 +5,10 @@ from pathlib import Path
 
 from beyond_click_sim.tasks import Task
 
+from runners.in_distribution.regression_prediction.methods.agent4rec_regressor import (
+    run_qwen36_27b_traits_taste_gpt4o_mini_full as run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_full,
+    run_qwen36_27b_traits_taste_gpt4o_mini_smoke as run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_smoke,
+)
 from runners.in_distribution.regression_prediction.methods.item import (
     run_item_mean,
     run_item_mode,
@@ -36,6 +40,12 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     "item_mode_regressor": run_item_mode,
     "user_mean_regressor": run_user_mean,
     "user_mode_regressor": run_user_mode,
+    "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_smoke": (
+        run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_smoke
+    ),
+    "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_full": (
+        run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_full
+    ),
     "llm_regressor_ollama_llama31_8b_smoke": run_llama31_8b_smoke,
     "llm_regressor_ollama_llama31_8b_full": run_llama31_8b_full,
     "llm_regressor_ollama_llama31_8b_with_item_stats_smoke": (

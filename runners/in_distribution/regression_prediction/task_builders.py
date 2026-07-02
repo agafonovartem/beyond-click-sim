@@ -21,6 +21,7 @@ TRAIN_FRACTION = 0.7
 VAL_FRACTION = 0.1
 TEST_FRACTION = 0.2
 EVAL_USERS = 1000
+DEBUG_EVAL_USERS = 100
 
 DATASET_TARGETS = {
     "ml-1m": {
@@ -163,8 +164,36 @@ EVAL1000_ITEM_STATS_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     for seed in SEEDS
 }
 
+EVAL100_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
+    f"{dataset_name}_{target_name}_eval_users{DEBUG_EVAL_USERS}_seed{seed}": _make_builder(
+        dataset_name,
+        target_name,
+        seed,
+        max_eval_users=DEBUG_EVAL_USERS,
+    )
+    for dataset_name, targets in DATASET_TARGETS.items()
+    for target_name in targets
+    for seed in SEEDS
+}
+
+EVAL100_ITEM_STATS_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
+    f"{dataset_name}_{target_name}_item_stats_eval_users{DEBUG_EVAL_USERS}_seed{seed}": _make_builder(
+        dataset_name,
+        target_name,
+        seed,
+        max_eval_users=DEBUG_EVAL_USERS,
+        use_item_rating_stats=True,
+    )
+    for dataset_name, targets in DATASET_TARGETS.items()
+    if dataset_name in DATASET_ITEM_RATING_VALUE_COLUMNS
+    for target_name in targets
+    for seed in SEEDS
+}
+
 DEFAULT_TASK_NAMES = list(EVAL1000_TASK_BUILDERS)
 TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     **EVAL1000_TASK_BUILDERS,
     **EVAL1000_ITEM_STATS_TASK_BUILDERS,
+    **EVAL100_TASK_BUILDERS,
+    **EVAL100_ITEM_STATS_TASK_BUILDERS,
 }

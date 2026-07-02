@@ -113,3 +113,27 @@
     fallback and smallest-value tie-break. Remaining optional question: decide whether a
     rounded/clipped valid-rating variant of item mean is worth reporting alongside the continuous
     MAE/RMSE diagnostic.
+
+13.
+    **Agent4Rec profile module is not a raw-history rating regressor.** Our Agent4Rec-style
+    regression baseline should be interpreted as an adaptation of the original Agent4Rec profile
+    module, not as the strongest possible LLM rating predictor. In Agent4Rec, the train history is
+    compressed into social traits (`activity`, `conformity`, `diversity`) and/or an LLM-generated
+    taste description. At prediction time the scorer sees the compressed profile plus candidate
+    metadata, but it does not see the explicit last-`k` history rows with their ratings.
+
+    This matters for rating regression: predicting a 1-5 rating needs user-specific calibration
+    (e.g. whether the user tends to rate generously, which concrete similar movies received 5 vs
+    3, and how low ratings map to disliked genres). A normal history-based LLM regressor can see
+    `item_title`, `item_genres`, and `rating` for the selected train history; the Agent4Rec profile
+    module cannot recover all of that information from the compressed profile. Therefore poor
+    Agent4Rec results on rating regression are a valid limitation of this original-style profile
+    adaptation, not necessarily evidence that no Agent4Rec-inspired hybrid could work.
+
+    Keep these variants separated in results:
+    - `Agent4Rec profile-module adaptation`: compressed profile only at prediction time, closest to
+      the original Agent4Rec profile idea.
+    - `Agent4Rec + explicit history` (future ablation): Agent4Rec profile in the system prompt plus
+      raw history ratings in the user prompt. This would test whether the profile helps on top of
+      the ordinary history-based regressor, but it should not be called the original Agent4Rec
+      protocol.

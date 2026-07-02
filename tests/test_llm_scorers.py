@@ -125,6 +125,42 @@ def test_llm_interaction_scorer_scores_candidate_groups() -> None:
     assert "- No interaction history available." in second_prompt
 
 
+def test_llm_regressor_passes_extra_body() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_title": ["Toy Story"],
+            "rating": [5],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_title": ["Lion King"],
+        },
+        index=["a"],
+    )
+    client = FakeClient(["4"])
+
+    scorer = LLMRegressor(
+        client=client,
+        model="fake-model",
+        history_description_columns=("item_title", "rating"),
+        candidate_description_columns=("item_title",),
+        target_description="Predict rating.",
+        output_instructions="Return exactly one integer.",
+        valid_values=(1, 2, 3, 4, 5),
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    ).fit(X_train, pd.Series([5]))
+
+    scores = scorer.score(X_test)
+
+    assert scores.to_dict() == {"a": 4.0}
+    assert client.completions.calls[0]["extra_body"] == {
+        "chat_template_kwargs": {"enable_thinking": False}
+    }
+
+
 def test_llm_interaction_scorer_can_keep_full_history() -> None:
     X_train = pd.DataFrame(
         {

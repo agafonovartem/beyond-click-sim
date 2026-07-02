@@ -171,6 +171,7 @@ def run_method(
     max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
     use_item_stats: bool = False,
+    extra_body: dict | None = None,
 ) -> dict[str, object]:
     """Run an LLM discrete numeric scorer for regression prediction."""
 
@@ -216,6 +217,7 @@ def run_method(
         max_history_items=max_history_items,
         temperature=temperature,
         max_tokens=max_tokens,
+        extra_body=extra_body,
     ).fit(X_train, y_train)
 
     scores, errors = _score_rows(
@@ -256,6 +258,7 @@ def run_method(
         "max_history_items": max_history_items,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "extra_body": extra_body,
         "prompt_columns": prompt_columns,
         "column_labels": column_labels,
         "uses_item_stats": use_item_stats,

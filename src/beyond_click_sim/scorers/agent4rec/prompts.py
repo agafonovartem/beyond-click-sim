@@ -21,6 +21,12 @@ _AGENT4REC_TASTE_USER_INSTRUCTION = (
 _AGENT4REC_PROFILE_USER_INSTRUCTION = (
     "Judge each movie using your available profile and the candidate information."
 )
+_AGENT4REC_TASTE_RATING_INSTRUCTION = (
+    "Rate the movie according to your taste."
+)
+_AGENT4REC_PROFILE_RATING_INSTRUCTION = (
+    "Rate the movie using your available profile and the candidate information."
+)
 # prefixes are different same to original code
 AGENT4REC_FORCED_ITEMS_SYSTEM_PROMPT_TEMPLATE = (
     "Assume you are a user browsing movie recommendation system who has the following characteristics: "
@@ -96,6 +102,37 @@ def agent4rec_user_prompt(*, candidates: str, taste: str | None) -> str:
     )
     return AGENT4REC_FORCED_ITEMS_USER_PROMPT_TEMPLATE.format(
         candidates=candidates,
+        profile_instruction=profile_instruction,
+    )
+
+
+AGENT4REC_RATING_USER_PROMPT_TEMPLATE = """##movie##
+{candidate}
+{target_description}
+{profile_instruction}
+Use this format: RATING: [integer from 1 to 5]
+Do not include any additional information or explanations and stay grounded in reality."""
+
+
+def agent4rec_rating_user_prompt(
+    *,
+    candidate: str,
+    taste: str | None,
+    target_description: str | None = None,
+) -> str:
+    """Build the Agent4Rec rating-prediction user prompt."""
+
+    profile_instruction = (
+        _AGENT4REC_TASTE_RATING_INSTRUCTION
+        if taste
+        else _AGENT4REC_PROFILE_RATING_INSTRUCTION
+    )
+    return AGENT4REC_RATING_USER_PROMPT_TEMPLATE.format(
+        candidate=candidate,
+        target_description=(
+            target_description
+            or "Please predict the rating you would give to this movie from 1 to 5."
+        ),
         profile_instruction=profile_instruction,
     )
 

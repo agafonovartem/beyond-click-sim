@@ -105,6 +105,7 @@ def test_llm_regression_runner_writes_valid_coverage_artifacts(
         max_rows=2,
         max_llm_attempts=2,
         max_workers=1,
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
     assert metrics["method"] == "llm_regressor_fake_smoke"
@@ -119,6 +120,9 @@ def test_llm_regression_runner_writes_valid_coverage_artifacts(
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["scorer"]["class"] == "LLMRegressor"
     assert manifest["scorer"]["client_name"] == "fake"
+    assert manifest["scorer"]["extra_body"] == {
+        "chat_template_kwargs": {"enable_thinking": False}
+    }
     assert manifest["scorer"]["target"]["valid_values"] == [1, 2, 3, 4, 5]
     assert manifest["limits"] == {
         "max_rows": 2,
