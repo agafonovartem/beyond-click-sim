@@ -59,6 +59,16 @@ def test_parse_agent4rec_watch_response_accepts_qwen_label_prefix() -> None:
     assert parsed == {"C1": 1.0, "C2": 0.0}
 
 
+def test_parse_agent4rec_watch_response_accepts_game_field() -> None:
+    parsed = parse_agent4rec_watch_response(
+        "ID: C1; GAME: Portal; WATCH: yes; REASON: puzzle game\n"
+        "ID: C2; GAME: Dota 2; WATCH: no; REASON: not preferred",
+        labels=["C1", "C2"],
+    )
+
+    assert parsed == {"C1": 1.0, "C2": 0.0}
+
+
 def test_parse_agent4rec_watch_response_requires_all_decisions() -> None:
     with pytest.raises(ValueError, match="Missing Agent4Rec watch decisions"):
         parse_agent4rec_watch_response(
@@ -142,6 +152,19 @@ def test_agent4rec_user_prompt_uses_taste_instruction_only_when_taste_exists() -
     assert "Judge each movie using your available profile" in traits_only_prompt
     assert "You only watch movies which align with your taste" not in traits_only_prompt
     assert "You only watch movies which align with your taste" in taste_prompt
+
+
+def test_agent4rec_user_prompt_can_use_game_field() -> None:
+    prompt = agent4rec_user_prompt(
+        candidates="C1. <- Portal ->",
+        taste=None,
+        entity_field="GAME",
+        entity_name="game",
+        entity_plural="games",
+    )
+
+    assert "Please judge all games in the ##recommended list##" in prompt
+    assert "Use this format: ID: [candidate id]; GAME: [game name]; WATCH:" in prompt
 
 
 def test_agent4rec_yes_no_scorer_uses_profile_prompt() -> None:

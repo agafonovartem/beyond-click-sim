@@ -82,26 +82,48 @@ class Agent4RecRegressor(Scorer):
         self.profile_by_user_: dict[Any, Agent4RecUserProfile] | None = None
         self.history_by_user_: dict[Any, UserHistory] | None = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "Agent4RecRegressor":
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        *,
+        profile_user_ids: Sequence[Any] | None = None,
+    ) -> "Agent4RecRegressor":
         """Build train-derived profile state and select train-history rows."""
 
         if len(X) != len(y):
             raise ValueError("X and y must have the same length")
         if "traits" in self.profile_generator.profile_components:
-            self.profile_by_user_ = self.profile_generator.build_traits(X, y)
+            self.profile_by_user_ = self.profile_generator.build_traits(
+                X,
+                y,
+                user_ids=profile_user_ids,
+            )
         else:
             self._require_columns(X, [self.user_column])
-            user_ids = list(dict.fromkeys(X[self.user_column].tolist()))
+            user_ids = (
+                list(dict.fromkeys(X[self.user_column].tolist()))
+                if profile_user_ids is None
+                else list(dict.fromkeys(profile_user_ids))
+            )
             self.profile_by_user_ = {
                 user_id: Agent4RecUserProfile(user_id=user_id)
                 for user_id in user_ids
             }
-        self.history_by_user_ = select_history_by_user(
-            X,
-            user_column=self.user_column,
-            item_column=self.profile_generator.item_column,
-            max_history_items=self.max_history_items,
-        )
+        if "taste" in self.profile_generator.profile_components:
+            history_rows = (
+                X
+                if profile_user_ids is None
+                else X[X[self.user_column].isin(profile_user_ids)].copy()
+            )
+            self.history_by_user_ = select_history_by_user(
+                history_rows,
+                user_column=self.user_column,
+                item_column=self.profile_generator.item_column,
+                max_history_items=self.max_history_items,
+            )
+        else:
+            self.history_by_user_ = {}
         return self
 
     def build_taste(self, X: pd.DataFrame) -> "Agent4RecRegressor":

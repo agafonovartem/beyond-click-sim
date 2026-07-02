@@ -6,6 +6,9 @@ from collections.abc import Mapping, Sequence
 _AGENT4REC_SOCIAL_TRAITS_PREFIX = (
     "You excel at role-playing. Picture yourself as a user exploring a movie recommendation system. You have the following social traits:"
 )
+_AGENT4REC_SOCIAL_TRAITS_PREFIX_TEMPLATE = (
+    "You excel at role-playing. Picture yourself as a user exploring a {domain_name} recommendation system. You have the following social traits:"
+)
 _AGENT4REC_ACTIVITY_EXPLANATION = (
     "The activity characteristic pertains to the frequency of your movie-watching habits."
 )
@@ -55,6 +58,8 @@ def agent4rec_system_prompt(
     activity: str | None,
     conformity: str | None,
     diversity: str | None,
+    domain_name: str = "movie",
+    taste_label: str = "movie tastes",
 ) -> str:
     """Build an Agent4Rec-style system prompt from available profile parts."""
 
@@ -62,22 +67,43 @@ def agent4rec_system_prompt(
     has_conformity = bool(conformity)
     has_diversity = bool(diversity)
     has_traits = has_activity or has_conformity or has_diversity
-    if not has_traits:
+    use_original_movie_wording = domain_name == "movie" and taste_label == "movie tastes"
+    if not has_traits and use_original_movie_wording:
         return AGENT4REC_FORCED_ITEMS_SYSTEM_PROMPT_TEMPLATE.format(taste=taste or "")
+    if not has_traits:
+        return (
+            f"Assume you are a user browsing {domain_name} recommendation system "
+            f"who has the following characteristics: \nYour {taste_label} are: "
+            f"{taste or ''}. "
+        )
 
-    parts = [_AGENT4REC_SOCIAL_TRAITS_PREFIX]
+    parts = [
+        _AGENT4REC_SOCIAL_TRAITS_PREFIX
+        if use_original_movie_wording
+        else _AGENT4REC_SOCIAL_TRAITS_PREFIX_TEMPLATE.format(
+            domain_name=domain_name,
+        )
+    ]
     explanations: list[str] = []
     if activity:
         parts.append(f"\nYour activity trait is described as: {activity}")
-        explanations.append(_AGENT4REC_ACTIVITY_EXPLANATION)
+        explanations.append(
+            _AGENT4REC_ACTIVITY_EXPLANATION
+            if use_original_movie_wording
+            else f"The activity characteristic pertains to the frequency of your {domain_name}-engagement habits."
+        )
     if conformity:
         parts.append(f"\nYour conformity trait is described as: {conformity}")
         explanations.append(_AGENT4REC_CONFORMITY_EXPLANATION)
     if diversity:
         parts.append(f"\nYour diversity trait is described as: {diversity}")
-        explanations.append(_AGENT4REC_DIVERSITY_EXPLANATION)
+        explanations.append(
+            _AGENT4REC_DIVERSITY_EXPLANATION
+            if use_original_movie_wording
+            else f"The diversity characteristic gauges your likelihood of trying {domain_name}s that may not align with your usual taste."
+        )
     if taste:
-        parts.append(f"\nBeyond that, your movie tastes are: {taste}. ")
+        parts.append(f"\nBeyond that, your {taste_label} are: {taste}. ")
     if explanations:
         parts.append("\n" + " ".join(explanations))
     return "".join(parts)
@@ -85,14 +111,21 @@ def agent4rec_system_prompt(
 
 AGENT4REC_FORCED_ITEMS_USER_PROMPT_TEMPLATE = """##recommended list##
 {candidates}
-Please judge all movies in the ##recommended list## and explain why.
+Please judge all {entity_plural} in the ##recommended list## and explain why.
 {profile_instruction}
-Use this format: ID: [candidate id]; MOVIE: [movie name]; WATCH: [yes or no]; REASON: [brief reason]
-You must judge all the movies. If you don't want to watch a movie, use WATCH: no; REASON: [brief reason]
+Use this format: ID: [candidate id]; {entity_field}: [{entity_name} name]; WATCH: [yes or no]; REASON: [brief reason]
+You must judge all the {entity_plural}. If you don't want to watch a {entity_name}, use WATCH: no; REASON: [brief reason]
 Each response should be on one line. Do not include any additional information or explanations and stay grounded in reality."""
 
 
-def agent4rec_user_prompt(*, candidates: str, taste: str | None) -> str:
+def agent4rec_user_prompt(
+    *,
+    candidates: str,
+    taste: str | None,
+    entity_field: str = "MOVIE",
+    entity_name: str = "movie",
+    entity_plural: str = "movies",
+) -> str:
     """Build the Agent4Rec forced-items user prompt for available profile parts."""
 
     profile_instruction = (
@@ -102,6 +135,9 @@ def agent4rec_user_prompt(*, candidates: str, taste: str | None) -> str:
     )
     return AGENT4REC_FORCED_ITEMS_USER_PROMPT_TEMPLATE.format(
         candidates=candidates,
+        entity_field=entity_field,
+        entity_name=entity_name,
+        entity_plural=entity_plural,
         profile_instruction=profile_instruction,
     )
 

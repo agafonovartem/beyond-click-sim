@@ -10,6 +10,10 @@ from beyond_click_sim.evaluation import (
 )
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import Agent4RecProfileGenerator, Agent4RecYesNoScorer
+from beyond_click_sim.scorers.agent4rec.profiles import (
+    AGENT4REC_GAME_ACTIVITY_DESCRIPTIONS,
+    AGENT4REC_GAME_DIVERSITY_DESCRIPTIONS,
+)
 from beyond_click_sim.scorers.agent4rec.prompts import AGENT4REC_TASTE_PROMPT_VERSION
 from beyond_click_sim.tasks import PREFIXED_ITEM_RATING_MEAN_COLUMN, Task
 from runners.in_distribution.interaction_prediction.methods.common import (
@@ -67,6 +71,7 @@ VLLM_MAX_WORKERS = 32
 
 DATASET_CANDIDATE_COLUMNS = {
     "ml-1m": ("item_title", PREFIXED_ITEM_RATING_MEAN_COLUMN, "item_genres"),
+    "steam": ("item_title", "item_genres_json", "item_tags_json"),
 }
 DATASET_COLUMN_LABELS = {
     "ml-1m": {
@@ -74,6 +79,35 @@ DATASET_COLUMN_LABELS = {
         PREFIXED_ITEM_RATING_MEAN_COLUMN: "History ratings",
         "item_genres": "genres",
     },
+    "steam": {
+        "item_title": "game title",
+        "item_genres_json": "genres",
+        "item_tags_json": "tags",
+    },
+}
+DATASET_PROFILE_GENERATOR_KWARGS = {
+    "ml-1m": {},
+    "steam": {
+        "genre_column": "item_genres_json",
+        "title_column": "item_title",
+        "include_conformity": False,
+        "activity_descriptions": AGENT4REC_GAME_ACTIVITY_DESCRIPTIONS,
+        "diversity_descriptions": AGENT4REC_GAME_DIVERSITY_DESCRIPTIONS,
+    },
+}
+DATASET_PROMPT_KWARGS = {
+    "ml-1m": {},
+    "steam": {
+        "domain_name": "game",
+        "taste_label": "game tastes",
+        "entity_field": "GAME",
+        "entity_name": "game",
+        "entity_plural": "games",
+    },
+}
+DATASET_SUPPORTS_TASTE = {
+    "ml-1m": True,
+    "steam": False,
 }
 
 
@@ -264,8 +298,8 @@ def run_method(
     dataset_name = str(task.manifest["dataset"])
     if dataset_name not in DATASET_CANDIDATE_COLUMNS:
         raise ValueError(
-            "Agent4Rec yes/no v1 supports only datasets with MovieLens-style "
-            f"rating and genre fields. Got dataset: {dataset_name!r}"
+            "Agent4Rec yes/no v1 has no dataset prompt config for "
+            f"dataset: {dataset_name!r}"
         )
     candidate_group_column = task.schema.candidate_group_column
     if candidate_group_column is None:
@@ -278,9 +312,16 @@ def run_method(
         candidate_group_column=candidate_group_column,
         max_candidate_groups=max_candidate_groups,
     )
+    profile_user_ids = X_test["user_id"].drop_duplicates().tolist()
     _require_columns(X_test, list(DATASET_CANDIDATE_COLUMNS[dataset_name]))
 
     uses_taste = "taste" in profile_components
+    if uses_taste and not DATASET_SUPPORTS_TASTE[dataset_name]:
+        raise ValueError(
+            "Agent4Rec taste profiles are currently configured only for "
+            "MovieLens-style 1-5 rating histories. "
+            f"Got dataset: {dataset_name!r}"
+        )
     if uses_taste:
         if not taste_client_name:
             raise ValueError("taste_client_name is required for taste profiles")
@@ -306,6 +347,7 @@ def run_method(
         taste_temperature=taste_temperature,
         taste_max_tokens=taste_max_tokens,
         taste_max_attempts=taste_max_attempts,
+        **DATASET_PROFILE_GENERATOR_KWARGS[dataset_name],
     )
     scorer = Agent4RecYesNoScorer(
         client=make_llm_client(client_name),
@@ -317,7 +359,8 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
-    ).fit(X_train, y_train)
+        **DATASET_PROMPT_KWARGS[dataset_name],
+    ).fit(X_train, y_train, profile_user_ids=profile_user_ids)
     if uses_taste:
         scorer.build_taste(X_test)
 
@@ -393,6 +436,7 @@ def run_method(
             "column_labels": DATASET_COLUMN_LABELS[dataset_name],
             "profile_generator": scorer.profile_generator.manifest(),
             "extra_body": extra_body,
+            "prompt": DATASET_PROMPT_KWARGS[dataset_name],
         },
         "decision_rule": {
             "kind": "hard_binary_yes_no_parser",

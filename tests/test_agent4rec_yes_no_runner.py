@@ -291,6 +291,153 @@ def test_agent4rec_yes_no_runner_requires_item_rating_mean(
         )
 
 
+def test_agent4rec_yes_no_runner_supports_steam_traits_only(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client = FakeClient(
+        [
+            "ID: C1; GAME: Portal 2; WATCH: yes; REASON: puzzle games fit\n"
+            "ID: C2; GAME: Dota 2; WATCH: no; REASON: not aligned"
+        ]
+    )
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: client)
+
+    task = Task(
+        name="steam_toy",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1", "u1"],
+                "item_id": ["g1", "g2", "g3"],
+                "item_title": ["Portal", "Half-Life", "Stardew Valley"],
+                "item_genres_json": [
+                    '["Action"]',
+                    '["Action"]',
+                    '["RPG", "Simulation"]',
+                ],
+                "item_tags_json": [
+                    '["Puzzle", "Singleplayer"]',
+                    '["FPS", "Story Rich"]',
+                    '["Farming Sim", "RPG"]',
+                ],
+                "playtime_forever": [120, 240, 600],
+                "target": [1, 1, 1],
+            }
+        ),
+        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": ["g4", "g5"],
+                "candidate_group": ["g1", "g1"],
+                "item_title": ["Portal 2", "Dota 2"],
+                "item_genres_json": [
+                    '["Action", "Adventure"]',
+                    '["Action", "Free to Play"]',
+                ],
+                "item_tags_json": [
+                    '["Puzzle", "Co-op"]',
+                    '["MOBA", "Multiplayer"]',
+                ],
+                "sampled": [False, True],
+                "target": [1, 0],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            sampled_column="sampled",
+            feature_columns=("user_id", "item_id"),
+        ),
+        manifest={"dataset": "steam", "dataset_version": "v1", "splitter": {"seed": 0}},
+    )
+
+    result = agent4rec_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="agent4rec_yes_no_steam_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+    )
+
+    assert result["scored_rows"] == 2
+    predictions = pd.read_parquet(tmp_path / "predictions.parquet")
+    assert predictions["score"].tolist() == [1.0, 0.0]
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    profile_manifest = manifest["scorer"]["profile_generator"]
+    assert profile_manifest["genre_column"] == "item_genres_json"
+    assert profile_manifest["include_conformity"] is False
+    assert "conformity" not in profile_manifest["trait_thresholds"]
+    assert manifest["scorer"]["prompt"]["entity_field"] == "GAME"
+
+    system_prompt = client.completions.calls[0]["messages"][0]["content"]
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "game recommendation system" in system_prompt
+    assert "Your conformity trait is described as:" not in system_prompt
+    assert "C1. <- Portal 2 -> <- genres:" in user_prompt
+    assert "Use this format: ID: [candidate id]; GAME: [game name]; WATCH:" in user_prompt
+
+
+def test_agent4rec_yes_no_runner_rejects_steam_taste_profiles(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: FakeClient([]))
+    task = Task(
+        name="steam_toy",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["g1"],
+                "item_title": ["Portal"],
+                "item_genres_json": ['["Action"]'],
+                "item_tags_json": ['["Puzzle"]'],
+                "playtime_forever": [120],
+                "target": [1],
+            }
+        ),
+        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["g2"],
+                "candidate_group": ["g1"],
+                "item_title": ["Portal 2"],
+                "item_genres_json": ['["Action"]'],
+                "item_tags_json": ['["Puzzle"]'],
+                "sampled": [False],
+                "target": [1],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            sampled_column="sampled",
+            feature_columns=("user_id", "item_id"),
+        ),
+        manifest={"dataset": "steam", "dataset_version": "v1", "splitter": {"seed": 0}},
+    )
+
+    with pytest.raises(ValueError, match="MovieLens-style 1-5 rating histories"):
+        agent4rec_yes_no.run_method(
+            task,
+            tmp_path,
+            method_name="agent4rec_yes_no_steam_taste_test",
+            client_name="fake",
+            model="fake-model",
+            max_candidate_groups=None,
+            max_llm_attempts=1,
+            max_workers=1,
+            profile_components=("traits", "taste"),
+            taste_client_name="openai",
+            taste_model="gpt-4o-mini",
+        )
+
+
 def test_agent4rec_qwen_port_wrappers_use_port_clients(
     tmp_path: Path,
     monkeypatch,

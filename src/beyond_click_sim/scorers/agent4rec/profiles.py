@@ -67,6 +67,18 @@ AGENT4REC_DIVERSITY_DESCRIPTIONS = {
     3: "A Cinematic Trailblazer, a relentless seeker of the unique and the obscure in the world of movies. The movie choices are so diverse and avant-garde that they defy categorization.",
 }
 
+AGENT4REC_GAME_ACTIVITY_DESCRIPTIONS = {
+    1: "An Incredibly Elusive Occasional Player, so seldom attracted by game recommendations that it's almost a legendary event when you do play a game. Your game-playing habits are extraordinarily infrequent. And you will exit the recommender system immediately even if you just feel little unsatisfied.",
+    2: "An Occasional Player, seldom attracted by game recommendations. Only curious about playing games that strictly align the taste. The game-playing habits are not very infrequent. And you tend to exit the recommender system if you have a few unsatisfied memories.",
+    3: "A Game Enthusiast with an insatiable appetite for games, willing to play nearly every game recommended to you. Games are a central part of your life, and game recommendations are integral to your existence. You are tolerant of recommender system, which means you are not easy to exit recommender system even if you have some unsatisfied memory.",
+}
+
+AGENT4REC_GAME_DIVERSITY_DESCRIPTIONS = {
+    1: "An Exceedingly Discerning Selective Player who plays games with a level of selectivity that borders on exclusivity. The game choices are meticulously curated to match personal taste, leaving no room for even a hint of variety.",
+    2: "A Niche Explorer who occasionally explores different genres and mostly sticks to preferred game types.",
+    3: "A Gaming Trailblazer, a relentless seeker of the unique and the obscure in the world of games. The game choices are so diverse and avant-garde that they defy categorization.",
+}
+
 
 class Agent4RecProfileGenerator:
     """Build Agent4Rec-style profiles from fitted train rows and histories."""
@@ -80,6 +92,10 @@ class Agent4RecProfileGenerator:
         rating_column: str = "rating",
         genre_column: str = "item_genres",
         title_column: str = "item_title",
+        include_conformity: bool = True,
+        activity_descriptions: dict[int, str] | None = None,
+        conformity_descriptions: dict[int, str] | None = None,
+        diversity_descriptions: dict[int, str] | None = None,
         taste_client: Any | None = None,
         taste_client_name: str | None = None,
         taste_model: str | None = None,
@@ -114,6 +130,22 @@ class Agent4RecProfileGenerator:
         self.rating_column = rating_column
         self.genre_column = genre_column
         self.title_column = title_column
+        self.include_conformity = include_conformity
+        self.activity_descriptions = (
+            AGENT4REC_ACTIVITY_DESCRIPTIONS
+            if activity_descriptions is None
+            else dict(activity_descriptions)
+        )
+        self.conformity_descriptions = (
+            AGENT4REC_CONFORMITY_DESCRIPTIONS
+            if conformity_descriptions is None
+            else dict(conformity_descriptions)
+        )
+        self.diversity_descriptions = (
+            AGENT4REC_DIVERSITY_DESCRIPTIONS
+            if diversity_descriptions is None
+            else dict(diversity_descriptions)
+        )
         self.taste_client = taste_client
         self.taste_client_name = taste_client_name
         self.taste_model = taste_model
@@ -143,6 +175,8 @@ class Agent4RecProfileGenerator:
         self,
         X: pd.DataFrame,
         y: pd.Series,
+        *,
+        user_ids: Sequence[Any] | None = None,
     ) -> dict[Any, Agent4RecUserProfile]:
         """Build deterministic Agent4Rec social-trait profiles from train rows."""
 
@@ -150,12 +184,25 @@ class Agent4RecProfileGenerator:
             raise ValueError("X and y must have the same length")
         self._require_columns(X, [self.user_column])
 
-        user_ids = list(dict.fromkeys(X[self.user_column].tolist()))
+        if user_ids is None:
+            requested_user_ids = list(dict.fromkeys(X[self.user_column].tolist()))
+        else:
+            requested_user_ids = list(dict.fromkeys(user_ids))
         profiles = {
             user_id: Agent4RecUserProfile(user_id=user_id)
-            for user_id in user_ids
+            for user_id in requested_user_ids
         }
         traits = self._build_traits(X)
+        missing_users = [
+            user_id
+            for user_id in requested_user_ids
+            if user_id not in traits
+        ]
+        if missing_users:
+            raise ValueError(
+                "No train rows for requested Agent4Rec profile users: "
+                f"{missing_users[:5]}"
+            )
         profiles = {
             user_id: self._with_traits(profile, traits[user_id])
             for user_id, profile in profiles.items()
@@ -240,6 +287,7 @@ class Agent4RecProfileGenerator:
             "rating_column": self.rating_column,
             "genre_column": self.genre_column,
             "title_column": self.title_column,
+            "include_conformity": self.include_conformity,
             "diversity_top_mass": AGENT4REC_DIVERSITY_TOP_MASS,
             "trait_thresholds": self.trait_thresholds_,
         }
@@ -261,15 +309,10 @@ class Agent4RecProfileGenerator:
         return manifest
 
     def _build_traits(self, X: pd.DataFrame) -> dict[Any, dict[str, int]]:
-        self._require_columns(
-            X,
-            [
-                self.user_column,
-                self.item_column,
-                self.rating_column,
-                self.genre_column,
-            ],
-        )
+        required_columns = [self.user_column, self.item_column, self.genre_column]
+        if self.include_conformity:
+            required_columns.append(self.rating_column)
+        self._require_columns(X, required_columns)
 
         activity_num = X.groupby(self.user_column, sort=False).size()
         activity_low = float(activity_num.quantile(0.60))
@@ -279,25 +322,32 @@ class Agent4RecProfileGenerator:
         diversity_low = float(diversity_num.quantile(0.33))
         diversity_high = float(diversity_num.quantile(0.66))
 
-        item_mean_rating = X.groupby(self.item_column, sort=False)[
-            self.rating_column
-        ].mean()
-        rows = X[[self.user_column, self.item_column, self.rating_column]].copy()
-        rows["_item_mean_rating_"] = rows[self.item_column].map(item_mean_rating)
-        rows["_squared_deviation_"] = (
-            rows[self.rating_column] - rows["_item_mean_rating_"]
-        ) ** 2
-        conformity_deviation = rows.groupby(self.user_column, sort=False)[
-            "_squared_deviation_"
-        ].mean()
-        conformity_low = float(conformity_deviation.quantile(0.25))
-        conformity_high = float(conformity_deviation.quantile(0.80))
-
         self.trait_thresholds_ = {
             "activity": {"p60": activity_low, "p90": activity_high},
             "diversity": {"p33": diversity_low, "p66": diversity_high},
-            "conformity": {"p25": conformity_low, "p80": conformity_high},
         }
+        if self.include_conformity:
+            item_mean_rating = X.groupby(self.item_column, sort=False)[
+                self.rating_column
+            ].mean()
+            rows = X[[self.user_column, self.item_column, self.rating_column]].copy()
+            rows["_item_mean_rating_"] = rows[self.item_column].map(item_mean_rating)
+            rows["_squared_deviation_"] = (
+                rows[self.rating_column] - rows["_item_mean_rating_"]
+            ) ** 2
+            conformity_deviation = rows.groupby(self.user_column, sort=False)[
+                "_squared_deviation_"
+            ].mean()
+            conformity_low = float(conformity_deviation.quantile(0.25))
+            conformity_high = float(conformity_deviation.quantile(0.80))
+            self.trait_thresholds_["conformity"] = {
+                "p25": conformity_low,
+                "p80": conformity_high,
+            }
+        else:
+            conformity_deviation = None
+            conformity_low = None
+            conformity_high = None
 
         traits: dict[Any, dict[str, int]] = {}
         for user_id in activity_num.index:
@@ -312,12 +362,13 @@ class Agent4RecProfileGenerator:
                     low=diversity_low,
                     high=diversity_high,
                 ),
-                "conformity": _three_tier_group(
+            }
+            if self.include_conformity:
+                traits[user_id]["conformity"] = _three_tier_group(
                     float(conformity_deviation.loc[user_id]),
                     low=conformity_low,
                     high=conformity_high,
-                ),
-            }
+                )
         return traits
 
     def _agent4rec_diversity_count_by_user(self, X: pd.DataFrame) -> pd.Series:
@@ -366,23 +417,35 @@ class Agent4RecProfileGenerator:
             {user_id: diversity_counts.get(user_id, 0) for user_id in user_order}
         )
 
-    @staticmethod
     def _with_traits(
+        self,
         profile: Agent4RecUserProfile,
         traits: dict[str, int],
     ) -> Agent4RecUserProfile:
-        activity_group = traits["activity"]
-        conformity_group = traits["conformity"]
-        diversity_group = traits["diversity"]
+        activity_group = traits.get("activity")
+        conformity_group = traits.get("conformity")
+        diversity_group = traits.get("diversity")
         return Agent4RecUserProfile(
             user_id=profile.user_id,
             taste=profile.taste,
             activity_group=activity_group,
             conformity_group=conformity_group,
             diversity_group=diversity_group,
-            activity_description=AGENT4REC_ACTIVITY_DESCRIPTIONS[activity_group],
-            conformity_description=AGENT4REC_CONFORMITY_DESCRIPTIONS[conformity_group],
-            diversity_description=AGENT4REC_DIVERSITY_DESCRIPTIONS[diversity_group],
+            activity_description=(
+                None
+                if activity_group is None
+                else self.activity_descriptions[activity_group]
+            ),
+            conformity_description=(
+                None
+                if conformity_group is None
+                else self.conformity_descriptions[conformity_group]
+            ),
+            diversity_description=(
+                None
+                if diversity_group is None
+                else self.diversity_descriptions[diversity_group]
+            ),
         )
 
     @staticmethod
@@ -561,7 +624,19 @@ def _split_genres(value: Any) -> list[str]:
     else:
         if pd.isna(value) or value == "":
             return []
-        text = str(value)
+        text = str(value).strip()
+        if text.startswith("["):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, list):
+                raw_parts = parsed
+                return [
+                    str(part).strip()
+                    for part in raw_parts
+                    if str(part).strip()
+                ]
         separator = "|" if "|" in text else ","
         raw_parts = text.split(separator)
     return [str(part).strip() for part in raw_parts if str(part).strip()]

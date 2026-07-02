@@ -150,6 +150,7 @@ def run_method(
     if max_rows is not None:
         X_test = X_test.head(max_rows).copy()
         y_test = y_test.loc[X_test.index].copy()
+    profile_user_ids = X_test["user_id"].drop_duplicates().tolist()
     _require_columns(X_test, list(DATASET_CANDIDATE_COLUMNS[dataset_name]))
 
     uses_taste = "taste" in profile_components
@@ -191,7 +192,7 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
-    ).fit(X_train, y_train)
+    ).fit(X_train, y_train, profile_user_ids=profile_user_ids)
     if uses_taste:
         scorer.build_taste(X_test)
 

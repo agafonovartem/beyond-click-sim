@@ -42,6 +42,11 @@ class Agent4RecYesNoScorer(Scorer):
         max_tokens: int = 1000,
         column_labels: dict[str, str] | None = None,
         extra_body: dict | None = None,
+        domain_name: str = "movie",
+        taste_label: str = "movie tastes",
+        entity_field: str = "MOVIE",
+        entity_name: str = "movie",
+        entity_plural: str = "movies",
     ) -> None:
         if candidate_description_columns is None:
             candidate_description_columns = item_description_columns
@@ -66,10 +71,21 @@ class Agent4RecYesNoScorer(Scorer):
         self.max_tokens = max_tokens
         self.column_labels = {} if column_labels is None else dict(column_labels)
         self.extra_body = extra_body
+        self.domain_name = domain_name
+        self.taste_label = taste_label
+        self.entity_field = entity_field
+        self.entity_name = entity_name
+        self.entity_plural = entity_plural
         self.profile_by_user_: dict[Any, Agent4RecUserProfile] | None = None
         self.history_by_user_: dict[Any, UserHistory] | None = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "Agent4RecYesNoScorer":
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        *,
+        profile_user_ids: Sequence[Any] | None = None,
+    ) -> "Agent4RecYesNoScorer":
         """Build train-derived profile state and select train-history rows.
 
         Taste generation is intentionally a separate explicit stage: call
@@ -82,20 +98,36 @@ class Agent4RecYesNoScorer(Scorer):
         if len(X) != len(y):
             raise ValueError("X and y must have the same length")
         if "traits" in self.profile_generator.profile_components:
-            self.profile_by_user_ = self.profile_generator.build_traits(X, y)
+            self.profile_by_user_ = self.profile_generator.build_traits(
+                X,
+                y,
+                user_ids=profile_user_ids,
+            )
         else:
             self._require_columns(X, [self.user_column])
-            user_ids = list(dict.fromkeys(X[self.user_column].tolist()))
+            user_ids = (
+                list(dict.fromkeys(X[self.user_column].tolist()))
+                if profile_user_ids is None
+                else list(dict.fromkeys(profile_user_ids))
+            )
             self.profile_by_user_ = {
                 user_id: Agent4RecUserProfile(user_id=user_id)
                 for user_id in user_ids
             }
-        self.history_by_user_ = select_history_by_user(
-            X,
-            user_column=self.user_column,
-            item_column=self.profile_generator.item_column,
-            max_history_items=self.max_history_items,
-        )
+        if "taste" in self.profile_generator.profile_components:
+            history_rows = (
+                X
+                if profile_user_ids is None
+                else X[X[self.user_column].isin(profile_user_ids)].copy()
+            )
+            self.history_by_user_ = select_history_by_user(
+                history_rows,
+                user_column=self.user_column,
+                item_column=self.profile_generator.item_column,
+                max_history_items=self.max_history_items,
+            )
+        else:
+            self.history_by_user_ = {}
         return self
 
     def build_taste(self, X: pd.DataFrame) -> "Agent4RecYesNoScorer":
@@ -193,14 +225,17 @@ class Agent4RecYesNoScorer(Scorer):
         user_prompt = agent4rec_user_prompt(
             candidates="\n".join(candidate_lines),
             taste=formatted_taste,
+            entity_field=self.entity_field,
+            entity_name=self.entity_name,
+            entity_plural=self.entity_plural,
         )
         return [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
-    @staticmethod
     def _format_system_prompt(
+        self,
         profile: Agent4RecUserProfile,
         *,
         taste: str | None = None,
@@ -212,6 +247,8 @@ class Agent4RecYesNoScorer(Scorer):
             activity=profile.activity_description,
             conformity=profile.conformity_description,
             diversity=profile.diversity_description,
+            domain_name=self.domain_name,
+            taste_label=self.taste_label,
         )
 
     def _format_item_description(
@@ -269,14 +306,14 @@ def parse_agent4rec_watch_response(
     *,
     labels: Sequence[str],
 ) -> dict[str, float]:
-    """Parse Agent4Rec `ID/MOVIE/WATCH/REASON` responses by candidate label."""
+    """Parse Agent4Rec `ID/{MOVIE|GAME|ITEM}/WATCH/REASON` responses by label."""
 
     if not labels:
         raise ValueError("labels must be non-empty")
     pattern = re.compile(
         r"(?:^|\n)\s*(?:(?:ID|LABEL):\s*)?(C\d+)\s*(?::|;)\s*"
         r"(?:\[[^\]]+\]\s*;?\s*)?"
-        r"MOVIE:\s*(.*?)\s*;?\s*WATCH:\s*(.*?)\s*;?\s*"
+        r"(?:MOVIE|GAME|ITEM):\s*(.*?)\s*;?\s*WATCH:\s*(.*?)\s*;?\s*"
         r"REASON:\s*(.*?)(?=\n\s*(?:(?:ID|LABEL):\s*)?C\d+\s*(?::|;)|\Z)",
         flags=re.IGNORECASE | re.DOTALL,
     )
