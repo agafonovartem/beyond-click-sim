@@ -279,3 +279,113 @@ The runner builds each task once (fitting all 6 policies on the train split), th
 **Cross-policy deduplication (itemwise mode).** When the same item appears in multiple policies' recommendation lists for the same user, the LLM is called only once per `(user, item)` pair and the score is broadcast. This is correct because the itemwise scorer is context-independent of which policy recommended the item.
 
 **Proportional smoke capping.** In smoke mode, the group cap (`max_llm_groups=25`) is distributed proportionally across policies so every policy stays represented in the result. Without this, a smoke run could accidentally exclude some policies entirely.
+
+---
+
+## Cold Start
+
+TODO: Verify later after exp runs
+
+### Scientific Question
+
+Can an LLM given only a short user profile — items the user interacted with before any training data was collected — predict per-candidate relevance competitively with classical low-data baselines (Popularity, ItemKNN)?
+
+This experiment isolates **Normal User Cold-Start**: users are entirely absent from training. Every candidate scored is for a user the model has never seen. Items remain warm (all items in cold users' profiles and evaluation sets exist in the training item catalog).
+
+### Split Design
+
+Users are partitioned into three non-overlapping groups; none of a cold user's interactions appear in `train`:
+
+| Group | Fraction | Role |
+|---|---|---|
+| Warm users | 0.7 | All interactions → `train` |
+| Val-cold users | 0.1 | Held out; evaluated on val |
+| Test-cold users | 0.2 | Held out; evaluated on test |
+
+Within each cold user, interactions are sorted by `timestamp` ascending (ties broken by `item_id`). The first k form `online_session_history` — the scorer's only view of the user. Post-k interactions become the evaluation target. Cold users with ≤ k interactions in total are dropped from evaluation.
+
+The k-axis produces a curve rather than a single point: running for `k ∈ {1, 3, 5}` shows how each additional profile item affects cold-user relevance prediction.
+
+### Dataset and Split Setup
+
+**Datasets:** MovieLens-1M (`ml-1m`) only. Steam lacks wall-clock timestamps and is unsupported.
+
+**Filtering:** `MinUserInteractionsFilter(min_interactions=10)`
+
+**Split:** `ColdUserHoldoutSplitter(k=k, train_fraction=0.7, val_fraction=0.1, test_fraction=0.2, seed=seed)`
+
+**Candidate sampling:** `CappedUserInteractionCandidateSampler(negative_ratio=negative_ratio, total_items=20, seed=seed)`. Exclusion set covers the full cold user history (profile + val + test positives), so no observed item is drawn as a negative.
+
+**Task name format:** `{dataset}_cold_start_k{k}_cap20_m{negative_ratio}_seed{seed}`
+
+Total tasks: 3 k-values × 5 negative ratios × 5 seeds = **75 tasks** (ml-1m only).
+
+`DEFAULT_TASK_NAMES`: `k ∈ {1, 3, 5}`, `negative_ratio=1`, `seed ∈ {0, 1, 2}` — 9 tasks.
+
+**Task builder module:** `runners/in_distribution/cold_start/task_builders.py`
+
+### Scorer Protocol
+
+Each scorer receives a different frame for fitting:
+
+| Scorer | Fit data | Why |
+|---|---|---|
+| `PopularityScorer` | `task.train` | Item counts from warm users only |
+| `LLMInteractionYesNoScorer` | `task.online_session_history` | Cold user's k-item visible profile; `task.train` has no cold-user rows |
+| `ColdItemKNNScorer` | `fit_train(task.train)` then `fit(task.online_session_history)` | Sim matrix from warm co-occurrence; aggregation profiles from cold user history |
+
+`task.val` is used for threshold calibration by Popularity and ItemKNN (threshold is fixed on val, not re-tuned on test). `task.test` is the evaluation target for all scorers.
+
+### Output Artifacts
+
+Each run writes to a timestamped directory under `outputs/in_distribution/cold_start/`:
+
+| File | Produced by | Contents |
+|---|---|---|
+| `manifest.json` | All | Method, scorer config (`fit_on`, `k`, `n_neighbors` for ItemKNN; prompt columns for LLM), decision rule, task manifest, git commit |
+| `metrics.json` | Pointwise methods | `val` + `test` metrics: `macro_by_user_group_mean` (headline), `macro_by_group`, `micro`; threshold |
+| `metrics_ranking.json` | Ranking methods | `val` + `test` ranking: `NDCG@{1,3,5,10}`, `HR@{1,3,5,10}` |
+| `predictions.parquet` | All | Row-level scores and predictions for val and test |
+| `llm_errors.jsonl` | LLM methods only | Failed LLM call records (candidate group, attempt count, errors) |
+
+### Runner
+
+**Entry point:** `runners/in_distribution/cold_start/run.py`
+
+```bash
+python -m runners.in_distribution.cold_start.run \
+    [--tasks TASK1,TASK2,...] \
+    [--methods METHOD1,METHOD2,...] \
+    [--output-dir PATH]
+```
+
+Default: 9 `DEFAULT_TASK_NAMES`, method `popularity_f1_threshold`, output `outputs/in_distribution/cold_start/`.
+
+**Available methods:**
+
+| Method name | Scorer | Description |
+|---|---|---|
+| `popularity_f1_threshold` | `PopularityScorer` | Val-threshold pointwise; F1 headline |
+| `popularity_ranking` | `PopularityScorer` | Raw-score ranking; NDCG headline |
+| `item_knn_cold_start` | `ColdItemKNNScorer` | Val-threshold pointwise; F1 headline |
+| `item_knn_cold_start_smoke` | `ColdItemKNNScorer` | Same, capped at 25 candidate groups |
+| `item_knn_cold_start_ranking` | `ColdItemKNNScorer` | Raw-score ranking; NDCG headline |
+| `item_knn_cold_start_ranking_smoke` | `ColdItemKNNScorer` | Same, capped at 25 candidate groups |
+| `llm_yes_no_ollama_llama31_8b_smoke` | `LLMInteractionYesNoScorer` | Ollama, LLaMA 3.1 8B, 25 groups |
+| `llm_yes_no_ollama_llama31_8b_full` | `LLMInteractionYesNoScorer` | Ollama, LLaMA 3.1 8B, all groups |
+| `llm_yes_no_vllm_llama33_70b_smoke` | `LLMInteractionYesNoScorer` | vLLM, LLaMA 3.3 70B, 25 groups |
+| `llm_yes_no_vllm_llama33_70b_full` | `LLMInteractionYesNoScorer` | vLLM, LLaMA 3.3 70B, all groups |
+| `llm_yes_no_vllm_qwen36_27b_smoke` | `LLMInteractionYesNoScorer` | vLLM, Qwen 3.6 27B, 25 groups |
+| `llm_yes_no_vllm_qwen36_27b_full` | `LLMInteractionYesNoScorer` | vLLM, Qwen 3.6 27B, all groups |
+
+LLM prompt columns for ml-1m: history = `item_title`, `item_genres`, `rating`; candidate = `item_title`, `item_genres`.
+
+### Key Design Decisions
+
+**Temporal split within cold users is mandatory.** The k earliest temporal interactions form the profile; post-k interactions are the evaluation target. Random sampling within a cold user's sequence is invalid — it would allow future interactions to contaminate the visible profile.
+
+**`task.train` must not be passed to the LLM scorer.** That frame contains only warm-user rows; the LLM would construct empty per-cold-user histories and ignore the profile entirely. `task.online_session_history` is the only correct fit source for cold-user context.
+
+**`ColdItemKNNScorer` needs two separate fit steps.** Item-item cosine similarity is built from warm train co-occurrence; aggregation profiles come from `online_session_history`. Merging the frames would corrupt the similarity matrix with cold-user counts. Mean aggregation (not sum) keeps raw scores scale-comparable across k values so the k-curve is interpretable.
+
+**Threshold calibration uses val cold users, not test.** Popularity and ItemKNN output real-valued scores. The threshold is selected on val via `find_best_user_group_threshold` using `macro_by_user_group_mean_f1` — the same aggregation as the headline test metric — then fixed before test evaluation.
