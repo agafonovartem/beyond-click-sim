@@ -166,6 +166,12 @@ number of prior reviews. The current Agent4Rec yes/no methods also require
 ML-1M item-stats interaction tasks because their candidate prompt includes
 train-only `History ratings` (`item_rating_mean`).
 
+Smaller debug interaction tasks with `eval_users100_cg5` are available for
+prompt and scorer iteration, e.g.
+`ml-1m_item_stats_cap20_eval_users100_cg5_m1_seed0`. They use the same split
+and train-only feature rules as the reduced `eval_users1000_cg5` tasks, but
+are not defaults and should not be treated as final reporting runs.
+
 The current reduced interaction reporting protocol is to run seeds 0, 1, and 2
 and report mean plus standard deviation over the seed-level headline test
 metric. All methods compared within one seed should use the same materialized
@@ -187,6 +193,8 @@ Available interaction-prediction methods:
 | `agent4rec_yes_no_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B Agent4Rec-style yes/no scorer on the full selected task. |
 | `agent4rec_yes_no_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B Agent4Rec-style yes/no scorer on a small candidate-group subset. |
 | `agent4rec_yes_no_vllm_llama33_70b_full` | vLLM Llama 3.3 70B Agent4Rec-style yes/no scorer on the full selected task. |
+| `agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_smoke` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer with train-derived traits and cached `gpt-4o-mini` taste profiles on a small candidate-group subset. |
+| `agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer with train-derived traits and cached `gpt-4o-mini` taste profiles on the full selected task. |
 | `agent4rec_yes_no_vllm_qwen36_27b_port8001_smoke` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8001` endpoint on a small candidate-group subset. |
 | `agent4rec_yes_no_vllm_qwen36_27b_port8001_full` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8001` endpoint on the full selected task. |
 | `agent4rec_yes_no_vllm_qwen36_27b_port8002_smoke` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8002` endpoint on a small candidate-group subset. |
@@ -197,12 +205,18 @@ before `_smoke` / `_full`, for example
 `llm_yes_no_ollama_llama31_8b_with_item_stats_smoke`. Use these with item-stats
 task variants when the prompt should expose average rating and number of prior reviews.
 
-The current Agent4Rec yes/no methods are ML-1M-only first versions. They build a
-train-only traits profile (`activity`, `conformity`, `diversity`) and use an
-Agent4Rec-style movie prompt with labeled candidate parsing. They do not yet
-include LLM-generated `taste` profiles or item `Summary` fields. Treat direct
-comparisons against `llm_yes_no_*` as exploratory unless temperature, token
-budget, visible item fields, and history/profile representation are controlled.
+The current Agent4Rec yes/no methods are ML-1M-only first versions. The base
+methods build a train-only traits profile (`activity`, `conformity`, `diversity`)
+and use an Agent4Rec-style movie prompt with labeled candidate parsing. The
+`traits_taste_gpt4o_mini` Qwen methods add a separate pre-scoring taste stage:
+they generate Agent4Rec `prompt_modify` taste profiles from the same 20-item
+train-history window used by the history LLM baseline, using OpenAI
+`gpt-4o-mini` with `temperature=0.0`. Taste outputs are cached as append-only
+JSONL under `outputs/agent4rec_taste_cache/`; `make_llm_client("openai")` loads
+`OPENAI_API_KEY` from the environment or `.env`. Agent4Rec item `Summary` fields
+are still omitted. Treat direct comparisons against `llm_yes_no_*` as exploratory
+unless temperature, token budget, visible item fields, and history/profile
+representation are controlled.
 
 > [!NOTE]
 > LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; the default vLLM client is expected at `http://127.0.0.1:8000/v1`. Some Agent4Rec Qwen methods intentionally target additional local vLLM ports `8001` and `8002`.

@@ -8,14 +8,18 @@ from typing import Any
 import pandas as pd
 
 from beyond_click_sim.scorers.agent4rec.prompts import (
-    AGENT4REC_FORCED_ITEMS_USER_PROMPT_TEMPLATE,
     agent4rec_system_prompt,
+    agent4rec_user_prompt,
 )
 from beyond_click_sim.scorers.agent4rec.profiles import (
     Agent4RecProfileGenerator,
     Agent4RecUserProfile,
 )
 from beyond_click_sim.scorers.base import Scorer
+from beyond_click_sim.scorers.history.selection import (
+    UserHistory,
+    select_history_by_user,
+)
 
 
 class Agent4RecYesNoScorer(Scorer):
@@ -33,6 +37,7 @@ class Agent4RecYesNoScorer(Scorer):
         candidate_description_columns: tuple[str, ...] | None = None,
         user_column: str = "user_id",
         candidate_group_column: str = "candidate_group",
+        max_history_items: int | None = 20,
         temperature: float = 0.2,
         max_tokens: int = 1000,
         column_labels: dict[str, str] | None = None,
@@ -42,6 +47,8 @@ class Agent4RecYesNoScorer(Scorer):
             candidate_description_columns = item_description_columns
         if not candidate_description_columns:
             raise ValueError("candidate_description_columns must be non-empty")
+        if max_history_items is not None and max_history_items < 0:
+            raise ValueError("max_history_items must be non-negative")
 
         self.client = client
         self.model = model
@@ -54,16 +61,55 @@ class Agent4RecYesNoScorer(Scorer):
         self.candidate_description_columns = candidate_description_columns
         self.user_column = user_column
         self.candidate_group_column = candidate_group_column
+        self.max_history_items = max_history_items
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.column_labels = {} if column_labels is None else dict(column_labels)
         self.extra_body = extra_body
         self.profile_by_user_: dict[Any, Agent4RecUserProfile] | None = None
+        self.history_by_user_: dict[Any, UserHistory] | None = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "Agent4RecYesNoScorer":
-        """Build Agent4Rec profiles from the scorer's fitted train rows."""
+        """Build train-derived profile state and select train-history rows.
 
-        self.profile_by_user_ = self.profile_generator.build(X, y)
+        Taste generation is intentionally a separate explicit stage: call
+        `build_taste(X_eval)` after fitting and before `score(X_eval)` for
+        methods whose profile includes `taste`. If traits are disabled, `fit`
+        still creates empty per-user profile shells so the later taste stage has
+        a profile object to fill.
+        """
+
+        if len(X) != len(y):
+            raise ValueError("X and y must have the same length")
+        if "traits" in self.profile_generator.profile_components:
+            self.profile_by_user_ = self.profile_generator.build_traits(X, y)
+        else:
+            self._require_columns(X, [self.user_column])
+            user_ids = list(dict.fromkeys(X[self.user_column].tolist()))
+            self.profile_by_user_ = {
+                user_id: Agent4RecUserProfile(user_id=user_id)
+                for user_id in user_ids
+            }
+        self.history_by_user_ = select_history_by_user(
+            X,
+            user_column=self.user_column,
+            item_column=self.profile_generator.item_column,
+            max_history_items=self.max_history_items,
+        )
+        return self
+
+    def build_taste(self, X: pd.DataFrame) -> "Agent4RecYesNoScorer":
+        """Build/cache taste profiles for users present in an eval frame."""
+
+        if self.profile_by_user_ is None or self.history_by_user_ is None:
+            raise RuntimeError("Agent4RecYesNoScorer is not fitted")
+        self._require_columns(X, [self.user_column])
+        user_ids = list(dict.fromkeys(X[self.user_column].tolist()))
+        self.profile_by_user_ = self.profile_generator.build_taste(
+            profiles=self.profile_by_user_,
+            histories=self.history_by_user_,
+            user_ids=user_ids,
+        )
         return self
 
     def score(self, X: pd.DataFrame) -> pd.Series:
@@ -79,6 +125,8 @@ class Agent4RecYesNoScorer(Scorer):
                 *self.candidate_description_columns,
             ],
         )
+        if "taste" in self.profile_generator.profile_components:
+            self._require_taste_for_users(X[self.user_column].drop_duplicates().tolist())
 
         scores = pd.Series(index=X.index, dtype=float, name="score")
         for _, group in X.groupby(self.candidate_group_column, sort=False):
@@ -120,7 +168,13 @@ class Agent4RecYesNoScorer(Scorer):
             raise ValueError(f"No fitted Agent4Rec profile for user: {user_id!r}")
 
         profile = self.profile_by_user_[user_id]
-        system_prompt = self._format_system_prompt(profile)
+        if "taste" in self.profile_generator.profile_components and not profile.taste:
+            raise RuntimeError(
+                "Agent4RecYesNoScorer requires taste profiles for this method. "
+                "Call scorer.build_taste(X_eval) before score()."
+            )
+        formatted_taste = _format_agent4rec_taste(profile.taste) or None
+        system_prompt = self._format_system_prompt(profile, taste=formatted_taste)
         if len(candidate_labels) != len(candidates):
             raise ValueError("candidate_labels length must match candidates length")
 
@@ -136,8 +190,9 @@ class Agent4RecYesNoScorer(Scorer):
                 strict=True,
             )
         ]
-        user_prompt = AGENT4REC_FORCED_ITEMS_USER_PROMPT_TEMPLATE.format(
+        user_prompt = agent4rec_user_prompt(
             candidates="\n".join(candidate_lines),
+            taste=formatted_taste,
         )
         return [
             {"role": "system", "content": system_prompt},
@@ -145,9 +200,15 @@ class Agent4RecYesNoScorer(Scorer):
         ]
 
     @staticmethod
-    def _format_system_prompt(profile: Agent4RecUserProfile) -> str:
+    def _format_system_prompt(
+        profile: Agent4RecUserProfile,
+        *,
+        taste: str | None = None,
+    ) -> str:
+        if taste is None:
+            taste = _format_agent4rec_taste(profile.taste) or None
         return agent4rec_system_prompt(
-            taste=_format_agent4rec_taste(profile.taste) or None,
+            taste=taste,
             activity=profile.activity_description,
             conformity=profile.conformity_description,
             diversity=profile.diversity_description,
@@ -171,6 +232,22 @@ class Agent4RecYesNoScorer(Scorer):
             else:
                 parts.append(f"<- {column_label}:{formatted_value} ->")
         return " ".join(parts) if parts else "<- no item description ->"
+
+    def _require_taste_for_users(self, user_ids: Sequence[Any]) -> None:
+        if self.profile_by_user_ is None:
+            raise RuntimeError("Agent4RecYesNoScorer is not fitted")
+        missing_users = [
+            user_id
+            for user_id in user_ids
+            if user_id not in self.profile_by_user_
+            or not self.profile_by_user_[user_id].taste
+        ]
+        if missing_users:
+            raise RuntimeError(
+                "Agent4RecYesNoScorer requires taste profiles for this method. "
+                "Call scorer.build_taste(X_eval) before score(). "
+                f"Missing users: {missing_users[:5]}"
+            )
 
     @staticmethod
     def _require_columns(frame: pd.DataFrame, columns: list[str]) -> None:
@@ -197,9 +274,10 @@ def parse_agent4rec_watch_response(
     if not labels:
         raise ValueError("labels must be non-empty")
     pattern = re.compile(
-        r"(?:^|\n)\s*(?:ID|LABEL):\s*(C\d+)\s*;?\s*"
+        r"(?:^|\n)\s*(?:(?:ID|LABEL):\s*)?(C\d+)\s*(?::|;)\s*"
+        r"(?:\[[^\]]+\]\s*;?\s*)?"
         r"MOVIE:\s*(.*?)\s*;?\s*WATCH:\s*(.*?)\s*;?\s*"
-        r"REASON:\s*(.*?)(?=\n\s*(?:ID|LABEL):\s*C\d+\b|\Z)",
+        r"REASON:\s*(.*?)(?=\n\s*(?:(?:ID|LABEL):\s*)?C\d+\s*(?::|;)|\Z)",
         flags=re.IGNORECASE | re.DOTALL,
     )
     matches = pattern.findall(text)

@@ -25,6 +25,7 @@ VAL_FRACTION = 0.1
 TEST_FRACTION = 0.2
 TOTAL_CANDIDATE_ITEMS = 20 # Cap, not guaranteed size: for m=1 and 5 held-out positives, group size is 10.
 EVAL_USERS = 1000
+DEBUG_EVAL_USERS = 100
 MAX_CANDIDATE_GROUPS_PER_USER = 5
 
 DATASET_HISTORY_CONTEXT_COLUMNS = {
@@ -235,10 +236,53 @@ EVAL1000_CG5_ITEM_STATS_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     for seed in REDUCED_SEEDS
 }
 
+EVAL100_CG5_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
+    (
+        f"{dataset_name}_cap20_eval_users{DEBUG_EVAL_USERS}"
+        f"_cg{MAX_CANDIDATE_GROUPS_PER_USER}_m{negative_ratio}_seed{seed}"
+    ): _make_builder(
+        dataset_name,
+        negative_ratio,
+        seed,
+        max_eval_users=DEBUG_EVAL_USERS,
+        max_candidate_groups_per_user=MAX_CANDIDATE_GROUPS_PER_USER,
+        task_name=(
+            f"{dataset_name}_cap20_eval_users{DEBUG_EVAL_USERS}"
+            f"_cg{MAX_CANDIDATE_GROUPS_PER_USER}_m{negative_ratio}_seed{seed}"
+        ),
+    )
+    for dataset_name in DATASETS
+    for negative_ratio in NEGATIVE_RATIOS
+    for seed in REDUCED_SEEDS
+}
+
+EVAL100_CG5_ITEM_STATS_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
+    (
+        f"{dataset_name}_item_stats_cap20_eval_users{DEBUG_EVAL_USERS}"
+        f"_cg{MAX_CANDIDATE_GROUPS_PER_USER}_m{negative_ratio}_seed{seed}"
+    ): _make_builder(
+        dataset_name,
+        negative_ratio,
+        seed,
+        max_eval_users=DEBUG_EVAL_USERS,
+        max_candidate_groups_per_user=MAX_CANDIDATE_GROUPS_PER_USER,
+        use_item_rating_stats=True,
+        task_name=(
+            f"{dataset_name}_item_stats_cap20_eval_users{DEBUG_EVAL_USERS}"
+            f"_cg{MAX_CANDIDATE_GROUPS_PER_USER}_m{negative_ratio}_seed{seed}"
+        ),
+    )
+    for dataset_name in DATASET_ITEM_RATING_VALUE_COLUMNS
+    for negative_ratio in NEGATIVE_RATIOS
+    for seed in REDUCED_SEEDS
+}
+
 DEFAULT_TASK_NAMES = list(EVAL1000_CG5_TASK_BUILDERS)
 TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     **EVAL1000_CG5_TASK_BUILDERS,
     **EVAL1000_CG5_ITEM_STATS_TASK_BUILDERS,
+    **EVAL100_CG5_TASK_BUILDERS,
+    **EVAL100_CG5_ITEM_STATS_TASK_BUILDERS,
     **EVAL1000_TASK_BUILDERS,
     **EVAL1000_ITEM_STATS_TASK_BUILDERS,
     **FULL_TASK_BUILDERS,

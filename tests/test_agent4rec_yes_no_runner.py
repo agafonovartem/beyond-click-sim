@@ -130,6 +130,116 @@ def test_agent4rec_yes_no_runner_writes_profile_manifest(
     assert "Use this format: ID: [candidate id]; MOVIE: [movie name]; WATCH: [yes or no]; REASON: [brief reason]" in user_prompt
 
 
+def test_agent4rec_yes_no_runner_writes_taste_manifest_and_cache(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    scoring_client = FakeClient(
+        [
+            "ID: C1; MOVIE: Lion King; WATCH: yes; REASON: animated taste\n"
+            "ID: C2; MOVIE: Godfather; WATCH: no; REASON: not animated"
+        ]
+    )
+    taste_client = FakeClient(
+        [
+            "TASTE: I enjoy animated family movies.\n"
+            "REASON: I rated animated movies highly.\n"
+            "HIGH RATINGS: animated family movies\n"
+            "LOW RATINGS: crime movies"
+        ]
+    )
+
+    def fake_make_llm_client(client_name: str) -> FakeClient:
+        if client_name == "openai":
+            return taste_client
+        if client_name == "fake":
+            return scoring_client
+        raise AssertionError(client_name)
+
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", fake_make_llm_client)
+    cache_path = tmp_path / "taste-cache.jsonl"
+    task = Task(
+        name="toy",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1", "u1"],
+                "item_id": ["i-train-1", "i-train-2", "i-train-3"],
+                "item_title": ["Toy Story", "Aladdin", "Heat"],
+                "item_genres": ["Animation|Comedy", "Animation", "Crime"],
+                "item_rating_mean": [4.15, 3.95, 3.60],
+                "rating": [5, 4, 2],
+                "target": [1, 1, 1],
+            }
+        ),
+        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": ["i1", "i2"],
+                "candidate_group": ["g1", "g1"],
+                "item_title": ["Lion King", "Godfather"],
+                "item_genres": ["Animation", "Crime"],
+                "item_rating_mean": [4.153, 4.567],
+                "sampled": [False, True],
+                "target": [1, 0],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            sampled_column="sampled",
+            feature_columns=("user_id", "item_id"),
+        ),
+        manifest={
+            "dataset": "ml-1m",
+            "dataset_version": "v1",
+            "splitter": {"seed": 0},
+        },
+    )
+
+    result = agent4rec_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="agent4rec_yes_no_traits_taste_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        profile_components=("traits", "taste"),
+        taste_client_name="openai",
+        taste_model="gpt-4o-mini",
+        taste_cache_path=cache_path,
+    )
+
+    assert result["scored_rows"] == 2
+    assert len(taste_client.completions.calls) == 1
+    assert cache_path.exists()
+    cached_rows = [
+        json.loads(line)
+        for line in cache_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert cached_rows[0]["history_item_ids"] == [
+        "i-train-1",
+        "i-train-2",
+        "i-train-3",
+    ]
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    profile_manifest = manifest["scorer"]["profile_generator"]
+    assert profile_manifest["profile_components"] == ["traits", "taste"]
+    assert profile_manifest["taste"]["client_name"] == "openai"
+    assert profile_manifest["taste"]["model"] == "gpt-4o-mini"
+    assert profile_manifest["taste"]["temperature"] == 0.0
+    assert profile_manifest["taste"]["max_tokens"] is None
+    assert profile_manifest["taste"]["cache_path"] == str(cache_path)
+    assert profile_manifest["taste"]["cache_stats"] == {
+        "requested_users": 1,
+        "hits": 0,
+        "misses": 1,
+        "generated": 1,
+    }
+
+
 def test_agent4rec_yes_no_runner_requires_item_rating_mean(
     tmp_path: Path,
     monkeypatch,
@@ -231,5 +341,51 @@ def test_agent4rec_qwen_port_wrappers_use_port_clients(
             "max_candidate_groups": 25,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+    ]
+
+
+def test_agent4rec_qwen_traits_taste_wrappers_use_openai_taste(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(agent4rec_yes_no, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_smoke(task, tmp_path)
+    agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_full(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_smoke",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": 25,
+            "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "profile_components": ("traits", "taste"),
+            "taste_client_name": "openai",
+            "taste_model": "gpt-4o-mini",
+            "taste_temperature": 0.0,
+            "taste_max_tokens": None,
+        },
+        {
+            "method_name": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": None,
+            "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "profile_components": ("traits", "taste"),
+            "taste_client_name": "openai",
+            "taste_model": "gpt-4o-mini",
+            "taste_temperature": 0.0,
+            "taste_max_tokens": None,
         },
     ]

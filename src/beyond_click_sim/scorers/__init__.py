@@ -11,6 +11,7 @@ from beyond_click_sim.scorers.constant import (
 )
 from beyond_click_sim.scorers.agent4rec import (
     Agent4RecProfileGenerator,
+    Agent4RecTasteProfile,
     Agent4RecUserProfile,
     Agent4RecYesNoScorer,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "ItemMeanRegressor",
     "ItemModeRegressor",
     "Agent4RecProfileGenerator",
+    "Agent4RecTasteProfile",
     "Agent4RecUserProfile",
     "Agent4RecYesNoScorer",
     "LLMInteractionYesNoScorer",

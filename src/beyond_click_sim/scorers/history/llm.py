@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 
 from beyond_click_sim.scorers.base import Scorer
-from beyond_click_sim.scorers.constant import select_user_history_positions
+from beyond_click_sim.scorers.history.selection import select_history_by_user
 from beyond_click_sim.scorers.history.prompts import (
     INTERACTION_YES_NO_SYSTEM_PROMPT,
     INTERACTION_YES_NO_USER_PROMPT_TEMPLATE,
@@ -114,26 +114,20 @@ class LLMInteractionYesNoScorer(Scorer):
             raise ValueError("X and y must have the same length")
         self._require_columns(X, [self.user_column, *self.history_description_columns])
 
-        history_rows_by_user: dict[Any, list[Any]] = {}
-        for row in X.itertuples(index=False):
-            user_id = getattr(row, self.user_column)
-            history_rows_by_user.setdefault(user_id, []).append(row)
-
         history_by_user: dict[Any, list[str]] = {}
-        for user_id, rows in history_rows_by_user.items():
-            if self.max_history_items is None:
-                selected_rows = rows
-            elif self.max_history_items == 0:
-                selected_rows = []
-            else:
-                selected_rows = rows[-self.max_history_items :]
+        for user_id, history in select_history_by_user(
+            X,
+            user_column=self.user_column,
+            item_column=None,
+            max_history_items=self.max_history_items,
+        ).items():
             history_by_user[user_id] = [
                 self._format_item_description(
                     row=row,
                     label=f"H{position}",
                     columns=self.history_description_columns,
                 )
-                for position, row in enumerate(selected_rows, start=1)
+                for position, (_, row) in enumerate(history.rows.iterrows(), start=1)
             ]
 
         self.history_by_user_ = history_by_user
@@ -441,19 +435,19 @@ class LLMRegressor(Scorer):
         self._require_columns(X, [self.user_column, *self.history_description_columns])
 
         history_by_user: dict[Any, list[str]] = {}
-        for user_id, selected_positions in select_user_history_positions(
+        for user_id, history in select_history_by_user(
             X,
             user_column=self.user_column,
+            item_column=None,
             max_history_items=self.max_history_items,
         ).items():
-            selected_rows = X.iloc[selected_positions]
             history_by_user[user_id] = [
                 self._format_item_description(
                     row=row,
                     label=f"H{position}",
                     columns=self.history_description_columns,
                 )
-                for position, (_, row) in enumerate(selected_rows.iterrows(), start=1)
+                for position, (_, row) in enumerate(history.rows.iterrows(), start=1)
             ]
 
         self.history_by_user_ = history_by_user

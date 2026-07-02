@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from runners.in_distribution.interaction_prediction.task_builders import (
+    EVAL100_CG5_ITEM_STATS_TASK_BUILDERS,
+    EVAL100_CG5_TASK_BUILDERS,
     DEFAULT_TASK_NAMES,
     EVAL1000_CG5_ITEM_STATS_TASK_BUILDERS,
     EVAL1000_CG5_TASK_BUILDERS,
@@ -34,3 +36,13 @@ def test_cg5_item_stats_are_ml1m_only_and_not_defaults() -> None:
         for task_name in EVAL1000_CG5_ITEM_STATS_TASK_BUILDERS
     )
     assert set(EVAL1000_CG5_ITEM_STATS_TASK_BUILDERS).isdisjoint(DEFAULT_TASK_NAMES)
+
+
+def test_eval100_cg5_tasks_are_debug_variants_not_defaults() -> None:
+    assert len(EVAL100_CG5_TASK_BUILDERS) == 30
+    assert len(EVAL100_CG5_ITEM_STATS_TASK_BUILDERS) == 15
+    assert "ml-1m_cap20_eval_users100_cg5_m1_seed0" in TASK_BUILDERS
+    assert "steam_cap20_eval_users100_cg5_m19_seed2" in TASK_BUILDERS
+    assert "ml-1m_item_stats_cap20_eval_users100_cg5_m1_seed0" in TASK_BUILDERS
+    assert set(EVAL100_CG5_TASK_BUILDERS).isdisjoint(DEFAULT_TASK_NAMES)
+    assert set(EVAL100_CG5_ITEM_STATS_TASK_BUILDERS).isdisjoint(DEFAULT_TASK_NAMES)

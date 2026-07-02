@@ -150,16 +150,16 @@ regression with item stats, compare against the matched train-only item baseline
 (`item_mean_regressor` / `item_mode_regressor`) before claiming user-conditioned reasoning beyond
 visible item-quality metadata.
 
-## 8. Agent4Rec yes/no scorer is currently traits-only and MovieLens-specific
+## 8. Agent4Rec yes/no scorer is still MovieLens-specific and lacks Summary
 
-The current `Agent4RecYesNoScorer` implementation is only the first prompt/profile variant. It
-builds deterministic Agent4Rec social traits (`activity`, `conformity`, `diversity`) from the
-train split and uses them in the system prompt, but it does **not** yet implement the LLM-generated
-`taste` profile. Therefore the planned Agent4Rec profile ablations are incomplete:
+The current `Agent4RecYesNoScorer` implementation supports deterministic Agent4Rec social traits
+(`activity`, `conformity`, `diversity`) from the train split and a cached LLM-generated `taste`
+profile for the `traits + taste` Qwen method. The planned Agent4Rec profile ablations are still
+incomplete:
 
 - `traits` only — currently implemented;
 - `taste` only — not implemented yet;
-- `traits + taste` — not implemented yet.
+- `traits + taste` — currently implemented for the Qwen + `gpt-4o-mini` taste runner.
 
 The scorer also intentionally omits Agent4Rec's `Summary` field in `##recommended list##`. The
 released Agent4Rec alignment code shows title, `History ratings`, and `Summary`, but `Summary`
@@ -173,11 +173,10 @@ recommendation system`, `movie tastes`, `watch`, `movie-watching habits`). That 
 the first ML-1M Agent4Rec-style scorer, but it is not a reusable generic yes/no simulator for
 Steam or other domains.
 
-**Fix:** implement a cached train-only `taste` generator and expose the three ablation variants
-explicitly in method names/manifests. Keep `Summary` out unless we add a reproducible summary
-artifact with clear provenance. Before applying Agent4Rec-style prompts outside ML-1M, introduce
-domain/task wording parameters such as item type, action verb, taste label, and system-domain
-description.
+**Fix:** add the `taste`-only ablation if needed, and keep `Summary` out unless we add a
+reproducible summary artifact with clear provenance. Before applying Agent4Rec-style prompts
+outside ML-1M, introduce domain/task wording parameters such as item type, action verb, taste
+label, and system-domain description.
 
 ## 9. Agent4Rec vs history LLM comparison currently mixes multiple axes
 

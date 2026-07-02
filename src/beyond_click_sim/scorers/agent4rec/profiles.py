@@ -2,9 +2,21 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
+import hashlib
+import json
+from pathlib import Path
+import re
 from typing import Any
 
 import pandas as pd
+
+from beyond_click_sim.scorers.agent4rec.prompts import (
+    AGENT4REC_TASTE_PROMPT_VERSION,
+    AGENT4REC_TASTE_SYSTEM_PROMPT,
+    agent4rec_taste_modify_user_prompt,
+)
+from beyond_click_sim.scorers.history.selection import UserHistory
 
 
 AGENT4REC_PROFILE_COMPONENTS = ("taste", "traits")
@@ -24,6 +36,17 @@ class Agent4RecUserProfile:
     activity_description: str | None = None
     conformity_description: str | None = None
     diversity_description: str | None = None
+
+
+@dataclass(frozen=True)
+class Agent4RecTasteProfile:
+    """Parsed Agent4Rec `prompt_modify` taste response."""
+
+    taste: str
+    reason: str
+    high_rating: str
+    low_rating: str
+    raw_response: str
 
 
 AGENT4REC_ACTIVITY_DESCRIPTIONS = {
@@ -46,12 +69,7 @@ AGENT4REC_DIVERSITY_DESCRIPTIONS = {
 
 
 class Agent4RecProfileGenerator:
-    """Build Agent4Rec-style profiles from fitted train rows.
-
-    V1 implements only the deterministic social-traits branch. Taste profile
-    generation/cache will be added separately so scorer logic stays independent
-    from profile-generation storage and model choices.
-    """
+    """Build Agent4Rec-style profiles from fitted train rows and histories."""
 
     def __init__(
         self,
@@ -61,6 +79,15 @@ class Agent4RecProfileGenerator:
         item_column: str = "item_id",
         rating_column: str = "rating",
         genre_column: str = "item_genres",
+        title_column: str = "item_title",
+        taste_client: Any | None = None,
+        taste_client_name: str | None = None,
+        taste_model: str | None = None,
+        taste_cache_path: Path | str | None = None,
+        taste_prompt_version: str = AGENT4REC_TASTE_PROMPT_VERSION,
+        taste_temperature: float = 0.0,
+        taste_max_tokens: int | None = None,
+        taste_max_attempts: int = 5,
     ) -> None:
         profile_components_tuple = tuple(profile_components)
         if not profile_components_tuple:
@@ -86,49 +113,152 @@ class Agent4RecProfileGenerator:
         self.item_column = item_column
         self.rating_column = rating_column
         self.genre_column = genre_column
+        self.title_column = title_column
+        self.taste_client = taste_client
+        self.taste_client_name = taste_client_name
+        self.taste_model = taste_model
+        self.taste_cache_path = (
+            None if taste_cache_path is None else Path(taste_cache_path)
+        )
+        self.taste_prompt_version = taste_prompt_version
+        self.taste_temperature = taste_temperature
+        self.taste_max_tokens = taste_max_tokens
+        self.taste_max_attempts = taste_max_attempts
         self.trait_thresholds_: dict[str, dict[str, float]] | None = None
+        self.taste_cache_stats_: dict[str, Any] | None = None
 
-    def build(
+        if "taste" in self.profile_components:
+            if self.taste_client is None:
+                raise ValueError("taste_client is required for taste profiles")
+            if not self.taste_model:
+                raise ValueError("taste_model is required for taste profiles")
+            if self.taste_cache_path is None:
+                raise ValueError("taste_cache_path is required for taste profiles")
+            if self.taste_max_attempts < 1:
+                raise ValueError("taste_max_attempts must be positive")
+            if self.taste_max_tokens is not None and self.taste_max_tokens < 1:
+                raise ValueError("taste_max_tokens must be positive when set")
+
+    def build_traits(
         self,
         X: pd.DataFrame,
         y: pd.Series,
     ) -> dict[Any, Agent4RecUserProfile]:
-        """Build profiles using only the rows passed to fit."""
+        """Build deterministic Agent4Rec social-trait profiles from train rows."""
 
         if len(X) != len(y):
             raise ValueError("X and y must have the same length")
         self._require_columns(X, [self.user_column])
-        if "taste" in self.profile_components:
-            raise NotImplementedError(
-                "Agent4Rec taste profile generation/cache is not implemented yet"
-            )
 
         user_ids = list(dict.fromkeys(X[self.user_column].tolist()))
         profiles = {
             user_id: Agent4RecUserProfile(user_id=user_id)
             for user_id in user_ids
         }
-        if "traits" in self.profile_components:
-            traits = self._build_traits(X)
-            profiles = {
-                user_id: self._with_traits(profile, traits[user_id])
-                for user_id, profile in profiles.items()
-            }
+        traits = self._build_traits(X)
+        profiles = {
+            user_id: self._with_traits(profile, traits[user_id])
+            for user_id, profile in profiles.items()
+        }
         return profiles
+
+    def build_taste(
+        self,
+        *,
+        profiles: dict[Any, Agent4RecUserProfile],
+        histories: dict[Any, UserHistory],
+        user_ids: Sequence[Any],
+    ) -> dict[Any, Agent4RecUserProfile]:
+        """Fill taste profiles for selected users using cache and LLM misses."""
+
+        if "taste" not in self.profile_components:
+            return profiles
+        if self.taste_client is None or not self.taste_model:
+            raise RuntimeError("Taste profile generator is not configured")
+        if self.taste_cache_path is None:
+            raise RuntimeError("taste_cache_path is not configured")
+
+        requested_user_ids = list(dict.fromkeys(user_ids))
+        cache = self._load_taste_cache(self.taste_cache_path)
+        updated_profiles = dict(profiles)
+        hits = 0
+        misses = 0
+
+        for user_id in requested_user_ids:
+            if user_id not in updated_profiles:
+                raise ValueError(f"No fitted Agent4Rec profile for user: {user_id!r}")
+            if user_id not in histories:
+                raise ValueError(f"No fitted taste history for user: {user_id!r}")
+
+            history = histories[user_id]
+            cache_key = self._taste_cache_key(
+                user_id=user_id,
+                history_item_ids=history.item_ids,
+            )
+            if cache_key in cache:
+                cached = cache[cache_key]
+                taste = str(cached.get("taste", ""))
+                if not taste.strip():
+                    raise ValueError(
+                        f"Cached Agent4Rec taste is empty for user: {user_id!r}"
+                    )
+                hits += 1
+            else:
+                parsed = self._generate_taste(user_id=user_id, history=history)
+                taste = parsed.taste
+                row = self._taste_cache_row(
+                    user_id=user_id,
+                    history=history,
+                    cache_key=cache_key,
+                    parsed=parsed,
+                )
+                self._append_taste_cache_row(self.taste_cache_path, row)
+                cache[cache_key] = row
+                misses += 1
+
+            updated_profiles[user_id] = self._with_taste(
+                updated_profiles[user_id],
+                taste=taste,
+            )
+
+        self.taste_cache_stats_ = {
+            "requested_users": len(requested_user_ids),
+            "hits": hits,
+            "misses": misses,
+            "generated": misses,
+        }
+        return updated_profiles
 
     def manifest(self) -> dict[str, Any]:
         """Return profile-generation metadata for experiment manifests."""
 
-        return {
+        manifest: dict[str, Any] = {
             "class": type(self).__name__,
             "profile_components": list(self.profile_components),
             "user_column": self.user_column,
             "item_column": self.item_column,
             "rating_column": self.rating_column,
             "genre_column": self.genre_column,
+            "title_column": self.title_column,
             "diversity_top_mass": AGENT4REC_DIVERSITY_TOP_MASS,
             "trait_thresholds": self.trait_thresholds_,
         }
+        if "taste" in self.profile_components:
+            manifest["taste"] = {
+                "client_name": self.taste_client_name,
+                "model": self.taste_model,
+                "temperature": self.taste_temperature,
+                "max_tokens": self.taste_max_tokens,
+                "max_attempts": self.taste_max_attempts,
+                "prompt_version": self.taste_prompt_version,
+                "cache_path": (
+                    None
+                    if self.taste_cache_path is None
+                    else str(self.taste_cache_path)
+                ),
+                "cache_stats": self.taste_cache_stats_,
+            }
+        return manifest
 
     def _build_traits(self, X: pd.DataFrame) -> dict[Any, dict[str, int]]:
         self._require_columns(
@@ -256,6 +386,161 @@ class Agent4RecProfileGenerator:
         )
 
     @staticmethod
+    def _with_taste(
+        profile: Agent4RecUserProfile,
+        *,
+        taste: str,
+    ) -> Agent4RecUserProfile:
+        return Agent4RecUserProfile(
+            user_id=profile.user_id,
+            taste=taste,
+            activity_group=profile.activity_group,
+            conformity_group=profile.conformity_group,
+            diversity_group=profile.diversity_group,
+            activity_description=profile.activity_description,
+            conformity_description=profile.conformity_description,
+            diversity_description=profile.diversity_description,
+        )
+
+    def _generate_taste(self, *, user_id: Any, history: UserHistory) -> Agent4RecTasteProfile:
+        last_error: Exception | None = None
+        for attempt in range(1, self.taste_max_attempts + 1):
+            try:
+                messages = self._taste_messages(history)
+                request: dict[str, Any] = {
+                    "model": self.taste_model,
+                    "messages": messages,
+                    "temperature": self.taste_temperature,
+                }
+                if self.taste_max_tokens is not None:
+                    request["max_tokens"] = self.taste_max_tokens
+                response = self.taste_client.chat.completions.create(**request)
+                raw_response = _chat_completion_text(response)
+                return parse_agent4rec_modify_taste_response(raw_response)
+            except Exception as error:
+                last_error = error
+        raise RuntimeError(
+            "Could not generate Agent4Rec taste profile "
+            f"for user {user_id!r} after {self.taste_max_attempts} attempts"
+        ) from last_error
+
+    def _taste_messages(self, history: UserHistory) -> list[dict[str, str]]:
+        rating_movies = self._rating_movies(history)
+        user_prompt = agent4rec_taste_modify_user_prompt(
+            rating_movies=rating_movies,
+        )
+        return [
+            {"role": "system", "content": AGENT4REC_TASTE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def _rating_movies(self, history: UserHistory) -> dict[int, list[str]]:
+        self._require_columns(
+            history.rows,
+            [
+                self.rating_column,
+                self.title_column,
+            ],
+        )
+        rating_movies: dict[int, list[str]] = {rating: [] for rating in range(1, 6)}
+        for _, row in history.rows.iterrows():
+            raw_rating = row[self.rating_column]
+            raw_title = row[self.title_column]
+            if pd.isna(raw_rating):
+                raise ValueError(
+                    f"Missing rating in Agent4Rec taste history for user: {history.user_id!r}"
+                )
+            if pd.isna(raw_title) or str(raw_title).strip() == "":
+                continue
+            rating = int(raw_rating)
+            if rating not in rating_movies:
+                raise ValueError(
+                    "Agent4Rec taste generation expects ratings in 1..5. "
+                    f"Got {raw_rating!r} for user {history.user_id!r}"
+                )
+            rating_movies[rating].append(str(raw_title).strip())
+        return rating_movies
+
+    def _taste_cache_row(
+        self,
+        *,
+        user_id: Any,
+        history: UserHistory,
+        cache_key: str,
+        parsed: Agent4RecTasteProfile,
+    ) -> dict[str, Any]:
+        return {
+            "cache_key": cache_key,
+            "user_id": _json_safe(user_id),
+            "history_item_ids": [_json_safe(item_id) for item_id in history.item_ids],
+            "history_ratings": [
+                _json_safe(value)
+                for value in history.rows[self.rating_column].tolist()
+            ],
+            "history_titles": [
+                _json_safe(value)
+                for value in history.rows[self.title_column].tolist()
+            ],
+            "taste": parsed.taste,
+            "reason": parsed.reason,
+            "high_rating": parsed.high_rating,
+            "low_rating": parsed.low_rating,
+            "raw_response": parsed.raw_response,
+            "model": self.taste_model,
+            "prompt_version": self.taste_prompt_version,
+            "created_at_utc": datetime.now(UTC).isoformat(),
+        }
+
+    @staticmethod
+    def _taste_cache_key(
+        *,
+        user_id: Any,
+        history_item_ids: Sequence[Any],
+    ) -> str:
+        payload = {
+            "user_id": _json_safe(user_id),
+            "history_item_ids": [_json_safe(item_id) for item_id in history_item_ids],
+        }
+        raw = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _load_taste_cache(path: Path) -> dict[str, dict[str, Any]]:
+        if not path.exists():
+            return {}
+        rows: dict[str, dict[str, Any]] = {}
+        with path.open("r", encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    raise ValueError(
+                        f"Malformed Agent4Rec taste cache row {line_number}: empty line"
+                    )
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError as error:
+                    raise ValueError(
+                        f"Malformed Agent4Rec taste cache row {line_number}"
+                    ) from error
+                cache_key = row.get("cache_key")
+                if not cache_key:
+                    raise ValueError(
+                        f"Malformed Agent4Rec taste cache row {line_number}: missing cache_key"
+                    )
+                if cache_key in rows:
+                    raise ValueError(
+                        "Duplicate Agent4Rec taste cache key in "
+                        f"{path}: {cache_key}"
+                    )
+                rows[str(cache_key)] = row
+        return rows
+
+    @staticmethod
+    def _append_taste_cache_row(path: Path, row: dict[str, Any]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    @staticmethod
     def _require_columns(frame: pd.DataFrame, columns: list[str]) -> None:
         missing = [column for column in columns if column not in frame.columns]
         if missing:
@@ -280,3 +565,42 @@ def _split_genres(value: Any) -> list[str]:
         separator = "|" if "|" in text else ","
         raw_parts = text.split(separator)
     return [str(part).strip() for part in raw_parts if str(part).strip()]
+
+
+def parse_agent4rec_modify_taste_response(text: str) -> Agent4RecTasteProfile:
+    """Parse Agent4Rec `prompt_modify` persona text using the released regex style."""
+
+    taste = "| ".join(re.findall(r"TASTE:(.+)", text))
+    reason = "| ".join(re.findall(r"REASON:(.+)", text))
+    high_rating = "| ".join(re.findall(r"HIGH RATINGS:(.+)", text))
+    low_rating = "| ".join(re.findall(r"LOW RATINGS:(.+)", text))
+    if not taste.strip():
+        raise ValueError("Agent4Rec taste response does not contain TASTE")
+    return Agent4RecTasteProfile(
+        taste=taste,
+        reason=reason,
+        high_rating=high_rating,
+        low_rating=low_rating,
+        raw_response=text,
+    )
+
+
+def _chat_completion_text(response: Any) -> str:
+    choice = response.choices[0]
+    content = choice.message.content
+    if content is None:
+        raise ValueError("Chat completion response has no text content")
+    return str(content)
+
+
+def _json_safe(value: Any) -> Any:
+    if hasattr(value, "item"):
+        value = value.item()
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return value
