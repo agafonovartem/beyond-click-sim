@@ -13,6 +13,11 @@ ITEM_RATING_COLUMN_LABELS = {
         PREFIXED_ITEM_RATING_MEAN_COLUMN: "average rating",
         PREFIXED_ITEM_RATING_COUNT_COLUMN: "number of prior reviews",
     },
+    "steam": {
+        "playtime_forever": "user playtime minutes",
+        PREFIXED_ITEM_RATING_MEAN_COLUMN: "average prior playtime minutes",
+        PREFIXED_ITEM_RATING_COUNT_COLUMN: "number of prior interactions",
+    },
 }
 
 

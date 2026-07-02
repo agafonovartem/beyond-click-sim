@@ -190,6 +190,77 @@ def test_llm_yes_no_runner_requires_item_stats_columns_when_enabled(
         )
 
 
+def test_llm_yes_no_runner_supports_steam_item_stats(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeClient(["C1: yes"])
+    monkeypatch.setattr(llm_yes_no, "make_llm_client", lambda _: client)
+
+    task = Task(
+        name="steam_toy",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["i-train-1"],
+                "item_title": ["Portal"],
+                "item_genres_json": ['["Action"]'],
+                "item_tags_json": ['["Puzzle"]'],
+                "playtime_forever": [45],
+                "item_rating_mean": [12.345],
+                "item_rating_count": [7],
+                "target": [1],
+            }
+        ),
+        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["i1"],
+                "candidate_group": ["g1"],
+                "item_title": ["Half-Life"],
+                "item_genres_json": ['["Action"]'],
+                "item_tags_json": ['["FPS"]'],
+                "item_rating_mean": [67.891],
+                "item_rating_count": [123],
+                "target": [1],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            feature_columns=("user_id", "item_id"),
+        ),
+        manifest={"dataset": "steam", "seed": 0},
+    )
+
+    result = llm_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="llm_yes_no_steam_test_with_item_stats",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        use_item_stats=True,
+    )
+
+    assert result["llm_errors"] == 0
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "user playtime minutes: 45" in user_prompt
+    assert "average prior playtime minutes: 12.35" in user_prompt
+    assert "number of prior interactions: 7" in user_prompt
+    assert "C1. item_title: Half-Life" in user_prompt
+    assert "average prior playtime minutes: 67.89" in user_prompt
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["uses_item_stats"] is True
+    assert manifest["scorer"]["column_labels"]["playtime_forever"] == (
+        "user playtime minutes"
+    )
+
+
 def test_llm_yes_no_qwen_wrappers_disable_thinking(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

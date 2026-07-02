@@ -34,6 +34,7 @@ DATASET_HISTORY_CONTEXT_COLUMNS = {
 }
 DATASET_ITEM_RATING_VALUE_COLUMNS = {
     "ml-1m": "rating",
+    "steam": "playtime_forever",
 }
 
 
