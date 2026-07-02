@@ -1,0 +1,111 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 3624,
+      "positives_max": 5,
+      "positives_mean": 4.673565121412803,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 18.694260485651213,
+      "rows_min": 4,
+      "sampled_max": 15,
+      "sampled_mean": 14.02069536423841,
+      "sampled_min": 3
+    },
+    "val": {
+      "groups": 2751,
+      "positives_max": 5,
+      "positives_mean": 4.443475099963649,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 17.773900399854597,
+      "rows_min": 4,
+      "sampled_max": 15,
+      "sampled_mean": 13.33042529989095,
+      "sampled_min": 3
+    }
+  },
+  "decision_rule": {
+    "kind": "threshold_on_validation",
+    "metric": "macro_by_user_group_mean_f1",
+    "metric_value": 0.6358829809774276,
+    "selection_metric": "macro_by_user_group_mean_f1",
+    "threshold": 236.0
+  },
+  "git_commit": "cbd81546fd286317b0aae54b17119dbe9847039f",
+  "method": "popularity_f1_threshold",
+  "scorer": {
+    "class": "PopularityScorer",
+    "item_column": "item_id"
+  },
+  "stage_times_seconds": {
+    "apply_threshold": 0.0,
+    "candidate_group_summary": 0.015,
+    "compute_metrics": 0.089,
+    "fit": 0.054,
+    "prepare_xy": 0.015,
+    "score_test": 0.008,
+    "score_val": 0.005,
+    "select_threshold": 0.037,
+    "write_predictions": 0.046
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_feature_builder": null,
+      "items": 3883,
+      "rows": {
+        "test": 67748,
+        "train": 694335,
+        "val": 48896
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedUserInteractionCandidateSampler",
+        "item_column": "item_id",
+        "max_candidate_groups_per_user": 5,
+        "max_eval_users": 1000,
+        "negative_ratio": 3,
+        "sampled_column": "sampled",
+        "seed": 1,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 1,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": 6040
+    },
+    "name": "ml-1m_cap20_eval_users1000_cg5_m3_seed1"
+  }
+}

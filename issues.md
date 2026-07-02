@@ -42,18 +42,18 @@ group by `(split, candidate_group)`.
 
 ## 3. Task registry key disagrees with `task.name` (provenance)
 
-The task registry key — e.g. `ml-1m_cap20_eval_users1000_m1_seed0` — is what the CLI takes
+The task registry key — e.g. `ml-1m_cap20_eval_users1000_cg5_m1_seed0` — is what the CLI takes
 and what drives the output directory name
 (`runners/in_distribution/interaction_prediction/task_builders.py:111-132`,
 `runners/in_distribution/interaction_prediction/run.py:24,95-97`). But the builder sets a
-different `task.name` — `ml-1m_interaction_cap20_eval_users1000_m1_seed0` (note the extra
+different `task.name` — `ml-1m_interaction_cap20_eval_users1000_cg5_m1_seed0` (note the extra
 `interaction`) — and that name is what gets recorded inside `metrics.json` / `manifest.json`
 (`task_builders.py:45`). So the output folder name and the `task` field stored inside it
 disagree, and there are effectively two identifiers for the same task.
 
 This is harmless to results but hurts provenance: matching a metrics file back to the run
 folder or the CLI invocation requires knowing about the rename. It predates the eval1000
-change (the full-scale builders have the same split) but eval1000 adds a third naming
+change (the full-scale builders have the same split) but reduced eval1000/cg5 adds another naming
 variant.
 
 **Fix:** make the registry key and `task.name` identical (pick one convention), or record
