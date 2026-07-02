@@ -46,6 +46,12 @@ VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
 VLLM_QWEN36_27B_METHOD_NAME = "llm_yes_no_vllm_qwen36_27b"
 VLLM_QWEN36_27B_CLIENT = "vllm_local"
 VLLM_QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
+OPENAI_VK_GPT54_MINI_METHOD_NAME = "llm_yes_no_openai_vk_gpt54_mini"
+OPENAI_VK_GPT54_MINI_CLIENT = "openai_vk_proxy"
+OPENAI_VK_GPT54_MINI_MODEL = "gpt-5.4-mini"
+OPENAI_VK_GPT55_METHOD_NAME = "llm_yes_no_openai_vk_gpt55"
+OPENAI_VK_GPT55_CLIENT = "openai_vk_proxy"
+OPENAI_VK_GPT55_MODEL = "gpt-5.5"
 QWEN_EXTRA_BODY: dict = {"chat_template_kwargs": {"enable_thinking": False}}
 MAX_HISTORY_ITEMS = 20
 TEMPERATURE = 0.0
@@ -53,6 +59,7 @@ MAX_TOKENS = 256
 MAX_LLM_ATTEMPTS = 5
 OLLAMA_MAX_WORKERS = 1
 VLLM_MAX_WORKERS = 32
+OPENAI_VK_MAX_WORKERS = 4
 
 DATASET_PROMPT_COLUMNS = {
     "ml-1m": {
@@ -244,6 +251,118 @@ def run_qwen36_27b_with_item_stats_full(
         max_workers=VLLM_MAX_WORKERS,
         use_item_stats=True,
         extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_gpt54_mini_smoke(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT54_MINI_METHOD_NAME}_smoke",
+        client_name=OPENAI_VK_GPT54_MINI_CLIENT,
+        model=OPENAI_VK_GPT54_MINI_MODEL,
+        max_candidate_groups=25,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+    )
+
+
+def run_gpt54_mini_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT54_MINI_METHOD_NAME}_with_item_stats_smoke",
+        client_name=OPENAI_VK_GPT54_MINI_CLIENT,
+        model=OPENAI_VK_GPT54_MINI_MODEL,
+        max_candidate_groups=25,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
+def run_gpt54_mini_full(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT54_MINI_METHOD_NAME}_full",
+        client_name=OPENAI_VK_GPT54_MINI_CLIENT,
+        model=OPENAI_VK_GPT54_MINI_MODEL,
+        max_candidate_groups=None,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+    )
+
+
+def run_gpt54_mini_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT54_MINI_METHOD_NAME}_with_item_stats_full",
+        client_name=OPENAI_VK_GPT54_MINI_CLIENT,
+        model=OPENAI_VK_GPT54_MINI_MODEL,
+        max_candidate_groups=None,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
+def run_gpt55_smoke(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT55_METHOD_NAME}_smoke",
+        client_name=OPENAI_VK_GPT55_CLIENT,
+        model=OPENAI_VK_GPT55_MODEL,
+        max_candidate_groups=25,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+    )
+
+
+def run_gpt55_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT55_METHOD_NAME}_with_item_stats_smoke",
+        client_name=OPENAI_VK_GPT55_CLIENT,
+        model=OPENAI_VK_GPT55_MODEL,
+        max_candidate_groups=25,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
+def run_gpt55_full(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT55_METHOD_NAME}_full",
+        client_name=OPENAI_VK_GPT55_CLIENT,
+        model=OPENAI_VK_GPT55_MODEL,
+        max_candidate_groups=None,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+    )
+
+
+def run_gpt55_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT55_METHOD_NAME}_with_item_stats_full",
+        client_name=OPENAI_VK_GPT55_CLIENT,
+        model=OPENAI_VK_GPT55_MODEL,
+        max_candidate_groups=None,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+        use_item_stats=True,
     )
 
 

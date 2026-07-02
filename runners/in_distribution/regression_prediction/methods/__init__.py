@@ -14,6 +14,14 @@ from runners.in_distribution.regression_prediction.methods.item import (
     run_item_mode,
 )
 from runners.in_distribution.regression_prediction.methods.llm_regressor import (
+    run_gpt54_mini_full,
+    run_gpt54_mini_smoke,
+    run_gpt54_mini_with_item_stats_full,
+    run_gpt54_mini_with_item_stats_smoke,
+    run_gpt55_full,
+    run_gpt55_smoke,
+    run_gpt55_with_item_stats_full,
+    run_gpt55_with_item_stats_smoke,
     run_llama31_8b_full,
     run_llama31_8b_smoke,
     run_llama31_8b_with_item_stats_full,
@@ -61,5 +69,21 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     ),
     "llm_regressor_vllm_llama33_70b_with_item_stats_full": (
         run_llama33_70b_with_item_stats_full
+    ),
+    "llm_regressor_openai_vk_gpt54_mini_smoke": run_gpt54_mini_smoke,
+    "llm_regressor_openai_vk_gpt54_mini_full": run_gpt54_mini_full,
+    "llm_regressor_openai_vk_gpt54_mini_with_item_stats_smoke": (
+        run_gpt54_mini_with_item_stats_smoke
+    ),
+    "llm_regressor_openai_vk_gpt54_mini_with_item_stats_full": (
+        run_gpt54_mini_with_item_stats_full
+    ),
+    "llm_regressor_openai_vk_gpt55_smoke": run_gpt55_smoke,
+    "llm_regressor_openai_vk_gpt55_full": run_gpt55_full,
+    "llm_regressor_openai_vk_gpt55_with_item_stats_smoke": (
+        run_gpt55_with_item_stats_smoke
+    ),
+    "llm_regressor_openai_vk_gpt55_with_item_stats_full": (
+        run_gpt55_with_item_stats_full
     ),
 }

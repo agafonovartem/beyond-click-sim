@@ -189,6 +189,10 @@ Available interaction-prediction methods:
 | `llm_yes_no_vllm_llama33_70b_full` | vLLM Llama 3.3 70B yes/no scorer on the full selected task. |
 | `llm_yes_no_vllm_qwen36_27b_smoke` | vLLM Qwen3.6 27B yes/no scorer on a small candidate-group subset, with Qwen thinking disabled. |
 | `llm_yes_no_vllm_qwen36_27b_full` | vLLM Qwen3.6 27B yes/no scorer on the full selected task, with Qwen thinking disabled. |
+| `llm_yes_no_openai_vk_gpt54_mini_smoke` | VK AI proxy `gpt-5.4-mini` yes/no scorer on a small candidate-group subset. |
+| `llm_yes_no_openai_vk_gpt54_mini_full` | VK AI proxy `gpt-5.4-mini` yes/no scorer on the full selected task. |
+| `llm_yes_no_openai_vk_gpt55_smoke` | VK AI proxy `gpt-5.5` yes/no scorer on a small candidate-group subset. |
+| `llm_yes_no_openai_vk_gpt55_full` | VK AI proxy `gpt-5.5` yes/no scorer on the full selected task. |
 | `agent4rec_yes_no_ollama_llama31_8b_smoke` | Local Ollama Llama 3.1 8B Agent4Rec-style yes/no scorer on a small candidate-group subset. |
 | `agent4rec_yes_no_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B Agent4Rec-style yes/no scorer on the full selected task. |
 | `agent4rec_yes_no_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B Agent4Rec-style yes/no scorer on a small candidate-group subset. |
@@ -219,7 +223,7 @@ unless temperature, token budget, visible item fields, and history/profile
 representation are controlled.
 
 > [!NOTE]
-> LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; the default vLLM client is expected at `http://127.0.0.1:8000/v1`. Some Agent4Rec Qwen methods intentionally target additional local vLLM ports `8001` and `8002`.
+> LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; the default vLLM client is expected at `http://127.0.0.1:8000/v1`. VK AI proxy methods use `https://ai-proxy.vk.team/v1` and load `OPENAI_VK_PROXY_API_KEY` from the environment or `.env`. Some Agent4Rec Qwen methods intentionally target additional local vLLM ports `8001` and `8002`.
 
 Available regression-prediction methods:
 
@@ -235,6 +239,10 @@ Available regression-prediction methods:
 | `llm_regressor_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B integer-rating scorer on the full selected test split. |
 | `llm_regressor_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B integer-rating scorer on the first 25 test rows. |
 | `llm_regressor_vllm_llama33_70b_full` | vLLM Llama 3.3 70B integer-rating scorer on the full selected test split. |
+| `llm_regressor_openai_vk_gpt54_mini_smoke` | VK AI proxy `gpt-5.4-mini` integer-rating scorer on the first 25 test rows. |
+| `llm_regressor_openai_vk_gpt54_mini_full` | VK AI proxy `gpt-5.4-mini` integer-rating scorer on the full selected test split. |
+| `llm_regressor_openai_vk_gpt55_smoke` | VK AI proxy `gpt-5.5` integer-rating scorer on the first 25 test rows. |
+| `llm_regressor_openai_vk_gpt55_full` | VK AI proxy `gpt-5.5` integer-rating scorer on the full selected test split. |
 
 Each LLM regressor also has explicit `_with_item_stats_smoke` and
 `_with_item_stats_full` variants, for example

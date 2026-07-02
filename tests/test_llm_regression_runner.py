@@ -290,3 +290,109 @@ def test_llm_regression_runner_labels_rating_only_with_item_stats(
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["scorer"]["uses_item_stats"] is True
     assert manifest["scorer"]["column_labels"]["rating"] == "user rating"
+
+
+def test_llm_regressor_openai_vk_gpt54_mini_wrappers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_regressor, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    llm_regressor.run_gpt54_mini_full(task, tmp_path)
+    llm_regressor.run_gpt54_mini_with_item_stats_full(task, tmp_path)
+    llm_regressor.run_gpt54_mini_smoke(task, tmp_path)
+    llm_regressor.run_gpt54_mini_with_item_stats_smoke(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": "llm_regressor_openai_vk_gpt54_mini_full",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.4-mini",
+            "max_rows": None,
+            "max_workers": llm_regressor.OPENAI_VK_MAX_WORKERS,
+        },
+        {
+            "method_name": "llm_regressor_openai_vk_gpt54_mini_with_item_stats_full",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.4-mini",
+            "max_rows": None,
+            "max_workers": llm_regressor.OPENAI_VK_MAX_WORKERS,
+            "use_item_stats": True,
+        },
+        {
+            "method_name": "llm_regressor_openai_vk_gpt54_mini_smoke",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.4-mini",
+            "max_rows": llm_regressor.SMOKE_ROWS,
+            "max_workers": llm_regressor.OPENAI_VK_MAX_WORKERS,
+        },
+        {
+            "method_name": (
+                "llm_regressor_openai_vk_gpt54_mini_with_item_stats_smoke"
+            ),
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.4-mini",
+            "max_rows": llm_regressor.SMOKE_ROWS,
+            "max_workers": llm_regressor.OPENAI_VK_MAX_WORKERS,
+            "use_item_stats": True,
+        },
+    ]
+
+
+def test_llm_regressor_openai_vk_gpt55_wrappers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_regressor, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    llm_regressor.run_gpt55_full(task, tmp_path)
+    llm_regressor.run_gpt55_with_item_stats_full(task, tmp_path)
+    llm_regressor.run_gpt55_smoke(task, tmp_path)
+    llm_regressor.run_gpt55_with_item_stats_smoke(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": "llm_regressor_openai_vk_gpt55_full",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.5",
+            "max_rows": None,
+            "max_workers": llm_regressor.OPENAI_VK_MAX_WORKERS,
+        },
+        {
+            "method_name": "llm_regressor_openai_vk_gpt55_with_item_stats_full",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.5",
+            "max_rows": None,
+            "max_workers": llm_regressor.OPENAI_VK_MAX_WORKERS,
+            "use_item_stats": True,
+        },
+        {
+            "method_name": "llm_regressor_openai_vk_gpt55_smoke",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.5",
+            "max_rows": llm_regressor.SMOKE_ROWS,
+            "max_workers": llm_regressor.OPENAI_VK_MAX_WORKERS,
+        },
+        {
+            "method_name": "llm_regressor_openai_vk_gpt55_with_item_stats_smoke",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.5",
+            "max_rows": llm_regressor.SMOKE_ROWS,
+            "max_workers": llm_regressor.OPENAI_VK_MAX_WORKERS,
+            "use_item_stats": True,
+        },
+    ]

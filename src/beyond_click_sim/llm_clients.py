@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from dotenv import load_dotenv
+import httpx
 from openai import OpenAI
 
 
@@ -10,6 +12,8 @@ OLLAMA_LOCAL_BASE_URL = "http://localhost:11434/v1"
 VLLM_LOCAL_BASE_URL = "http://127.0.0.1:8000/v1"
 VLLM_LOCAL_8001_BASE_URL = "http://127.0.0.1:8001/v1"
 VLLM_LOCAL_8002_BASE_URL = "http://127.0.0.1:8002/v1"
+OPENAI_VK_PROXY_BASE_URL = "https://ai-proxy.vk.team/v1"
+OPENAI_VK_PROXY_API_KEY_ENV = "OPENAI_VK_PROXY_API_KEY"
 
 
 def openai_client() -> Any:
@@ -17,6 +21,21 @@ def openai_client() -> Any:
 
     load_dotenv()
     return OpenAI()
+
+
+def openai_vk_proxy_client(
+    base_url: str = OPENAI_VK_PROXY_BASE_URL,
+    api_key_env: str = OPENAI_VK_PROXY_API_KEY_ENV,
+    trust_env: bool = False,
+) -> Any:
+    """Return an OpenAI-compatible client for the VK AI proxy endpoint."""
+
+    load_dotenv()
+    api_key = os.environ.get(api_key_env)
+    if not api_key:
+        raise RuntimeError(f"{api_key_env} is not set")
+    http_client = httpx.Client(trust_env=trust_env)
+    return OpenAI(base_url=base_url, api_key=api_key, http_client=http_client)
 
 
 def vllm_client(base_url: str, api_key: str = "EMPTY") -> Any:
@@ -47,4 +66,6 @@ def make_llm_client(client_name: str) -> Any:
         return vllm_client(base_url=VLLM_LOCAL_8002_BASE_URL)
     if client_name == "openai":
         return openai_client()
+    if client_name == "openai_vk_proxy":
+        return openai_vk_proxy_client()
     raise ValueError(f"Unsupported LLM client: {client_name!r}")

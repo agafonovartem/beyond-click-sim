@@ -37,12 +37,19 @@ OLLAMA_LLAMA31_8B_MODEL = "llama3.1:8b"
 VLLM_LLAMA33_70B_METHOD_NAME = "llm_regressor_vllm_llama33_70b"
 VLLM_LLAMA33_70B_CLIENT = "vllm_local"
 VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
+OPENAI_VK_GPT54_MINI_METHOD_NAME = "llm_regressor_openai_vk_gpt54_mini"
+OPENAI_VK_GPT54_MINI_CLIENT = "openai_vk_proxy"
+OPENAI_VK_GPT54_MINI_MODEL = "gpt-5.4-mini"
+OPENAI_VK_GPT55_METHOD_NAME = "llm_regressor_openai_vk_gpt55"
+OPENAI_VK_GPT55_CLIENT = "openai_vk_proxy"
+OPENAI_VK_GPT55_MODEL = "gpt-5.5"
 TEMPERATURE = 0.0
 MAX_TOKENS = 64
 MAX_LLM_ATTEMPTS = 5
 SMOKE_ROWS = 25
 OLLAMA_MAX_WORKERS = 1
 VLLM_MAX_WORKERS = 32
+OPENAI_VK_MAX_WORKERS = 4
 
 
 def run_llama31_8b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
@@ -153,6 +160,118 @@ def run_llama33_70b_with_item_stats_full(
         model=VLLM_LLAMA33_70B_MODEL,
         max_rows=None,
         max_workers=VLLM_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
+def run_gpt54_mini_smoke(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT54_MINI_METHOD_NAME}_smoke",
+        client_name=OPENAI_VK_GPT54_MINI_CLIENT,
+        model=OPENAI_VK_GPT54_MINI_MODEL,
+        max_rows=SMOKE_ROWS,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+    )
+
+
+def run_gpt54_mini_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT54_MINI_METHOD_NAME}_with_item_stats_smoke",
+        client_name=OPENAI_VK_GPT54_MINI_CLIENT,
+        model=OPENAI_VK_GPT54_MINI_MODEL,
+        max_rows=SMOKE_ROWS,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
+def run_gpt54_mini_full(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT54_MINI_METHOD_NAME}_full",
+        client_name=OPENAI_VK_GPT54_MINI_CLIENT,
+        model=OPENAI_VK_GPT54_MINI_MODEL,
+        max_rows=None,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+    )
+
+
+def run_gpt54_mini_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT54_MINI_METHOD_NAME}_with_item_stats_full",
+        client_name=OPENAI_VK_GPT54_MINI_CLIENT,
+        model=OPENAI_VK_GPT54_MINI_MODEL,
+        max_rows=None,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
+def run_gpt55_smoke(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT55_METHOD_NAME}_smoke",
+        client_name=OPENAI_VK_GPT55_CLIENT,
+        model=OPENAI_VK_GPT55_MODEL,
+        max_rows=SMOKE_ROWS,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+    )
+
+
+def run_gpt55_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT55_METHOD_NAME}_with_item_stats_smoke",
+        client_name=OPENAI_VK_GPT55_CLIENT,
+        model=OPENAI_VK_GPT55_MODEL,
+        max_rows=SMOKE_ROWS,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
+def run_gpt55_full(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT55_METHOD_NAME}_full",
+        client_name=OPENAI_VK_GPT55_CLIENT,
+        model=OPENAI_VK_GPT55_MODEL,
+        max_rows=None,
+        max_workers=OPENAI_VK_MAX_WORKERS,
+    )
+
+
+def run_gpt55_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OPENAI_VK_GPT55_METHOD_NAME}_with_item_stats_full",
+        client_name=OPENAI_VK_GPT55_CLIENT,
+        model=OPENAI_VK_GPT55_MODEL,
+        max_rows=None,
+        max_workers=OPENAI_VK_MAX_WORKERS,
         use_item_stats=True,
     )
 

@@ -333,3 +333,109 @@ def test_llm_yes_no_qwen_wrappers_disable_thinking(
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
     ]
+
+
+def test_llm_yes_no_openai_vk_gpt54_mini_wrappers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_yes_no, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    llm_yes_no.run_gpt54_mini_full(task, tmp_path)
+    llm_yes_no.run_gpt54_mini_with_item_stats_full(task, tmp_path)
+    llm_yes_no.run_gpt54_mini_smoke(task, tmp_path)
+    llm_yes_no.run_gpt54_mini_with_item_stats_smoke(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": "llm_yes_no_openai_vk_gpt54_mini_full",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.4-mini",
+            "max_candidate_groups": None,
+            "max_workers": llm_yes_no.OPENAI_VK_MAX_WORKERS,
+        },
+        {
+            "method_name": "llm_yes_no_openai_vk_gpt54_mini_with_item_stats_full",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.4-mini",
+            "max_candidate_groups": None,
+            "max_workers": llm_yes_no.OPENAI_VK_MAX_WORKERS,
+            "use_item_stats": True,
+        },
+        {
+            "method_name": "llm_yes_no_openai_vk_gpt54_mini_smoke",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.4-mini",
+            "max_candidate_groups": 25,
+            "max_workers": llm_yes_no.OPENAI_VK_MAX_WORKERS,
+        },
+        {
+            "method_name": (
+                "llm_yes_no_openai_vk_gpt54_mini_with_item_stats_smoke"
+            ),
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.4-mini",
+            "max_candidate_groups": 25,
+            "max_workers": llm_yes_no.OPENAI_VK_MAX_WORKERS,
+            "use_item_stats": True,
+        },
+    ]
+
+
+def test_llm_yes_no_openai_vk_gpt55_wrappers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_yes_no, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    llm_yes_no.run_gpt55_full(task, tmp_path)
+    llm_yes_no.run_gpt55_with_item_stats_full(task, tmp_path)
+    llm_yes_no.run_gpt55_smoke(task, tmp_path)
+    llm_yes_no.run_gpt55_with_item_stats_smoke(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": "llm_yes_no_openai_vk_gpt55_full",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.5",
+            "max_candidate_groups": None,
+            "max_workers": llm_yes_no.OPENAI_VK_MAX_WORKERS,
+        },
+        {
+            "method_name": "llm_yes_no_openai_vk_gpt55_with_item_stats_full",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.5",
+            "max_candidate_groups": None,
+            "max_workers": llm_yes_no.OPENAI_VK_MAX_WORKERS,
+            "use_item_stats": True,
+        },
+        {
+            "method_name": "llm_yes_no_openai_vk_gpt55_smoke",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.5",
+            "max_candidate_groups": 25,
+            "max_workers": llm_yes_no.OPENAI_VK_MAX_WORKERS,
+        },
+        {
+            "method_name": "llm_yes_no_openai_vk_gpt55_with_item_stats_smoke",
+            "client_name": "openai_vk_proxy",
+            "model": "gpt-5.5",
+            "max_candidate_groups": 25,
+            "max_workers": llm_yes_no.OPENAI_VK_MAX_WORKERS,
+            "use_item_stats": True,
+        },
+    ]
