@@ -6,6 +6,12 @@ from pathlib import Path
 from beyond_click_sim.tasks import Task
 
 from runners.in_distribution.regression_prediction.methods.agent4rec_regressor import (
+    run_qwen3_8b_taste_gpt4o_mini_full as run_agent4rec_qwen3_8b_taste_gpt4o_mini_full,
+    run_qwen3_8b_taste_gpt4o_mini_smoke as run_agent4rec_qwen3_8b_taste_gpt4o_mini_smoke,
+    run_qwen3_8b_traits_full as run_agent4rec_qwen3_8b_traits_full,
+    run_qwen3_8b_traits_smoke as run_agent4rec_qwen3_8b_traits_smoke,
+    run_qwen3_8b_traits_taste_gpt4o_mini_full as run_agent4rec_qwen3_8b_traits_taste_gpt4o_mini_full,
+    run_qwen3_8b_traits_taste_gpt4o_mini_smoke as run_agent4rec_qwen3_8b_traits_taste_gpt4o_mini_smoke,
     run_qwen36_27b_traits_taste_gpt4o_mini_full as run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_full,
     run_qwen36_27b_traits_taste_gpt4o_mini_smoke as run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_smoke,
 )
@@ -30,6 +36,8 @@ from runners.in_distribution.regression_prediction.methods.llm_regressor import 
     run_llama33_70b_smoke,
     run_llama33_70b_with_item_stats_full,
     run_llama33_70b_with_item_stats_smoke,
+    run_qwen3_8b_with_item_stats_full,
+    run_qwen3_8b_with_item_stats_smoke,
 )
 from runners.in_distribution.regression_prediction.methods.mean import run as run_mean
 from runners.in_distribution.regression_prediction.methods.mode import run as run_mode
@@ -54,6 +62,24 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_full": (
         run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_full
     ),
+    "agent4rec_regressor_vllm_qwen3_8b_traits_smoke": (
+        run_agent4rec_qwen3_8b_traits_smoke
+    ),
+    "agent4rec_regressor_vllm_qwen3_8b_traits_full": (
+        run_agent4rec_qwen3_8b_traits_full
+    ),
+    "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_smoke": (
+        run_agent4rec_qwen3_8b_taste_gpt4o_mini_smoke
+    ),
+    "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_full": (
+        run_agent4rec_qwen3_8b_taste_gpt4o_mini_full
+    ),
+    "agent4rec_regressor_vllm_qwen3_8b_traits_taste_gpt4o_mini_smoke": (
+        run_agent4rec_qwen3_8b_traits_taste_gpt4o_mini_smoke
+    ),
+    "agent4rec_regressor_vllm_qwen3_8b_traits_taste_gpt4o_mini_full": (
+        run_agent4rec_qwen3_8b_traits_taste_gpt4o_mini_full
+    ),
     "llm_regressor_ollama_llama31_8b_smoke": run_llama31_8b_smoke,
     "llm_regressor_ollama_llama31_8b_full": run_llama31_8b_full,
     "llm_regressor_ollama_llama31_8b_with_item_stats_smoke": (
@@ -69,6 +95,12 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     ),
     "llm_regressor_vllm_llama33_70b_with_item_stats_full": (
         run_llama33_70b_with_item_stats_full
+    ),
+    "llm_regressor_vllm_qwen3_8b_with_item_stats_smoke": (
+        run_qwen3_8b_with_item_stats_smoke
+    ),
+    "llm_regressor_vllm_qwen3_8b_with_item_stats_full": (
+        run_qwen3_8b_with_item_stats_full
     ),
     "llm_regressor_openai_vk_gpt54_mini_smoke": run_gpt54_mini_smoke,
     "llm_regressor_openai_vk_gpt54_mini_full": run_gpt54_mini_full,
