@@ -6,7 +6,7 @@
 ![uv](https://img.shields.io/badge/uv-managed-5c3ee8?style=flat-square)
 ![Status](https://img.shields.io/badge/status-research%20prototype-orange?style=flat-square)
 
-[Overview](#overview) - [Research scope](#research-scope) - [Getting started](#getting-started) - [Data](#data) - [Run experiments](#run-experiments) - [Outputs](#outputs)
+[Overview](#overview) - [Research scope](#research-scope) - [Getting started](#getting-started) - [Git workflow](#git-workflow) - [Data](#data) - [Run experiments](#run-experiments) - [Outputs](#outputs)
 
 ## Overview
 
@@ -73,6 +73,37 @@ Run tests:
 ```bash
 uv run pytest
 ```
+
+## Git workflow
+
+The repository is mirrored to two remotes:
+
+| Remote | Purpose |
+| --- | --- |
+| `origin` | Public GitHub remote: `git@github.com:agafonovartem/beyond-click-sim.git`. |
+| `corp` | Corporate GitLab remote: `git@gitlab.corp.mail.ru:ai/research-department/beyond-click-sim.git`. |
+
+Keep both remotes up to date for shared work on `master`. The local `master`
+branch may track `origin/master`, but every committed `master` update should be
+pushed to both remotes:
+
+```bash
+git push origin master
+git push corp master
+```
+
+Before starting work, fetch both remotes and inspect divergence:
+
+```bash
+git fetch --all --prune
+git status --short --branch
+git log --oneline --decorate --graph --all -n 20
+```
+
+Do not rename `origin` to the corporate remote. Do not force-push `master` unless
+the branch protection and overwrite implications are explicit and intentional.
+If GitLab rejects a push to protected `master`, fix the remote branch state or
+branch protection in GitLab rather than repeatedly retrying `git push -f`.
 
 ## Data
 
