@@ -152,7 +152,7 @@ Protocol:
 
 - Candidate construction: for ratio `m`, each candidate group uses `k = floor(20 / (m + 1))` held-out positives plus `k * m` sampled non-interactions when enough positives are available; `cg5` caps candidate groups per selected user, not items or positives directly.
 
-- Methods currently final under this reduced protocol: `popularity_f1_threshold`, `popularity_ranking`, selected Qwen-family history+item-stats runs, and selected Qwen3-8B Agent4Rec taste runs. Older uncapped `eval_users1000` LLM/Agent4Rec interaction results are intentionally not listed here.
+- Methods currently final under this reduced protocol: `popularity_f1_threshold`, `popularity_ranking`, selected Qwen-family history+item-stats runs, and selected Qwen-family Agent4Rec runs. Older uncapped `eval_users1000` LLM/Agent4Rec interaction results are intentionally not listed here.
 
 - Main pointwise metric: `test.macro_by_user_group_mean.f1`; threshold is selected on validation by `macro_by_user_group_mean_f1`.
 
@@ -167,12 +167,39 @@ These rows match the paper table convention for LLM-based methods: pointwise F1 
 | dataset | method | backbone | m | seeds | NDCG@5 mean | NDCG@5 std | F1 mean | F1 std | run root |
 |---|---|---|---:|---|---:|---:|---:|---:|---|
 | ml-1m | History + item stats | Qwen3.6-27B | 1 | 0,1,2 | 0.807 | 0.001 | 0.756 | 0.006 | `outputs/in_distribution/interaction_prediction/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed*/llm_yes_no_vllm_qwen36_27b_port8001_with_item_stats_full` |
+| ml-1m | History + item stats | Qwen3.6-27B | 3 | 0,1,2 | 0.592 | 0.003 | 0.640 | 0.002 | `outputs/in_distribution/interaction_prediction/ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed*/llm_yes_no_vllm_qwen36_27b_port8001_with_item_stats_full` |
+| ml-1m | History + item stats | Qwen3.6-27B | 19 | 0,1,2 | 0.446 | 0.002 | 0.292 | 0.001 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_history_missing_ml1m_qwen36_27b_local_parallel` |
 | ml-1m | History + item stats | Qwen3-8B | 1 | 0,1,2 | 0.757 | 0.003 | 0.565 | 0.003 | `outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full` |
 | ml-1m | History + item stats | Qwen3-8B | 3 | 0,1,2 | 0.509 | 0.003 | 0.463 | 0.005 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
 | ml-1m | History + item stats | Qwen3-8B | 9 | 0,1,2 | 0.404 | 0.002 | 0.310 | 0.003 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
 | ml-1m | History + item stats | Qwen3-8B | 19 | 0,1,2 | 0.333 | 0.004 | 0.204 | 0.004 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec traits + item stats | Qwen3.6-27B | 1 | 0,1,2 | 0.506 | 0.004 | 0.159 | 0.003 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel` |
+| ml-1m | Agent4Rec traits + item stats | Qwen3.6-27B | 3 | 0,1,2 | 0.276 | 0.003 | 0.118 | 0.002 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel` |
+| ml-1m | Agent4Rec traits + item stats | Qwen3.6-27B | 9 | 0,1,2 | 0.186 | 0.001 | 0.070 | 0.002 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel` |
+| ml-1m | Agent4Rec traits + item stats | Qwen3-8B | 1 | 0,1,2 | 0.557 | 0.001 | 0.163 | 0.004 | `outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full` |
+| ml-1m | Agent4Rec traits + item stats | Qwen3-8B | 3 | 0,1,2 | 0.307 | 0.003 | 0.113 | 0.001 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec traits + item stats | Qwen3-8B | 9 | 0,1,2 | 0.206 | 0.001 | 0.060 | 0.001 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec traits + item stats | Qwen3-8B | 19 | 0,1,2 | 0.165 | 0.002 | 0.035 | 0.002 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec taste + item stats | Qwen3.6-27B | 1 | 0,1,2 | 0.712 | 0.001 | 0.667 | 0.001 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel` |
+| ml-1m | Agent4Rec taste + item stats | Qwen3.6-27B | 3 | 0,1,2 | 0.471 | 0.002 | 0.528 | 0.002 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel` |
+| ml-1m | Agent4Rec taste + item stats | Qwen3.6-27B | 9 | 0,1,2 | 0.372 | 0.002 | 0.318 | 0.002 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel` |
+| ml-1m | Agent4Rec taste + item stats | Qwen3.6-27B | 19 | 0,1,2 | 0.316 | 0.003 | 0.195 | 0.002 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel` |
+| ml-1m | Agent4Rec taste + item stats | Qwen3-8B | 1 | 0,1,2 | 0.711 | 0.001 | 0.563 | 0.003 | `outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full` |
 | ml-1m | Agent4Rec taste + item stats | Qwen3-8B | 3 | 0,1,2 | 0.470 | 0.003 | 0.467 | 0.002 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
 | ml-1m | Agent4Rec taste + item stats | Qwen3-8B | 9 | 0,1,2 | 0.375 | 0.002 | 0.305 | 0.002 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec taste + item stats | Qwen3-8B | 19 | 0,1,2 | 0.317 | 0.003 | 0.198 | 0.002 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec taste + traits + item stats | Qwen3.6-27B | 1 | 0,1,2 | 0.694 | 0.003 | 0.542 | 0.006 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel` |
+| ml-1m | Agent4Rec taste + traits + item stats | Qwen3.6-27B | 19 | 0,1,2 | 0.322 | 0.003 | 0.203 | 0.002 | `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel` |
+| ml-1m | Agent4Rec taste + traits + item stats | Qwen3-8B | 1 | 0,1,2 | 0.685 | 0.005 | 0.466 | 0.007 | `outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full` |
+| ml-1m | Agent4Rec taste + traits + item stats | Qwen3-8B | 3 | 0,1,2 | 0.441 | 0.001 | 0.380 | 0.003 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec taste + traits + item stats | Qwen3-8B | 9 | 0,1,2 | 0.342 | 0.003 | 0.247 | 0.004 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+| ml-1m | Agent4Rec taste + traits + item stats | Qwen3-8B | 19 | 0,1,2 | 0.284 | 0.002 | 0.160 | 0.001 | `outputs/in_distribution/interaction_prediction/20260702T1905MSK_ml1m_qwen3_8b_m3_9_19_ml1m_qwen3_8b_local_parallel` |
+
+Current Qwen3.6-27B rerun queue:
+- Rerun `History + item stats`, `m=9`, seed `0` only. The current seed-0 artifact is excluded because it has tunnel-failure coverage (`failed_fraction=0.6856`, `failed_rows=62660/91390`): `outputs/in_distribution/interaction_prediction/ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed0/llm_yes_no_vllm_qwen36_27b_port8001_with_item_stats_full`.
+- Rerun `Agent4Rec traits + item stats`, `m=19`, seeds `0,1,2`. The current artifacts are excluded because the interrupted port-forward contaminated coverage (`failed_fraction=0.1034`, `0.3811`, `0.5909`) under `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel`.
+- Rerun `Agent4Rec taste + traits + item stats`, `m=3`, seeds `1,2`. The seed-0 artifact is reportable, but seeds 1/2 are excluded because stale skipped-existing artifacts still have bad coverage (`failed_fraction=0.6743`, `0.6534`; `failed_rows=45680/67748`, `45144/69088`) under `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel`.
+- Rerun `Agent4Rec taste + traits + item stats`, `m=9`, seed `0` only. Seeds 1/2 are reportable, but seed 0 is excluded because the current artifact has bad coverage (`failed_fraction=0.4991`, `failed_rows=45610/91390`) under `outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel`.
 
 Additional complete ablation not shown in the current paper table:
 
