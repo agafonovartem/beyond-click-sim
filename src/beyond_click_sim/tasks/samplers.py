@@ -391,6 +391,196 @@ class CappedUserInteractionCandidateSampler(CandidateSampler):
         return f"candidate:user:{user_id}:chunk:{chunk_position}"
 
 
+class CappedObservedPreferenceCandidateSampler(CandidateSampler):
+    """Build capped candidate lists from held-out observed preference labels.
+
+    Each candidate group contains up to `total_items` observed candidates with
+    ratio 1:`negative_ratio`: `k` preference-positive items and
+    `k * negative_ratio` preference-negative items from the same held-out split.
+    Users with more held-out positives get multiple candidate groups. Chunks
+    without enough observed negatives are skipped to preserve the requested
+    within-group ratio.
+    """
+
+    def __init__(
+        self,
+        negative_ratio: int,
+        total_items: int = 10,
+        max_eval_users: int | None = None,
+        max_candidate_groups_per_user: int | None = None,
+        seed: int = 0,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+        target_source_column: str = "target",
+        target_column: str = "target",
+        candidate_group_column: str = "candidate_group",
+    ) -> None:
+        super().__init__(seed=seed)
+        self.negative_ratio = negative_ratio
+        self.total_items = total_items
+        self.max_eval_users = max_eval_users
+        self.max_candidate_groups_per_user = max_candidate_groups_per_user
+        self.user_column = user_column
+        self.item_column = item_column
+        self.target_source_column = target_source_column
+        self.target_column = target_column
+        self.candidate_group_column = candidate_group_column
+
+    def sample(
+        self,
+        positives: pd.DataFrame,
+        *,
+        interactions: pd.DataFrame,
+        items: pd.DataFrame,
+        excluded_pairs: set[tuple[Any, Any]] | None = None,
+    ) -> pd.DataFrame:
+        """Return capped candidate groups from observed held-out rows."""
+
+        del interactions, items, excluded_pairs
+        if self.negative_ratio < 1:
+            raise ValueError("negative_ratio must be positive.")
+        if self.total_items < self.negative_ratio + 1:
+            raise ValueError("total_items must fit at least one positive group.")
+        if self.max_eval_users is not None and self.max_eval_users < 1:
+            raise ValueError("max_eval_users must be positive when provided.")
+        if (
+            self.max_candidate_groups_per_user is not None
+            and self.max_candidate_groups_per_user < 1
+        ):
+            raise ValueError(
+                "max_candidate_groups_per_user must be positive when provided."
+            )
+
+        output_columns = [
+            self.user_column,
+            self.item_column,
+            self.target_column,
+            self.candidate_group_column,
+        ]
+        if positives.empty:
+            return pd.DataFrame(columns=output_columns)
+        missing = [
+            column
+            for column in [
+                self.user_column,
+                self.item_column,
+                self.target_source_column,
+            ]
+            if column not in positives.columns
+        ]
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
+
+        positive_rows = positives[positives[self.target_source_column].astype(bool)]
+        negative_rows = positives[~positives[self.target_source_column].astype(bool)]
+        if positive_rows.empty or negative_rows.empty:
+            return pd.DataFrame(columns=output_columns)
+
+        positives_by_user = positive_rows.groupby(self.user_column, sort=False)[
+            self.item_column
+        ].agg(lambda values: list(dict.fromkeys(values)))
+        negatives_by_user = negative_rows.groupby(self.user_column, sort=False)[
+            self.item_column
+        ].agg(lambda values: list(dict.fromkeys(values)))
+
+        if self.max_eval_users is not None:
+            selected_users = stable_sample_values(
+                positives_by_user.index,
+                n=self.max_eval_users,
+                seed=self.seed,
+            )
+            positives_by_user = positives_by_user.loc[selected_users]
+
+        row_values: dict[str, list[Any]] = {column: [] for column in output_columns}
+        max_positive_items = self.total_items // (self.negative_ratio + 1)
+        for user_id, positive_items in positives_by_user.items():
+            stable_positive_items = stable_sample_values(
+                positive_items,
+                n=None,
+                seed=self.seed,
+            )
+            positive_rng = random.Random(f"{self.seed}:positives:{user_id}")
+            shuffled_positives = positive_rng.sample(
+                stable_positive_items,
+                len(stable_positive_items),
+            )
+
+            positive_chunks = _chunks(shuffled_positives, max_positive_items)
+            if self.max_candidate_groups_per_user is not None:
+                positive_chunks = positive_chunks[: self.max_candidate_groups_per_user]
+
+            stable_negative_items = stable_sample_values(
+                negatives_by_user.get(user_id, []),
+                n=None,
+                seed=self.seed,
+            )
+            for chunk_position, selected_positives in enumerate(positive_chunks):
+                negative_count = len(selected_positives) * self.negative_ratio
+                if len(stable_negative_items) < negative_count:
+                    continue
+
+                group_id = self._candidate_group_id(
+                    user_id=user_id,
+                    chunk_position=chunk_position,
+                )
+                group_rng = random.Random(f"{self.seed}:{group_id}")
+                selected_negatives = group_rng.sample(
+                    stable_negative_items,
+                    negative_count,
+                )
+
+                group_rows: list[dict[str, Any]] = []
+                self._append_rows(
+                    group_rows,
+                    user_id=user_id,
+                    item_ids=selected_positives,
+                    target=1,
+                    group_id=group_id,
+                )
+                self._append_rows(
+                    group_rows,
+                    user_id=user_id,
+                    item_ids=selected_negatives,
+                    target=0,
+                    group_id=group_id,
+                )
+                for row in _shuffled_group_rows(
+                    group_rows,
+                    seed=self.seed,
+                    group_id=group_id,
+                ):
+                    for column in output_columns:
+                        row_values[column].append(row[column])
+
+        return pd.DataFrame(row_values, columns=output_columns)
+
+    def _append_rows(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        user_id: Any,
+        item_ids: list[Any],
+        target: int,
+        group_id: str,
+    ) -> None:
+        """Append observed preference candidate rows to a group."""
+
+        for item_id in item_ids:
+            rows.append(
+                {
+                    self.user_column: user_id,
+                    self.item_column: item_id,
+                    self.target_column: target,
+                    self.candidate_group_column: group_id,
+                }
+            )
+
+    def _candidate_group_id(self, *, user_id: Any, chunk_position: int) -> str:
+        """Create one stable candidate group id per user positive chunk."""
+
+        return f"candidate:user:{user_id}:chunk:{chunk_position}"
+
+
 class PostSplitUserSampler:
     """Limit held-out rows to a deterministic sample of users after splitting.
 
