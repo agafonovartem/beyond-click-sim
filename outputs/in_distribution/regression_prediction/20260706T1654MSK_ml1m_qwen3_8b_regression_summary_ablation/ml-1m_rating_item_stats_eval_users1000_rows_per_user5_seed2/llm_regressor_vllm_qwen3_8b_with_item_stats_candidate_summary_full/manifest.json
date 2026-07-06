@@ -1,0 +1,184 @@
+{
+  "coverage": 1.0,
+  "evaluated_splits": [
+    "test"
+  ],
+  "git_commit": "c802c8144472f5cb82a21f74932aed192569d9f7",
+  "limits": {
+    "max_llm_attempts": 5,
+    "max_rows": null,
+    "max_workers": 128
+  },
+  "llm_errors": 0,
+  "method": "llm_regressor_vllm_qwen3_8b_with_item_stats_candidate_summary_full",
+  "protocol": "regression",
+  "regression_evaluation": {
+    "aggregations": [
+      "micro",
+      "macro_by_user_mean"
+    ],
+    "main_metric": "test.macro_by_user_mean.mae",
+    "metrics": [
+      "mae",
+      "rmse"
+    ]
+  },
+  "requested_rows": 4982,
+  "scored_rows": 4982,
+  "scorer": {
+    "class": "LLMRegressor",
+    "client_name": "vllm_local",
+    "column_labels": {
+      "item_rating_count": "number of prior reviews",
+      "item_rating_mean": "average rating",
+      "item_summary": "summary",
+      "rating": "user rating"
+    },
+    "extra_body": {
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      }
+    },
+    "item_summaries": {
+      "candidate_item_summaries": true,
+      "history_item_summaries": false,
+      "source_path": "/Users/a.agafonov/Research/agent_simulator/repos/Agent4Rec/datasets/ml-1m/raw_data/movies_augmentation.csv",
+      "summary_column": "item_summary",
+      "test_missing_summaries": 0,
+      "test_rows": 4982,
+      "train_missing_summaries": 0,
+      "train_rows": 694335,
+      "uses_item_summaries": true
+    },
+    "max_history_items": 20,
+    "max_tokens": 64,
+    "model": "Qwen/Qwen3-8B",
+    "prompt_columns": {
+      "candidate_description_columns": [
+        "item_title",
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count",
+        "item_summary"
+      ],
+      "history_description_columns": [
+        "item_title",
+        "item_genres",
+        "rating",
+        "item_rating_mean",
+        "item_rating_count"
+      ]
+    },
+    "target": {
+      "description": "Predict the integer rating this user would give to this movie on a 1 to 5 scale.",
+      "name": "rating",
+      "output_format": "bare_integer",
+      "valid_values": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    "temperature": 0.0,
+    "uses_item_stats": true
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": null,
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "eval_sampler": {
+        "class": "PostSplitUserSampler",
+        "max_rows_per_user": 5,
+        "n_users": 1000,
+        "require_train_history": true,
+        "seed": 2,
+        "user_column": "user_id"
+      },
+      "eval_user_selection": {
+        "kind": "post_split",
+        "test": {
+          "eligible_users": 6040,
+          "max_rows_per_user": 5,
+          "rows_after": 4982,
+          "rows_after_user_selection": 32738,
+          "rows_before": 202451,
+          "selected_users": 1000,
+          "users_with_rows_capped": 908
+        },
+        "val": {
+          "eligible_users": 6040,
+          "max_rows_per_user": 5,
+          "rows_after": 4651,
+          "rows_after_user_selection": 16731,
+          "rows_before": 103423,
+          "selected_users": 1000,
+          "users_with_rows_capped": 708
+        }
+      },
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_feature_builder": {
+        "class": "TrainItemRatingStatistics",
+        "count_column": "rating_count",
+        "items_total": 3883,
+        "items_with_statistics": 3672,
+        "mean_column": "rating_mean",
+        "missing_policy": {
+          "rating_count": 0,
+          "rating_mean": "nan"
+        },
+        "source": "train_split_only",
+        "value_column": "rating"
+      },
+      "items": 3883,
+      "protocol": "regression",
+      "rows": {
+        "test": 4982,
+        "train": 694335,
+        "val": 4651
+      },
+      "sampled_column": null,
+      "sampler": null,
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 2,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_rows_dropped": 0,
+      "target_source_column": "target_rating",
+      "users": {
+        "filtered": 6040,
+        "test": 1000,
+        "train": 6040,
+        "val": 1000
+      }
+    },
+    "name": "ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed2"
+  }
+}

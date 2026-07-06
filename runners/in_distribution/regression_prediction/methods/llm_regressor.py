@@ -23,6 +23,7 @@ from runners.in_distribution.regression_prediction.item_summaries import (
     ITEM_SUMMARY_COLUMN_LABEL,
     add_ml1m_item_summaries,
     maybe_add_item_summary_prompt_columns,
+    resolve_item_summary_visibility,
 )
 from runners.in_distribution.regression_prediction.methods.common import (
     current_git_commit,
@@ -227,6 +228,44 @@ def run_qwen3_8b_with_item_stats_summary_full(
     )
 
 
+def run_qwen3_8b_with_item_stats_history_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN3_8B_METHOD_NAME}_with_item_stats_history_summary_full",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        use_item_stats=True,
+        history_item_summaries=True,
+        candidate_item_summaries=False,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen3_8b_with_item_stats_candidate_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN3_8B_METHOD_NAME}_with_item_stats_candidate_summary_full",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        use_item_stats=True,
+        history_item_summaries=False,
+        candidate_item_summaries=True,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
 def run_gpt54_mini_smoke(task: Task, output_dir: Path) -> dict[str, object]:
     return run_method(
         task,
@@ -354,6 +393,8 @@ def run_method(
     max_workers: int = 1,
     use_item_stats: bool = False,
     use_item_summaries: bool = False,
+    history_item_summaries: bool | None = None,
+    candidate_item_summaries: bool | None = None,
     extra_body: dict | None = None,
 ) -> dict[str, object]:
     """Run an LLM discrete numeric scorer for regression prediction."""
@@ -367,6 +408,11 @@ def run_method(
     dataset_name = str(task.manifest["dataset"])
     target_source_column = str(task.manifest["target_source_column"])
     target_config = DATASET_TARGET_REGRESSION_CONFIG[dataset_name][target_source_column]
+    summary_visibility = resolve_item_summary_visibility(
+        use_item_summaries=use_item_summaries,
+        history_item_summaries=history_item_summaries,
+        candidate_item_summaries=candidate_item_summaries,
+    )
     base_prompt_columns = {
         "history_description_columns": target_config["history_description_columns"],
         "candidate_description_columns": target_config["candidate_description_columns"],
@@ -379,13 +425,14 @@ def run_method(
     prompt_columns = maybe_add_item_summary_prompt_columns(
         dataset_name,
         prompt_columns,
-        use_item_summaries=use_item_summaries,
+        history_item_summaries=summary_visibility["history"],
+        candidate_item_summaries=summary_visibility["candidate"],
     )
     column_labels = item_rating_column_labels(
         dataset_name,
         use_item_stats=use_item_stats,
     )
-    if use_item_summaries:
+    if summary_visibility["any"]:
         column_labels = {
             **column_labels,
             ITEM_SUMMARY_COLUMN: ITEM_SUMMARY_COLUMN_LABEL,
@@ -401,7 +448,8 @@ def run_method(
         dataset_name=dataset_name,
         X_train=X_train,
         X_test=X_test,
-        use_item_summaries=use_item_summaries,
+        use_item_summaries=summary_visibility["any"],
+        summary_visibility=summary_visibility,
     )
 
     scorer = LLMRegressor(

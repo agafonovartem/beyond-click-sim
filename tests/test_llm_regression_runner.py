@@ -504,6 +504,8 @@ def test_llm_regressor_qwen3_8b_with_item_stats_wrappers_disable_thinking(
     task = SimpleNamespace()
 
     llm_regressor.run_qwen3_8b_with_item_stats_full(task, tmp_path)
+    llm_regressor.run_qwen3_8b_with_item_stats_history_summary_full(task, tmp_path)
+    llm_regressor.run_qwen3_8b_with_item_stats_candidate_summary_full(task, tmp_path)
     llm_regressor.run_qwen3_8b_with_item_stats_summary_full(task, tmp_path)
     llm_regressor.run_qwen3_8b_with_item_stats_smoke(task, tmp_path)
 
@@ -515,6 +517,32 @@ def test_llm_regressor_qwen3_8b_with_item_stats_wrappers_disable_thinking(
             "max_rows": None,
             "max_workers": 128,
             "use_item_stats": True,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": (
+                "llm_regressor_vllm_qwen3_8b_with_item_stats_history_summary_full"
+            ),
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3-8B",
+            "max_rows": None,
+            "max_workers": 128,
+            "use_item_stats": True,
+            "history_item_summaries": True,
+            "candidate_item_summaries": False,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": (
+                "llm_regressor_vllm_qwen3_8b_with_item_stats_candidate_summary_full"
+            ),
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3-8B",
+            "max_rows": None,
+            "max_workers": 128,
+            "use_item_stats": True,
+            "history_item_summaries": False,
+            "candidate_item_summaries": True,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
         {

@@ -42,20 +42,40 @@ Seed average over seeds 0-2. Lower MAE/RMSE is better.
 | Agent4Rec traits + taste + item stats | traits and taste profiles, candidate item mean | 0,1,2 | 1.000 | 1.0973 +/- 0.0112 | 1.3478 +/- 0.0064 | 1.0971 +/- 0.0110 | 1.4353 +/- 0.0068 |
 
 Movie-summary ablation over the same protocol. Summaries come from Agent4Rec
-`movies_augmentation.csv` and are joined by the raw MovieLens item id. For the
-LLM regressor, summaries are visible in both history and candidate rows. For
-Agent4Rec taste variants, summaries are visible in the taste-history prompt and
-candidate prompt; the traits-only variant uses summaries only in the candidate
-prompt.
+`movies_augmentation.csv` and are joined by the raw MovieLens item id. Summary
+placement is ablated separately: `history only` means train-history rows for the
+LLM regressor and the taste-profile history prompt for Agent4Rec; `candidate
+only` means final candidate/movie rows. The Agent4Rec traits-only variant has no
+taste-history prompt, so only its candidate-summary variant is meaningful.
 
 Run root: `outputs/in_distribution/regression_prediction/20260706T1654MSK_ml1m_qwen3_8b_regression_summary_ablation`.
 
-| method | visible metadata | seeds | coverage | macro MAE | macro RMSE | micro MAE | micro RMSE |
-|---|---|---|---:|---:|---:|---:|---:|
-| History + item stats + summaries | train history, candidate item mean/count, movie summaries | 0,1,2 | 1.000 | 0.7738 +/- 0.0004 | 0.9790 +/- 0.0055 | 0.7737 +/- 0.0003 | 1.0360 +/- 0.0062 |
-| Agent4Rec traits + item stats + summaries | traits profile, candidate item mean and summary | 0,1,2 | 1.000 | 0.9874 +/- 0.0248 | 1.2007 +/- 0.0232 | 0.9873 +/- 0.0244 | 1.2942 +/- 0.0260 |
-| Agent4Rec taste + item stats + summaries | summary-aware taste profile, candidate item mean and summary | 0,1,2 | 1.000 | 1.0533 +/- 0.0088 | 1.3080 +/- 0.0113 | 1.0533 +/- 0.0082 | 1.3862 +/- 0.0136 |
-| Agent4Rec traits + taste + item stats + summaries | traits and summary-aware taste profiles, candidate item mean and summary | 0,1,2 | 1.000 | 1.0479 +/- 0.0160 | 1.2926 +/- 0.0114 | 1.0477 +/- 0.0152 | 1.3754 +/- 0.0127 |
+Lower MAE/RMSE is better. Delta is macro MAE change relative to the same
+method without summaries; negative is better.
+
+| method | summary placement | seeds | coverage | macro MAE | delta MAE | macro RMSE | micro MAE | micro RMSE |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| History + item stats | none | 0,1,2 | 1.000 | 0.7816 +/- 0.0057 | 0.0000 | 0.9877 +/- 0.0094 | 0.7816 +/- 0.0054 | 1.0444 +/- 0.0094 |
+| History + item stats | history only | 0,1,2 | 1.000 | 0.7777 +/- 0.0023 | -0.0039 | 0.9807 +/- 0.0066 | 0.7776 +/- 0.0020 | 1.0369 +/- 0.0066 |
+| History + item stats | candidate only | 0,1,2 | 1.000 | 0.7804 +/- 0.0030 | -0.0012 | 0.9836 +/- 0.0057 | 0.7804 +/- 0.0029 | 1.0406 +/- 0.0052 |
+| History + item stats | history + candidate | 0,1,2 | 1.000 | 0.7738 +/- 0.0004 | -0.0078 | 0.9790 +/- 0.0055 | 0.7737 +/- 0.0003 | 1.0360 +/- 0.0062 |
+| Agent4Rec traits + item stats | none | 0,1,2 | 1.000 | 0.9948 +/- 0.0244 | 0.0000 | 1.2128 +/- 0.0218 | 0.9947 +/- 0.0240 | 1.3180 +/- 0.0245 |
+| Agent4Rec traits + item stats | candidate only | 0,1,2 | 1.000 | 0.9874 +/- 0.0248 | -0.0074 | 1.2007 +/- 0.0232 | 0.9873 +/- 0.0244 | 1.2942 +/- 0.0260 |
+| Agent4Rec taste + item stats | none | 0,1,2 | 1.000 | 1.1260 +/- 0.0063 | 0.0000 | 1.3721 +/- 0.0043 | 1.1260 +/- 0.0064 | 1.4516 +/- 0.0083 |
+| Agent4Rec taste + item stats | history only | 0,1,2 | 1.000 | 1.1074 +/- 0.0063 | -0.0186 | 1.3584 +/- 0.0038 | 1.1076 +/- 0.0060 | 1.4392 +/- 0.0059 |
+| Agent4Rec taste + item stats | candidate only | 0,1,2 | 1.000 | 1.0861 +/- 0.0178 | -0.0399 | 1.3412 +/- 0.0254 | 1.0864 +/- 0.0180 | 1.4242 +/- 0.0297 |
+| Agent4Rec taste + item stats | history + candidate | 0,1,2 | 1.000 | 1.0533 +/- 0.0088 | -0.0727 | 1.3080 +/- 0.0113 | 1.0533 +/- 0.0082 | 1.3862 +/- 0.0136 |
+| Agent4Rec traits + taste + item stats | none | 0,1,2 | 1.000 | 1.0973 +/- 0.0112 | 0.0000 | 1.3478 +/- 0.0064 | 1.0971 +/- 0.0110 | 1.4353 +/- 0.0068 |
+| Agent4Rec traits + taste + item stats | history only | 0,1,2 | 1.000 | 1.0598 +/- 0.0152 | -0.0376 | 1.3087 +/- 0.0109 | 1.0597 +/- 0.0148 | 1.3958 +/- 0.0125 |
+| Agent4Rec traits + taste + item stats | candidate only | 0,1,2 | 1.000 | 1.0752 +/- 0.0189 | -0.0221 | 1.3228 +/- 0.0176 | 1.0752 +/- 0.0190 | 1.4078 +/- 0.0217 |
+| Agent4Rec traits + taste + item stats | history + candidate | 0,1,2 | 1.000 | 1.0479 +/- 0.0160 | -0.0495 | 1.2926 +/- 0.0114 | 1.0477 +/- 0.0152 | 1.3754 +/- 0.0127 |
+
+Interpretation: summaries help every Qwen3-8B regression variant under this
+protocol, but the effect is small for the plain history+item-stats LLM and large
+for Agent4Rec taste-profile variants. In all comparable cases, showing summaries
+in both history and candidate text is best. Even with summaries, Agent4Rec
+regression remains worse than the plain history+item-stats LLM and the strongest
+item-statistic baselines above.
 
 ### ML-1M rating eval_1000 users
 

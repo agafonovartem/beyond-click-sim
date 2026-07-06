@@ -8,6 +8,8 @@ from runners.in_distribution.regression_prediction.item_summaries import (
     ITEM_SUMMARY_COLUMN,
     add_ml1m_item_summaries,
     load_ml1m_item_summaries,
+    maybe_add_item_summary_prompt_columns,
+    resolve_item_summary_visibility,
 )
 
 
@@ -51,5 +53,55 @@ def test_add_ml1m_item_summaries_merges_train_and_test(tmp_path: Path) -> None:
     assert train[ITEM_SUMMARY_COLUMN].iloc[0] == "Toys plan a rescue."
     assert pd.isna(train[ITEM_SUMMARY_COLUMN].iloc[1])
     assert test[ITEM_SUMMARY_COLUMN].tolist() == ["A magical board game."]
+    assert metadata["history_item_summaries"] is True
+    assert metadata["candidate_item_summaries"] is True
     assert metadata["train_missing_summaries"] == 1
     assert metadata["test_missing_summaries"] == 0
+
+
+def test_item_summary_prompt_columns_can_be_split() -> None:
+    columns = {
+        "history_description_columns": ("item_title", "rating"),
+        "candidate_description_columns": ("item_title",),
+    }
+
+    history_only = maybe_add_item_summary_prompt_columns(
+        "ml-1m",
+        columns,
+        history_item_summaries=True,
+        candidate_item_summaries=False,
+    )
+    candidate_only = maybe_add_item_summary_prompt_columns(
+        "ml-1m",
+        columns,
+        history_item_summaries=False,
+        candidate_item_summaries=True,
+    )
+
+    assert history_only["history_description_columns"] == (
+        "item_title",
+        "rating",
+        ITEM_SUMMARY_COLUMN,
+    )
+    assert history_only["candidate_description_columns"] == ("item_title",)
+    assert candidate_only["history_description_columns"] == ("item_title", "rating")
+    assert candidate_only["candidate_description_columns"] == (
+        "item_title",
+        ITEM_SUMMARY_COLUMN,
+    )
+
+
+def test_resolve_item_summary_visibility_keeps_legacy_bool_as_both() -> None:
+    assert resolve_item_summary_visibility(use_item_summaries=True) == {
+        "history": True,
+        "candidate": True,
+        "any": True,
+    }
+    assert resolve_item_summary_visibility(
+        history_item_summaries=True,
+        candidate_item_summaries=False,
+    ) == {
+        "history": True,
+        "candidate": False,
+        "any": True,
+    }

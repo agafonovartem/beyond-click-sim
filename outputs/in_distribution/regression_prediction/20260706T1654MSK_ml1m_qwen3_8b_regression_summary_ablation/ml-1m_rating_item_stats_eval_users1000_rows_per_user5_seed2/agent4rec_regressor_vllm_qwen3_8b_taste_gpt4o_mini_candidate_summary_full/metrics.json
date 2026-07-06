@@ -1,0 +1,38 @@
+{
+  "coverage": 1.0,
+  "evaluated_splits": [
+    "test"
+  ],
+  "llm_errors": 0,
+  "main_metric": "test.macro_by_user_mean.mae",
+  "max_rows": null,
+  "max_workers": 128,
+  "method": "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_candidate_summary_full",
+  "protocol": "regression",
+  "regression_evaluation": {
+    "aggregations": [
+      "micro",
+      "macro_by_user_mean"
+    ],
+    "metrics": [
+      "mae",
+      "rmse"
+    ]
+  },
+  "requested_rows": 4982,
+  "scored_rows": 4982,
+  "task": "ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed2",
+  "test": {
+    "macro_by_user_mean": {
+      "mae": 1.072,
+      "n": 4982,
+      "n_users": 1000,
+      "rmse": 1.3296709066392705
+    },
+    "micro": {
+      "mae": 1.0722601364913689,
+      "n": 4982,
+      "rmse": 1.4139296692532273
+    }
+  }
+}

@@ -16,6 +16,7 @@ from runners.in_distribution.regression_prediction.item_summaries import (
     ITEM_SUMMARY_COLUMN,
     ITEM_SUMMARY_COLUMN_LABEL,
     add_ml1m_item_summaries,
+    resolve_item_summary_visibility,
 )
 from runners.in_distribution.regression_prediction.methods.common import (
     current_git_commit,
@@ -228,6 +229,52 @@ def run_qwen3_8b_taste_gpt4o_mini_summary_full(
     )
 
 
+def run_qwen3_8b_taste_gpt4o_mini_history_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN3_8B_METHOD_NAME}_taste_gpt4o_mini_history_summary_full",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("taste",),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        history_item_summaries=True,
+        candidate_item_summaries=False,
+    )
+
+
+def run_qwen3_8b_taste_gpt4o_mini_candidate_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN3_8B_METHOD_NAME}_taste_gpt4o_mini_candidate_summary_full",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("taste",),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        history_item_summaries=False,
+        candidate_item_summaries=True,
+    )
+
+
 def run_qwen3_8b_traits_taste_gpt4o_mini_smoke(
     task: Task,
     output_dir: Path,
@@ -294,6 +341,56 @@ def run_qwen3_8b_traits_taste_gpt4o_mini_summary_full(
     )
 
 
+def run_qwen3_8b_traits_taste_gpt4o_mini_history_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=(
+            f"{VLLM_QWEN3_8B_METHOD_NAME}_traits_taste_gpt4o_mini_history_summary_full"
+        ),
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        history_item_summaries=True,
+        candidate_item_summaries=False,
+    )
+
+
+def run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=(
+            f"{VLLM_QWEN3_8B_METHOD_NAME}_traits_taste_gpt4o_mini_candidate_summary_full"
+        ),
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        history_item_summaries=False,
+        candidate_item_summaries=True,
+    )
+
+
 def run_method(
     task: Task,
     output_dir: Path,
@@ -318,6 +415,8 @@ def run_method(
     taste_prompt_version: str = AGENT4REC_TASTE_PROMPT_VERSION,
     taste_cache_path: Path | None = None,
     use_item_summaries: bool = False,
+    history_item_summaries: bool | None = None,
+    candidate_item_summaries: bool | None = None,
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based discrete rating regressor."""
 
@@ -337,6 +436,15 @@ def run_method(
     target_config = DATASET_TARGET_REGRESSION_CONFIG[dataset_name][target_source_column]
     if target_config["target_name"] != "rating":
         raise ValueError("Agent4Rec regression v1 supports only rating targets")
+    uses_taste = "taste" in profile_components
+    summary_visibility = resolve_item_summary_visibility(
+        use_item_summaries=use_item_summaries,
+        history_item_summaries=history_item_summaries,
+        candidate_item_summaries=candidate_item_summaries,
+    )
+    if not uses_taste:
+        summary_visibility["history"] = False
+        summary_visibility["any"] = summary_visibility["candidate"]
 
     xy = task_xy(task)
     X_train, y_train = xy["train"]
@@ -348,20 +456,20 @@ def run_method(
         dataset_name=dataset_name,
         X_train=X_train,
         X_test=X_test,
-        use_item_summaries=use_item_summaries,
+        use_item_summaries=summary_visibility["any"],
+        summary_visibility=summary_visibility,
     )
     candidate_columns = _candidate_columns(
         dataset_name,
-        use_item_summaries=use_item_summaries,
+        use_item_summaries=summary_visibility["candidate"],
     )
     column_labels = _column_labels(
         dataset_name,
-        use_item_summaries=use_item_summaries,
+        use_item_summaries=summary_visibility["candidate"],
     )
     profile_user_ids = X_test["user_id"].drop_duplicates().tolist()
     _require_columns(X_test, list(candidate_columns))
 
-    uses_taste = "taste" in profile_components
     if uses_taste:
         if not taste_client_name:
             raise ValueError("taste_client_name is required for taste profiles")
@@ -372,7 +480,7 @@ def run_method(
                 task,
                 taste_model=taste_model,
                 taste_prompt_version=taste_prompt_version,
-                use_item_summaries=use_item_summaries,
+                use_history_item_summaries=summary_visibility["history"],
             )
         taste_client = make_llm_client(taste_client_name)
     else:
@@ -389,7 +497,11 @@ def run_method(
         taste_max_tokens=taste_max_tokens,
         taste_max_attempts=taste_max_attempts,
         taste_max_workers=taste_max_workers,
-        summary_column=ITEM_SUMMARY_COLUMN if use_item_summaries else None,
+        summary_column=(
+            ITEM_SUMMARY_COLUMN
+            if summary_visibility["history"]
+            else None
+        ),
     )
     scorer = Agent4RecRegressor(
         client=make_llm_client(client_name),
@@ -520,13 +632,13 @@ def agent4rec_taste_cache_path(
     *,
     taste_model: str,
     taste_prompt_version: str,
-    use_item_summaries: bool = False,
+    use_history_item_summaries: bool = False,
 ) -> Path:
     dataset_name = str(task.manifest["dataset"])
     dataset_version = str(task.manifest["dataset_version"])
     split_seed = task.manifest["splitter"]["seed"]
     model_slug = _cache_slug(taste_model)
-    summary_slug = "_summary" if use_item_summaries else ""
+    summary_slug = "_summary" if use_history_item_summaries else ""
     return (
         repo_root()
         / "outputs"

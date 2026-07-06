@@ -108,7 +108,12 @@ def test_agent4rec_regression_runner_can_add_candidate_summaries(
         }
         X_train["item_summary"] = X_train["item_id"].map(summaries)
         X_test["item_summary"] = X_test["item_id"].map(summaries)
-        return X_train, X_test, {"uses_item_summaries": True, "source_path": "fake.csv"}
+        return X_train, X_test, {
+            "uses_item_summaries": True,
+            "history_item_summaries": kwargs["summary_visibility"]["history"],
+            "candidate_item_summaries": kwargs["summary_visibility"]["candidate"],
+            "source_path": "fake.csv",
+        }
 
     monkeypatch.setattr(
         agent4rec_regressor,
@@ -139,9 +144,11 @@ def test_agent4rec_regression_runner_can_add_candidate_summaries(
         "item_genres",
         "item_summary",
     ]
-    assert manifest["scorer"]["profile_generator"]["summary_column"] == "item_summary"
+    assert manifest["scorer"]["profile_generator"]["summary_column"] is None
     assert manifest["scorer"]["item_summaries"] == {
         "uses_item_summaries": True,
+        "history_item_summaries": False,
+        "candidate_item_summaries": True,
         "source_path": "fake.csv",
     }
 
@@ -303,8 +310,24 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
     agent4rec_regressor.run_qwen3_8b_traits_full(task, tmp_path)
     agent4rec_regressor.run_qwen3_8b_traits_summary_full(task, tmp_path)
     agent4rec_regressor.run_qwen3_8b_taste_gpt4o_mini_full(task, tmp_path)
+    agent4rec_regressor.run_qwen3_8b_taste_gpt4o_mini_history_summary_full(
+        task,
+        tmp_path,
+    )
+    agent4rec_regressor.run_qwen3_8b_taste_gpt4o_mini_candidate_summary_full(
+        task,
+        tmp_path,
+    )
     agent4rec_regressor.run_qwen3_8b_taste_gpt4o_mini_summary_full(task, tmp_path)
     agent4rec_regressor.run_qwen3_8b_traits_taste_gpt4o_mini_full(task, tmp_path)
+    agent4rec_regressor.run_qwen3_8b_traits_taste_gpt4o_mini_history_summary_full(
+        task,
+        tmp_path,
+    )
+    agent4rec_regressor.run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_full(
+        task,
+        tmp_path,
+    )
     agent4rec_regressor.run_qwen3_8b_traits_taste_gpt4o_mini_summary_full(
         task,
         tmp_path,
@@ -346,6 +369,28 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
         },
         {
             "method_name": (
+                "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_history_summary_full"
+            ),
+            "max_rows": None,
+            "profile_components": ("taste",),
+            "history_item_summaries": True,
+            "candidate_item_summaries": False,
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_candidate_summary_full"
+            ),
+            "max_rows": None,
+            "profile_components": ("taste",),
+            "history_item_summaries": False,
+            "candidate_item_summaries": True,
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
                 "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_summary_full"
             ),
             "max_rows": None,
@@ -360,6 +405,28 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("traits", "taste"),
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen3_8b_traits_taste_gpt4o_mini_history_summary_full"
+            ),
+            "max_rows": None,
+            "profile_components": ("traits", "taste"),
+            "history_item_summaries": True,
+            "candidate_item_summaries": False,
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_full"
+            ),
+            "max_rows": None,
+            "profile_components": ("traits", "taste"),
+            "history_item_summaries": False,
+            "candidate_item_summaries": True,
             **common,
             **taste,
         },
