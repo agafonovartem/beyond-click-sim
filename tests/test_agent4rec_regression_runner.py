@@ -229,6 +229,68 @@ def test_agent4rec_regression_qwen_traits_taste_wrappers_use_openai_taste(
     ]
 
 
+def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(agent4rec_regressor, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    agent4rec_regressor.run_qwen3_8b_traits_full(task, tmp_path)
+    agent4rec_regressor.run_qwen3_8b_taste_gpt4o_mini_full(task, tmp_path)
+    agent4rec_regressor.run_qwen3_8b_traits_taste_gpt4o_mini_full(task, tmp_path)
+    agent4rec_regressor.run_qwen3_8b_traits_smoke(task, tmp_path)
+
+    common = {
+        "client_name": "vllm_local",
+        "model": "Qwen/Qwen3-8B",
+        "max_workers": 128,
+        "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+    }
+    taste = {
+        "taste_client_name": "openai",
+        "taste_model": "gpt-4o-mini",
+        "taste_temperature": 0.0,
+        "taste_max_tokens": None,
+    }
+    assert calls == [
+        {
+            "method_name": "agent4rec_regressor_vllm_qwen3_8b_traits_full",
+            "max_rows": None,
+            "profile_components": ("traits",),
+            **common,
+        },
+        {
+            "method_name": "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_full",
+            "max_rows": None,
+            "profile_components": ("taste",),
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen3_8b_traits_taste_gpt4o_mini_full"
+            ),
+            "max_rows": None,
+            "profile_components": ("traits", "taste"),
+            **common,
+            **taste,
+        },
+        {
+            "method_name": "agent4rec_regressor_vllm_qwen3_8b_traits_smoke",
+            "max_rows": agent4rec_regressor.SMOKE_ROWS,
+            "profile_components": ("traits",),
+            **common,
+        },
+    ]
+
+
 def _toy_task(*, test: pd.DataFrame | None = None) -> Task:
     return Task(
         name="ml-1m_rating_item_stats_eval_users1_seed0",

@@ -37,6 +37,10 @@ OLLAMA_LLAMA31_8B_MODEL = "llama3.1:8b"
 VLLM_LLAMA33_70B_METHOD_NAME = "llm_regressor_vllm_llama33_70b"
 VLLM_LLAMA33_70B_CLIENT = "vllm_local"
 VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
+VLLM_QWEN3_8B_METHOD_NAME = "llm_regressor_vllm_qwen3_8b"
+VLLM_QWEN3_8B_CLIENT = "vllm_local"
+VLLM_QWEN3_8B_MODEL = "Qwen/Qwen3-8B"
+QWEN_EXTRA_BODY: dict = {"chat_template_kwargs": {"enable_thinking": False}}
 OPENAI_VK_GPT54_MINI_METHOD_NAME = "llm_regressor_openai_vk_gpt54_mini"
 OPENAI_VK_GPT54_MINI_CLIENT = "openai_vk_proxy"
 OPENAI_VK_GPT54_MINI_MODEL = "gpt-5.4-mini"
@@ -49,6 +53,7 @@ MAX_LLM_ATTEMPTS = 5
 SMOKE_ROWS = 25
 OLLAMA_MAX_WORKERS = 1
 VLLM_MAX_WORKERS = 32
+QWEN3_8B_MAX_WORKERS = 128
 OPENAI_VK_MAX_WORKERS = 4
 
 
@@ -161,6 +166,40 @@ def run_llama33_70b_with_item_stats_full(
         max_rows=None,
         max_workers=VLLM_MAX_WORKERS,
         use_item_stats=True,
+    )
+
+
+def run_qwen3_8b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN3_8B_METHOD_NAME}_with_item_stats_smoke",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=SMOKE_ROWS,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        use_item_stats=True,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen3_8b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN3_8B_METHOD_NAME}_with_item_stats_full",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        use_item_stats=True,
+        extra_body=QWEN_EXTRA_BODY,
     )
 
 

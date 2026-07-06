@@ -25,6 +25,15 @@ VLLM_LOCAL_8003_BASE_URL = os.environ.get(
     "BEYOND_CLICK_SIM_VLLM_LOCAL_8003_BASE_URL",
     "http://127.0.0.1:8003/v1",
 )
+VLLM_LOCAL_TIMEOUT_SECONDS = float(
+    os.environ.get("BEYOND_CLICK_SIM_VLLM_LOCAL_TIMEOUT_SECONDS", "120")
+)
+VLLM_LOCAL_MAX_CONNECTIONS = int(
+    os.environ.get("BEYOND_CLICK_SIM_VLLM_LOCAL_MAX_CONNECTIONS", "256")
+)
+VLLM_LOCAL_MAX_KEEPALIVE_CONNECTIONS = int(
+    os.environ.get("BEYOND_CLICK_SIM_VLLM_LOCAL_MAX_KEEPALIVE_CONNECTIONS", "128")
+)
 OPENAI_VK_PROXY_BASE_URL = "https://ai-proxy.vk.team/v1"
 OPENAI_VK_PROXY_API_KEY_ENV = "OPENAI_VK_PROXY_API_KEY"
 
@@ -51,10 +60,25 @@ def openai_vk_proxy_client(
     return OpenAI(base_url=base_url, api_key=api_key, http_client=http_client)
 
 
-def vllm_client(base_url: str, api_key: str = "EMPTY") -> Any:
+def vllm_client(
+    base_url: str,
+    api_key: str = "EMPTY",
+    *,
+    timeout_seconds: float = VLLM_LOCAL_TIMEOUT_SECONDS,
+    max_connections: int = VLLM_LOCAL_MAX_CONNECTIONS,
+    max_keepalive_connections: int = VLLM_LOCAL_MAX_KEEPALIVE_CONNECTIONS,
+) -> Any:
     """Return an OpenAI-compatible client for a vLLM endpoint."""
 
-    return OpenAI(base_url=base_url, api_key=api_key)
+    http_client = httpx.Client(
+        timeout=timeout_seconds,
+        limits=httpx.Limits(
+            max_connections=max_connections,
+            max_keepalive_connections=max_keepalive_connections,
+        ),
+        trust_env=False,
+    )
+    return OpenAI(base_url=base_url, api_key=api_key, http_client=http_client)
 
 
 def ollama_client(

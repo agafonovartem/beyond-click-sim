@@ -4,12 +4,42 @@ Snapshot of local in-distribution final-result artifacts. Metrics are copied fro
 
 Notes:
 - Interaction prediction uses the reduced `eval_users1000_cg5` protocol: seeds 0-2, 1000 validation/test users per split, and up to 5 candidate groups per selected user.
-- Regression prediction rows below are older full-row ML-1M `eval_users1000` rating artifacts. Current regression runner defaults use the reduced `eval_users1000_rows_per_user5` task names; those results are not listed here until rerun.
+- Regression prediction includes the current reduced ML-1M `eval_users1000_rows_per_user5` Qwen3-8B run and older full-row ML-1M `eval_users1000` rating artifacts. Do not compare the two protocols as if they used the same test rows.
 - For every listed run, the compact `manifest.json` plus relevant `metrics*.json` files should be tracked; row-level `predictions.parquet` files are local artifacts and should stay untracked.
 - Provenance exception: the Qwen3.6-27B `History + item stats` interaction rows below currently point to local ignored output directories. Treat them as local registry entries, not committed reproducible artifacts, until their compact provenance files are force-added or the rows are removed.
 - Paper-table notebooks that still reference the older uncapped interaction protocol need refresh before being used for reporting.
 
 ## Regression Prediction
+
+### ML-1M rating item_stats eval_users1000 rows_per_user5
+
+Run root: `outputs/in_distribution/regression_prediction/20260706T1605MSK_ml1m_qwen3_8b_regression_full`.
+
+Protocol:
+- Dataset: `ml-1m` canonical `v1`.
+- Target: `target_rating`; `rating` is available as train history context and hidden on val/test rows.
+- Split: `RandomFractionSplitter(0.7, 0.1, 0.2, group_column="user_id")`, seeds 0-2.
+- Filter: `MinUserInteractionsFilter(10)`.
+- Evaluation budget: post-split `PostSplitUserSampler(n_users=1000, seed=seed, max_rows_per_user=5, require_train_history=True)`.
+- Candidate construction: none; no negatives, no `candidate_group`, no `sampled`.
+- Item statistics: train-split-only `item_rating_mean` and `item_rating_count`.
+- LLM backend: local LiteLLM/vLLM `Qwen/Qwen3-8B`, `enable_thinking=false`, runner concurrency `max_workers=128`.
+- Caveat: Agent4Rec regression candidate prompts expose `item_title`, train-only item mean rating, and genres. They do not expose `item_rating_count`; raw history statistics are not separately injected into the Agent4Rec profile text.
+
+Seed average over seeds 0-2. Lower MAE/RMSE is better.
+
+| method | visible metadata | seeds | coverage | macro MAE | macro RMSE | micro MAE | micro RMSE |
+|---|---|---|---:|---:|---:|---:|---:|
+| MeanRegressor | global train target mean | 0,1,2 | n/a | 0.9287 +/- 0.0052 | 1.0478 +/- 0.0063 | 0.9286 +/- 0.0053 | 1.1009 +/- 0.0106 |
+| ModeRegressor | global train target mode | 0,1,2 | n/a | 0.8237 +/- 0.0142 | 1.0471 +/- 0.0154 | 0.8235 +/- 0.0145 | 1.1301 +/- 0.0207 |
+| ItemMeanRegressor | train item mean | 0,1,2 | n/a | 0.7810 +/- 0.0139 | 0.9142 +/- 0.0163 | 0.7811 +/- 0.0138 | 0.9739 +/- 0.0205 |
+| ItemModeRegressor | train item mode | 0,1,2 | n/a | 0.7623 +/- 0.0210 | 1.0033 +/- 0.0223 | 0.7622 +/- 0.0210 | 1.0888 +/- 0.0250 |
+| UserMeanRegressor | last-20 train history | 0,1,2 | n/a | 0.8362 +/- 0.0075 | 0.9833 +/- 0.0083 | 0.8359 +/- 0.0074 | 1.0475 +/- 0.0112 |
+| UserModeRegressor | last-20 train history | 0,1,2 | n/a | 0.8930 +/- 0.0111 | 1.1486 +/- 0.0146 | 0.8924 +/- 0.0105 | 1.2603 +/- 0.0183 |
+| History + item stats | train history, candidate item mean/count | 0,1,2 | 1.000 | 0.7816 +/- 0.0057 | 0.9877 +/- 0.0094 | 0.7816 +/- 0.0054 | 1.0444 +/- 0.0094 |
+| Agent4Rec traits + item stats | traits profile, candidate item mean | 0,1,2 | 1.000 | 0.9948 +/- 0.0244 | 1.2128 +/- 0.0218 | 0.9947 +/- 0.0240 | 1.3180 +/- 0.0245 |
+| Agent4Rec taste + item stats | taste profile, candidate item mean | 0,1,2 | 1.000 | 1.1260 +/- 0.0063 | 1.3721 +/- 0.0043 | 1.1260 +/- 0.0064 | 1.4516 +/- 0.0083 |
+| Agent4Rec traits + taste + item stats | traits and taste profiles, candidate item mean | 0,1,2 | 1.000 | 1.0973 +/- 0.0112 | 1.3478 +/- 0.0064 | 1.0971 +/- 0.0110 | 1.4353 +/- 0.0068 |
 
 ### ML-1M rating eval_1000 users
 
