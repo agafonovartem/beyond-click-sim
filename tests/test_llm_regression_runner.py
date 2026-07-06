@@ -618,3 +618,42 @@ def test_llm_regressor_qwen36_27b_with_item_stats_wrappers_disable_thinking(
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
     ]
+
+
+def test_llm_regressor_llama33_70b_summary_wrapper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_regressor, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    llm_regressor.run_llama33_70b_with_item_stats_full(task, tmp_path)
+    llm_regressor.run_llama33_70b_with_item_stats_summary_full(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": "llm_regressor_vllm_llama33_70b_with_item_stats_full",
+            "client_name": "vllm_local",
+            "model": "llama-3.3-70b-instruct",
+            "max_rows": None,
+            "max_workers": llm_regressor.VLLM_MAX_WORKERS,
+            "use_item_stats": True,
+        },
+        {
+            "method_name": (
+                "llm_regressor_vllm_llama33_70b_with_item_stats_summary_full"
+            ),
+            "client_name": "vllm_local",
+            "model": "llama-3.3-70b-instruct",
+            "max_rows": None,
+            "max_workers": llm_regressor.VLLM_MAX_WORKERS,
+            "use_item_stats": True,
+            "use_item_summaries": True,
+        },
+    ]

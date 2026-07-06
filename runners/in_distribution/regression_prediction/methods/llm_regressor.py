@@ -180,6 +180,23 @@ def run_llama33_70b_with_item_stats_full(
     )
 
 
+def run_llama33_70b_with_item_stats_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_with_item_stats_summary_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=None,
+        max_workers=VLLM_MAX_WORKERS,
+        use_item_stats=True,
+        use_item_summaries=True,
+    )
+
+
 def run_qwen3_8b_with_item_stats_smoke(
     task: Task,
     output_dir: Path,

@@ -385,6 +385,98 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
     ]
 
 
+def test_agent4rec_regression_llama33_70b_summary_wrappers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(agent4rec_regressor, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    agent4rec_regressor.run_llama33_70b_traits_full(task, tmp_path)
+    agent4rec_regressor.run_llama33_70b_traits_summary_full(task, tmp_path)
+    agent4rec_regressor.run_llama33_70b_taste_gpt4o_mini_full(task, tmp_path)
+    agent4rec_regressor.run_llama33_70b_taste_gpt4o_mini_summary_full(
+        task,
+        tmp_path,
+    )
+    agent4rec_regressor.run_llama33_70b_traits_taste_gpt4o_mini_full(
+        task,
+        tmp_path,
+    )
+    agent4rec_regressor.run_llama33_70b_traits_taste_gpt4o_mini_summary_full(
+        task,
+        tmp_path,
+    )
+
+    common = {
+        "client_name": "vllm_local",
+        "model": "llama-3.3-70b-instruct",
+        "max_rows": None,
+        "max_workers": agent4rec_regressor.VLLM_MAX_WORKERS,
+    }
+    taste = {
+        "taste_client_name": "openai",
+        "taste_model": "gpt-4o-mini",
+        "taste_temperature": 0.0,
+        "taste_max_tokens": None,
+    }
+    assert calls == [
+        {
+            "method_name": "agent4rec_regressor_vllm_llama33_70b_traits_full",
+            "profile_components": ("traits",),
+            **common,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_llama33_70b_traits_summary_full"
+            ),
+            "profile_components": ("traits",),
+            "use_item_summaries": True,
+            **common,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_llama33_70b_taste_gpt4o_mini_full"
+            ),
+            "profile_components": ("taste",),
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_llama33_70b_taste_gpt4o_mini_summary_full"
+            ),
+            "profile_components": ("taste",),
+            "use_item_summaries": True,
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_full"
+            ),
+            "profile_components": ("traits", "taste"),
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_summary_full"
+            ),
+            "profile_components": ("traits", "taste"),
+            "use_item_summaries": True,
+            **common,
+            **taste,
+        },
+    ]
+
+
 def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

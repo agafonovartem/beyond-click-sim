@@ -39,6 +39,9 @@ from runners.in_distribution.regression_prediction.task_builders import repo_roo
 VLLM_QWEN36_27B_METHOD_NAME = "agent4rec_regressor_vllm_qwen36_27b"
 VLLM_QWEN36_27B_CLIENT = "vllm_local"
 VLLM_QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
+VLLM_LLAMA33_70B_METHOD_NAME = "agent4rec_regressor_vllm_llama33_70b"
+VLLM_LLAMA33_70B_CLIENT = "vllm_local"
+VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
 VLLM_QWEN3_8B_METHOD_NAME = "agent4rec_regressor_vllm_qwen3_8b"
 VLLM_QWEN3_8B_CLIENT = "vllm_local"
 VLLM_QWEN3_8B_MODEL = "Qwen/Qwen3-8B"
@@ -66,6 +69,123 @@ DATASET_COLUMN_LABELS = {
         "item_genres": "genres",
     },
 }
+
+
+def run_llama33_70b_traits_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_traits_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=None,
+        max_workers=VLLM_MAX_WORKERS,
+        profile_components=("traits",),
+    )
+
+
+def run_llama33_70b_traits_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_traits_summary_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=None,
+        max_workers=VLLM_MAX_WORKERS,
+        profile_components=("traits",),
+        use_item_summaries=True,
+    )
+
+
+def run_llama33_70b_taste_gpt4o_mini_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_taste_gpt4o_mini_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=None,
+        max_workers=VLLM_MAX_WORKERS,
+        profile_components=("taste",),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+    )
+
+
+def run_llama33_70b_taste_gpt4o_mini_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_taste_gpt4o_mini_summary_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=None,
+        max_workers=VLLM_MAX_WORKERS,
+        profile_components=("taste",),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        use_item_summaries=True,
+    )
+
+
+def run_llama33_70b_traits_taste_gpt4o_mini_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_traits_taste_gpt4o_mini_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=None,
+        max_workers=VLLM_MAX_WORKERS,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+    )
+
+
+def run_llama33_70b_traits_taste_gpt4o_mini_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=(
+            f"{VLLM_LLAMA33_70B_METHOD_NAME}_traits_taste_gpt4o_mini_summary_full"
+        ),
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=None,
+        max_workers=VLLM_MAX_WORKERS,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        use_item_summaries=True,
+    )
 
 
 def run_qwen36_27b_traits_taste_gpt4o_mini_smoke(
