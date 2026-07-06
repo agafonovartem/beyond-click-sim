@@ -1,0 +1,170 @@
+{
+  "candidate_groups": {
+    "requested": {
+      "groups": 2763,
+      "positives_max": 10,
+      "positives_mean": 8.776692001447701,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 17.553384002895402,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 8.776692001447701,
+      "sampled_min": 1
+    },
+    "scored": {
+      "groups": 2761,
+      "positives_max": 10,
+      "positives_mean": 8.7765302426657,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 17.5530604853314,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 8.7765302426657,
+      "sampled_min": 1
+    }
+  },
+  "decision_rule": {
+    "kind": "hard_binary_yes_no_parser",
+    "parser_contract": "agent4rec_labeled_id_movie_watch_reason",
+    "threshold": null
+  },
+  "git_commit": "6b5d950db61a5ea267fc36e0d5c60ef34c65b01e",
+  "limits": {
+    "max_candidate_groups": null,
+    "max_llm_attempts": 5,
+    "max_workers": 16
+  },
+  "llm_errors": 2,
+  "method": "agent4rec_yes_no_vllm_qwen36_27b_taste_gpt4o_mini_full",
+  "scorer": {
+    "candidate_description_columns": [
+      "item_title",
+      "item_rating_mean",
+      "item_genres"
+    ],
+    "class": "Agent4RecYesNoScorer",
+    "client_name": "vllm_local_8001",
+    "column_labels": {
+      "item_genres": "genres",
+      "item_rating_mean": "History ratings",
+      "item_title": "movie title"
+    },
+    "extra_body": {
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      }
+    },
+    "max_history_items": 20,
+    "max_tokens": 1000,
+    "model": "Qwen/Qwen3.6-27B",
+    "profile_generator": {
+      "class": "Agent4RecProfileGenerator",
+      "diversity_top_mass": 0.8,
+      "genre_column": "item_genres",
+      "include_conformity": true,
+      "item_column": "item_id",
+      "playtime_column": "playtime_forever",
+      "profile_components": [
+        "taste"
+      ],
+      "rating_column": "rating",
+      "tag_column": null,
+      "taste": {
+        "cache_path": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/agent4rec_taste_cache/ml-1m_v1_seed2_gpt-4o-mini_agent4rec_modify_v1.jsonl",
+        "cache_stats": {
+          "generated": 0,
+          "hits": 1000,
+          "misses": 0,
+          "requested_users": 1000
+        },
+        "client_name": "openai",
+        "max_attempts": 5,
+        "max_tokens": null,
+        "model": "gpt-4o-mini",
+        "prompt_kind": "rating",
+        "prompt_version": "agent4rec_modify_v1",
+        "temperature": 0.0
+      },
+      "title_column": "item_title",
+      "trait_thresholds": null,
+      "user_column": "user_id"
+    },
+    "prompt": {},
+    "temperature": 0.0
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_feature_builder": {
+        "class": "TrainItemRatingStatistics",
+        "count_column": "rating_count",
+        "items_total": 3883,
+        "items_with_statistics": 3672,
+        "mean_column": "rating_mean",
+        "missing_policy": {
+          "rating_count": 0,
+          "rating_mean": "nan"
+        },
+        "source": "train_split_only",
+        "value_column": "rating"
+      },
+      "items": 3883,
+      "rows": {
+        "test": 48500,
+        "train": 694335,
+        "val": 30634
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedUserInteractionCandidateSampler",
+        "item_column": "item_id",
+        "max_candidate_groups_per_user": 5,
+        "max_eval_users": 1000,
+        "negative_ratio": 1,
+        "sampled_column": "sampled",
+        "seed": 2,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 2,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": 6040
+    },
+    "name": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2"
+  }
+}

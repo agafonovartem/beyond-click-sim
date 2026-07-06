@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/runners/in_distribution/interaction_prediction/run_ml1m_qwen3_8b_local_parallel.py", line 164, in _run_one_task_method
+    metrics = _run_method(
+              ^^^^^^^^^^^^
+  File "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/runners/in_distribution/interaction_prediction/run_ml1m_qwen3_8b_local_parallel.py", line 218, in _run_method
+    return agent4rec_yes_no.run_method(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/runners/in_distribution/interaction_prediction/methods/agent4rec_yes_no.py", line 378, in run_method
+    scorer.build_taste(X_test)
+  File "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/src/beyond_click_sim/scorers/agent4rec/yes_no.py", line 140, in build_taste
+    self.profile_by_user_ = self.profile_generator.build_taste(
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/src/beyond_click_sim/scorers/agent4rec/profiles.py", line 253, in build_taste
+    cache = self._load_taste_cache(self.taste_cache_path)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/src/beyond_click_sim/scorers/agent4rec/profiles.py", line 694, in _load_taste_cache
+    raise ValueError(
+ValueError: Duplicate Agent4Rec taste cache key in /Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/agent4rec_taste_cache/ml-1m_v1_seed1_gpt-4o-mini_agent4rec_modify_v1.jsonl: fe42f34f99ba5cfd2925367c3e09a5f62be34d431e3e8a0d45f55431bf025791

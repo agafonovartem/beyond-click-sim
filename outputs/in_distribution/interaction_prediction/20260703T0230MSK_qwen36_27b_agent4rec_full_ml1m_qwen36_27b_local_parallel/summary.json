@@ -1,0 +1,263 @@
+[
+  {
+    "client_name": "vllm_local_8001",
+    "coverage": {
+      "failed_fraction": 0.0004610419548178884,
+      "failed_rows": 22,
+      "requested_rows": 47718,
+      "scored_fraction": 0.9995389580451821,
+      "scored_rows": 47696
+    },
+    "llm_errors": 2,
+    "macro_user_f1": 0.5387498370507868,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.601981203962408,
+    "micro_precision": 0.6698699830412662,
+    "micro_recall": 0.5465867158671587,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 47718,
+    "scored_rows": 47696,
+    "status": "ok",
+    "strict_micro_f1": 0.6018283392585069,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.6742634468914211,
+      "failed_rows": 45680,
+      "requested_rows": 67748,
+      "scored_fraction": 0.32573655310857885,
+      "scored_rows": 22068
+    },
+    "llm_errors": 2430,
+    "macro_user_f1": 0.4460691321482747,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.4747987809642885,
+    "micro_precision": 0.4173076923076923,
+    "micro_recall": 0.5506615914446257,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed1/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 67748,
+    "scored_rows": 22068,
+    "status": "skipped_existing",
+    "strict_micro_f1": 0.2508981294132221,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed1"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.6534275127373784,
+      "failed_rows": 45144,
+      "requested_rows": 69088,
+      "scored_fraction": 0.3465724872626216,
+      "scored_rows": 23944
+    },
+    "llm_errors": 2404,
+    "macro_user_f1": 0.45952261199124694,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.4841147655703289,
+    "micro_precision": 0.4165462427745665,
+    "micro_recall": 0.5778483127297026,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed2/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 69088,
+    "scored_rows": 23944,
+    "status": "skipped_existing",
+    "strict_micro_f1": 0.2704879574601189,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed2"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.4990699201225517,
+      "failed_rows": 45610,
+      "requested_rows": 91390,
+      "scored_fraction": 0.5009300798774483,
+      "scored_rows": 45780
+    },
+    "llm_errors": 2308,
+    "macro_user_f1": 0.3102181385936487,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.2984749455337691,
+    "micro_precision": 0.20234763681592038,
+    "micro_recall": 0.5685889034512888,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed0/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 91390,
+    "scored_rows": 45780,
+    "status": "skipped_existing",
+    "strict_micro_f1": 0.23660409944098532,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed0"
+  },
+  {
+    "client_name": "vllm_local_8002",
+    "coverage": {
+      "failed_fraction": 0.00012371134020618558,
+      "failed_rows": 6,
+      "requested_rows": 48500,
+      "scored_fraction": 0.9998762886597938,
+      "scored_rows": 48494
+    },
+    "llm_errors": 1,
+    "macro_user_f1": 0.5490096612628239,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.6057990867579909,
+    "micro_precision": 0.6785148059121362,
+    "micro_recall": 0.5471604734606343,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 48500,
+    "scored_rows": 48494,
+    "status": "ok",
+    "strict_micro_f1": 0.6057575965116545,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2"
+  },
+  {
+    "client_name": "vllm_local",
+    "coverage": {
+      "failed_fraction": 0.0003938093175284527,
+      "failed_rows": 20,
+      "requested_rows": 50786,
+      "scored_fraction": 0.9996061906824716,
+      "scored_rows": 50766
+    },
+    "llm_errors": 1,
+    "macro_user_f1": 0.5395270095053796,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.6061376664798931,
+    "micro_precision": 0.6690613254674342,
+    "micro_recall": 0.5540322262931884,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed0/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 50786,
+    "scored_rows": 50766,
+    "status": "ok",
+    "strict_micro_f1": 0.6060070671378092,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed0"
+  },
+  {
+    "client_name": "vllm_local_8003",
+    "coverage": {
+      "failed_fraction": 0.000850677706572903,
+      "failed_rows": 60,
+      "requested_rows": 70532,
+      "scored_fraction": 0.9991493222934271,
+      "scored_rows": 70472
+    },
+    "llm_errors": 3,
+    "macro_user_f1": 0.4643103170981302,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.4854064083351174,
+    "micro_precision": 0.4177961590434462,
+    "micro_recall": 0.5791236235668067,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed0/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 70532,
+    "scored_rows": 70472,
+    "status": "ok",
+    "strict_micro_f1": 0.48523327150806106,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed0"
+  },
+  {
+    "client_name": "vllm_local_8001",
+    "coverage": {
+      "failed_fraction": 0.0005491488193300384,
+      "failed_rows": 50,
+      "requested_rows": 91050,
+      "scored_fraction": 0.99945085118067,
+      "scored_rows": 91000
+    },
+    "llm_errors": 3,
+    "macro_user_f1": 0.3052627364648882,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.29582973828012654,
+    "micro_precision": 0.20035060381768602,
+    "micro_recall": 0.5651648351648352,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed1/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 91050,
+    "scored_rows": 91000,
+    "status": "ok",
+    "strict_micro_f1": 0.2957872034507549,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed1"
+  },
+  {
+    "client_name": "vllm_local_8002",
+    "coverage": {
+      "failed_fraction": 0.0004400924194080757,
+      "failed_rows": 40,
+      "requested_rows": 90890,
+      "scored_fraction": 0.9995599075805919,
+      "scored_rows": 90850
+    },
+    "llm_errors": 2,
+    "macro_user_f1": 0.30827277421437643,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.29831182890078706,
+    "micro_precision": 0.20315613294014506,
+    "micro_recall": 0.5611447440836543,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed2/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 90890,
+    "scored_rows": 90850,
+    "status": "ok",
+    "strict_micro_f1": 0.298276921276658,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed2"
+  },
+  {
+    "client_name": "vllm_local",
+    "coverage": {
+      "failed_fraction": 0.0002008435428800964,
+      "failed_rows": 20,
+      "requested_rows": 99580,
+      "scored_fraction": 0.9997991564571199,
+      "scored_rows": 99560
+    },
+    "llm_errors": 1,
+    "macro_user_f1": 0.20225195288028106,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.1821335099170687,
+    "micro_precision": 0.10802319057415373,
+    "micro_recall": 0.5801526717557252,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m19_seed0/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 99580,
+    "scored_rows": 99560,
+    "status": "ok",
+    "strict_micro_f1": 0.18212776691681906,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m19_seed0"
+  },
+  {
+    "client_name": "vllm_local_8003",
+    "coverage": {
+      "failed_fraction": 0.00020048115477145148,
+      "failed_rows": 20,
+      "requested_rows": 99760,
+      "scored_fraction": 0.9997995188452286,
+      "scored_rows": 99740
+    },
+    "llm_errors": 1,
+    "macro_user_f1": 0.20108640784310292,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.17992101968086815,
+    "micro_precision": 0.10711009174311927,
+    "micro_recall": 0.5618608381792661,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m19_seed1/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 99760,
+    "scored_rows": 99740,
+    "status": "ok",
+    "strict_micro_f1": 0.17991524335430847,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m19_seed1"
+  },
+  {
+    "client_name": "vllm_local_8001",
+    "coverage": {
+      "failed_fraction": 0.0002007226013649137,
+      "failed_rows": 20,
+      "requested_rows": 99640,
+      "scored_fraction": 0.9997992773986351,
+      "scored_rows": 99620
+    },
+    "llm_errors": 1,
+    "macro_user_f1": 0.20565306617187423,
+    "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.18282512379463123,
+    "micro_precision": 0.10911919113357962,
+    "micro_recall": 0.5633406946396305,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260703T0230MSK_qwen36_27b_agent4rec_full_ml1m_qwen36_27b_local_parallel/ml-1m_item_stats_cap20_eval_users1000_cg5_m19_seed2/agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 99640,
+    "scored_rows": 99620,
+    "status": "ok",
+    "strict_micro_f1": 0.18281916799687267,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m19_seed2"
+  }
+]

@@ -1,0 +1,212 @@
+[
+  {
+    "coverage": {
+      "failed_fraction": 0.0,
+      "failed_rows": 0,
+      "requested_rows": 47718,
+      "scored_fraction": 1.0,
+      "scored_rows": 47718
+    },
+    "llm_errors": 0,
+    "macro_user_f1": 0.5541535700354709,
+    "method": "llm_yes_no_vllm_qwen3_8b_history_full",
+    "micro_f1": 0.5678684553754425,
+    "micro_precision": 0.6390417780573465,
+    "micro_recall": 0.5109602246531707,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1/llm_yes_no_vllm_qwen3_8b_history_full",
+    "requested_rows": 47718,
+    "scored_rows": 47718,
+    "status": "ok",
+    "strict_micro_f1": 0.5678684553754425,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.0,
+      "failed_rows": 0,
+      "requested_rows": 47718,
+      "scored_fraction": 1.0,
+      "scored_rows": 47718
+    },
+    "llm_errors": 0,
+    "macro_user_f1": 0.563000295005186,
+    "method": "llm_yes_no_vllm_qwen3_8b_history_item_stats_full",
+    "micro_f1": 0.5793233377816155,
+    "micro_precision": 0.7709987463435019,
+    "micro_recall": 0.46397585816672954,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1/llm_yes_no_vllm_qwen3_8b_history_item_stats_full",
+    "requested_rows": 47718,
+    "scored_rows": 47718,
+    "status": "ok",
+    "strict_micro_f1": 0.5793233377816155,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.002011819439205331,
+      "failed_rows": 96,
+      "requested_rows": 47718,
+      "scored_fraction": 0.9979881805607946,
+      "scored_rows": 47622
+    },
+    "llm_errors": 5,
+    "macro_user_f1": 0.564948780929264,
+    "method": "agent4rec_yes_no_vllm_qwen3_8b_taste_gpt4o_mini_full",
+    "micro_f1": 0.57456478009288,
+    "micro_precision": 0.7029654837141468,
+    "micro_recall": 0.4858258787955147,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1/agent4rec_yes_no_vllm_qwen3_8b_taste_gpt4o_mini_full",
+    "requested_rows": 47718,
+    "scored_rows": 47622,
+    "status": "ok",
+    "strict_micro_f1": 0.5738806895696391,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.0,
+      "failed_rows": 0,
+      "requested_rows": 47718,
+      "scored_fraction": 1.0,
+      "scored_rows": 47718
+    },
+    "llm_errors": 0,
+    "macro_user_f1": 0.1664715851709281,
+    "method": "agent4rec_yes_no_vllm_qwen3_8b_traits_full",
+    "micro_f1": 0.38988456436453955,
+    "micro_precision": 0.5968717594192879,
+    "micro_recall": 0.2894924347206505,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1/agent4rec_yes_no_vllm_qwen3_8b_traits_full",
+    "requested_rows": 47718,
+    "scored_rows": 47718,
+    "status": "ok",
+    "strict_micro_f1": 0.38988456436453955,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.0033949453036589967,
+      "failed_rows": 162,
+      "requested_rows": 47718,
+      "scored_fraction": 0.996605054696341,
+      "scored_rows": 47556
+    },
+    "llm_errors": 9,
+    "macro_user_f1": 0.4593840451330364,
+    "method": "agent4rec_yes_no_vllm_qwen3_8b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.530121740947803,
+    "micro_precision": 0.6997241379310345,
+    "micro_recall": 0.4266969467575069,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1/agent4rec_yes_no_vllm_qwen3_8b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 47718,
+    "scored_rows": 47556,
+    "status": "ok",
+    "strict_micro_f1": 0.5290023201856149,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed1"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.0,
+      "failed_rows": 0,
+      "requested_rows": 48500,
+      "scored_fraction": 1.0,
+      "scored_rows": 48500
+    },
+    "llm_errors": 0,
+    "macro_user_f1": 0.5638356043059887,
+    "method": "llm_yes_no_vllm_qwen3_8b_history_full",
+    "micro_f1": 0.5698367571533383,
+    "micro_precision": 0.6416916244965404,
+    "micro_recall": 0.5124536082474227,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2/llm_yes_no_vllm_qwen3_8b_history_full",
+    "requested_rows": 48500,
+    "scored_rows": 48500,
+    "status": "ok",
+    "strict_micro_f1": 0.5698367571533383,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.0,
+      "failed_rows": 0,
+      "requested_rows": 48500,
+      "scored_fraction": 1.0,
+      "scored_rows": 48500
+    },
+    "llm_errors": 0,
+    "macro_user_f1": 0.5676936527172106,
+    "method": "llm_yes_no_vllm_qwen3_8b_history_item_stats_full",
+    "micro_f1": 0.5870570107858244,
+    "micro_precision": 0.7780803267528931,
+    "micro_recall": 0.471340206185567,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2/llm_yes_no_vllm_qwen3_8b_history_item_stats_full",
+    "requested_rows": 48500,
+    "scored_rows": 48500,
+    "status": "ok",
+    "strict_micro_f1": 0.5870570107858244,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.0018556701030927835,
+      "failed_rows": 90,
+      "requested_rows": 48500,
+      "scored_fraction": 0.9981443298969073,
+      "scored_rows": 48410
+    },
+    "llm_errors": 5,
+    "macro_user_f1": 0.5670733191450327,
+    "method": "agent4rec_yes_no_vllm_qwen3_8b_taste_gpt4o_mini_full",
+    "micro_f1": 0.5774372031533076,
+    "micro_precision": 0.7086713538849829,
+    "micro_recall": 0.487213385664119,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2/agent4rec_yes_no_vllm_qwen3_8b_taste_gpt4o_mini_full",
+    "requested_rows": 48500,
+    "scored_rows": 48410,
+    "status": "ok",
+    "strict_micro_f1": 0.5768017412144482,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.0,
+      "failed_rows": 0,
+      "requested_rows": 48500,
+      "scored_fraction": 1.0,
+      "scored_rows": 48500
+    },
+    "llm_errors": 0,
+    "macro_user_f1": 0.1592754410039008,
+    "method": "agent4rec_yes_no_vllm_qwen3_8b_traits_full",
+    "micro_f1": 0.3722404683706983,
+    "micro_precision": 0.6053878309335811,
+    "micro_recall": 0.26874226804123713,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2/agent4rec_yes_no_vllm_qwen3_8b_traits_full",
+    "requested_rows": 48500,
+    "scored_rows": 48500,
+    "status": "ok",
+    "strict_micro_f1": 0.3722404683706983,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2"
+  },
+  {
+    "coverage": {
+      "failed_fraction": 0.0023917525773195876,
+      "failed_rows": 116,
+      "requested_rows": 48500,
+      "scored_fraction": 0.9976082474226804,
+      "scored_rows": 48384
+    },
+    "llm_errors": 6,
+    "macro_user_f1": 0.4724031089602858,
+    "method": "agent4rec_yes_no_vllm_qwen3_8b_traits_taste_gpt4o_mini_full",
+    "micro_f1": 0.5364726423087786,
+    "micro_precision": 0.7080311758725856,
+    "micro_recall": 0.4318369708994709,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim/outputs/in_distribution/interaction_prediction/20260702_ml1m_qwen3_8b_full_local_ml1m_qwen3_8b_interaction_full/ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2/agent4rec_yes_no_vllm_qwen3_8b_traits_taste_gpt4o_mini_full",
+    "requested_rows": 48500,
+    "scored_rows": 48384,
+    "status": "ok",
+    "strict_micro_f1": 0.5356749134726317,
+    "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed2"
+  }
+]

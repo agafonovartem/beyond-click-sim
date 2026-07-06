@@ -1,0 +1,167 @@
+{
+  "candidate_groups": {
+    "requested": {
+      "groups": 3624,
+      "positives_max": 5,
+      "positives_mean": 4.673565121412803,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 18.694260485651213,
+      "rows_min": 4,
+      "sampled_max": 15,
+      "sampled_mean": 14.02069536423841,
+      "sampled_min": 3
+    },
+    "scored": {
+      "groups": 3446,
+      "positives_max": 5,
+      "positives_mean": 4.656703424260011,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 18.626813697040046,
+      "rows_min": 4,
+      "sampled_max": 15,
+      "sampled_mean": 13.970110272780035,
+      "sampled_min": 3
+    }
+  },
+  "decision_rule": {
+    "kind": "hard_binary_yes_no_parser",
+    "parser_contract": "agent4rec_labeled_id_movie_watch_reason",
+    "threshold": null
+  },
+  "git_commit": "6b5d950db61a5ea267fc36e0d5c60ef34c65b01e",
+  "limits": {
+    "max_candidate_groups": null,
+    "max_llm_attempts": 5,
+    "max_workers": 8
+  },
+  "llm_errors": 178,
+  "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_full",
+  "scorer": {
+    "candidate_description_columns": [
+      "item_title",
+      "item_rating_mean",
+      "item_genres"
+    ],
+    "class": "Agent4RecYesNoScorer",
+    "client_name": "vllm_local_8003",
+    "column_labels": {
+      "item_genres": "genres",
+      "item_rating_mean": "History ratings",
+      "item_title": "movie title"
+    },
+    "extra_body": {
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      }
+    },
+    "max_history_items": 20,
+    "max_tokens": 1000,
+    "model": "Qwen/Qwen3.6-27B",
+    "profile_generator": {
+      "class": "Agent4RecProfileGenerator",
+      "diversity_top_mass": 0.8,
+      "genre_column": "item_genres",
+      "include_conformity": true,
+      "item_column": "item_id",
+      "playtime_column": "playtime_forever",
+      "profile_components": [
+        "traits"
+      ],
+      "rating_column": "rating",
+      "tag_column": null,
+      "title_column": "item_title",
+      "trait_thresholds": {
+        "activity": {
+          "p60": 87.0,
+          "p90": 279.0
+        },
+        "conformity": {
+          "p25": 0.6600896059099762,
+          "p80": 1.2422617876844422
+        },
+        "diversity": {
+          "p33": 5.0,
+          "p66": 7.0
+        }
+      },
+      "user_column": "user_id"
+    },
+    "prompt": {},
+    "temperature": 0.0
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_feature_builder": {
+        "class": "TrainItemRatingStatistics",
+        "count_column": "rating_count",
+        "items_total": 3883,
+        "items_with_statistics": 3661,
+        "mean_column": "rating_mean",
+        "missing_policy": {
+          "rating_count": 0,
+          "rating_mean": "nan"
+        },
+        "source": "train_split_only",
+        "value_column": "rating"
+      },
+      "items": 3883,
+      "rows": {
+        "test": 67748,
+        "train": 694335,
+        "val": 48896
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedUserInteractionCandidateSampler",
+        "item_column": "item_id",
+        "max_candidate_groups_per_user": 5,
+        "max_eval_users": 1000,
+        "negative_ratio": 3,
+        "sampled_column": "sampled",
+        "seed": 1,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 1,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": 6040
+    },
+    "name": "ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed1"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "max_workers_per_task": 32,
+  "method_order": "sequential",
+  "methods": [
+    "llm_yes_no_vllm_qwen3_8b_history_item_stats_full",
+    "agent4rec_yes_no_vllm_qwen3_8b_taste_gpt4o_mini_full",
+    "agent4rec_yes_no_vllm_qwen3_8b_traits_full",
+    "agent4rec_yes_no_vllm_qwen3_8b_traits_taste_gpt4o_mini_full"
+  ],
+  "qwen_extra_body": {
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    }
+  },
+  "qwen_model": "Qwen/Qwen3-8B",
+  "run_id": "20260702T1905MSK_ml1m_qwen3_8b_m3_9_19",
+  "task_order": "parallel_with_checked_out_vllm_client",
+  "task_workers": 4,
+  "tasks": [
+    "ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed0",
+    "ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed1",
+    "ml-1m_item_stats_cap20_eval_users1000_cg5_m3_seed2",
+    "ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed0",
+    "ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed1",
+    "ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed2",
+    "ml-1m_item_stats_cap20_eval_users1000_cg5_m19_seed0",
+    "ml-1m_item_stats_cap20_eval_users1000_cg5_m19_seed1",
+    "ml-1m_item_stats_cap20_eval_users1000_cg5_m19_seed2"
+  ],
+  "taste_client": "openai",
+  "taste_model": "gpt-4o-mini",
+  "vllm_base_url_env": {
+    "BEYOND_CLICK_SIM_VLLM_LOCAL_8001_BASE_URL": "http://127.0.0.1:18001/v1",
+    "BEYOND_CLICK_SIM_VLLM_LOCAL_8002_BASE_URL": "http://127.0.0.1:18002/v1",
+    "BEYOND_CLICK_SIM_VLLM_LOCAL_8003_BASE_URL": "http://127.0.0.1:18003/v1",
+    "BEYOND_CLICK_SIM_VLLM_LOCAL_BASE_URL": "http://127.0.0.1:18000/v1"
+  },
+  "vllm_clients": [
+    "vllm_local",
+    "vllm_local_8001",
+    "vllm_local_8002",
+    "vllm_local_8003"
+  ]
+}
