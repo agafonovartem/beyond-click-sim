@@ -77,6 +77,36 @@ in both history and candidate text is best. Even with summaries, Agent4Rec
 regression remains worse than the plain history+item-stats LLM and the strongest
 item-statistic baselines above.
 
+Qwen3.6-27B check over the same reduced protocol. This run tests only the
+original no-summary prompt and the best Qwen3-8B placement from above, not the
+separate history-only/candidate-only ablation. The `traits` Agent4Rec summary
+variant can only add summaries to candidate rows because traits-only profiles do
+not use the taste-history prompt.
+
+Run root: `outputs/in_distribution/regression_prediction/20260706T1912MSK_ml1m_qwen36_27b_regression_summary_comparison`.
+
+Protocol differences relative to the Qwen3-8B run:
+- LLM backend: local LiteLLM/vLLM `Qwen/Qwen3.6-27B`, `enable_thinking=false`, runner concurrency `max_workers=128`.
+- Same dataset, split, target, 1000-user/5-row post-split evaluation budget, train-only item statistics, and Agent4Rec `movies_augmentation.csv` summary join.
+
+| method | summary placement | seeds | coverage | macro MAE | delta MAE | macro RMSE | micro MAE | micro RMSE |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| History + item stats | none | 0,1,2 | 1.000 | 0.6976 +/- 0.0099 | 0.0000 | 0.9165 +/- 0.0098 | 0.6974 +/- 0.0098 | 0.9862 +/- 0.0128 |
+| History + item stats | history + candidate | 0,1,2 | 1.000 | 0.7067 +/- 0.0146 | 0.0091 | 0.9280 +/- 0.0147 | 0.7065 +/- 0.0146 | 0.9995 +/- 0.0169 |
+| Agent4Rec traits + item stats | none | 0,1,2 | 1.000 | 1.1092 +/- 0.0193 | 0.0000 | 1.3317 +/- 0.0173 | 1.1087 +/- 0.0191 | 1.4758 +/- 0.0236 |
+| Agent4Rec traits + item stats | candidate only | 0,1,2 | 1.000 | 1.1840 +/- 0.0164 | 0.0748 | 1.4096 +/- 0.0158 | 1.1836 +/- 0.0159 | 1.5645 +/- 0.0185 |
+| Agent4Rec taste + item stats | none | 0,1,2 | 1.000 | 0.8888 +/- 0.0250 | 0.0000 | 1.1428 +/- 0.0216 | 0.8888 +/- 0.0248 | 1.2248 +/- 0.0243 |
+| Agent4Rec taste + item stats | history + candidate | 0,1,2 | 1.000 | 0.9035 +/- 0.0193 | 0.0148 | 1.1567 +/- 0.0189 | 0.9037 +/- 0.0189 | 1.2419 +/- 0.0215 |
+| Agent4Rec traits + taste + item stats | none | 0,1,2 | 1.000 | 0.9273 +/- 0.0231 | 0.0000 | 1.1823 +/- 0.0198 | 0.9270 +/- 0.0234 | 1.2943 +/- 0.0213 |
+| Agent4Rec traits + taste + item stats | history + candidate | 0,1,2 | 1.000 | 0.9456 +/- 0.0232 | 0.0182 | 1.2022 +/- 0.0223 | 0.9453 +/- 0.0230 | 1.3163 +/- 0.0295 |
+
+Interpretation: the Qwen3.6-27B run reverses the Qwen3-8B summary result under
+this reduced regression protocol. Summaries worsen macro MAE for every tested
+family: +0.0091 for the plain history LLM, +0.0748 for Agent4Rec traits, +0.0148
+for Agent4Rec taste, and +0.0182 for Agent4Rec traits+taste. The larger model is
+substantially stronger than Qwen3-8B for the plain history+item-stats prompt, but
+Agent4Rec profiles still lag behind that prompt.
+
 ### ML-1M rating eval_1000 users
 
 Protocol:
