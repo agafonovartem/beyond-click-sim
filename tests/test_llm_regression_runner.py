@@ -567,3 +567,54 @@ def test_llm_regressor_qwen3_8b_with_item_stats_wrappers_disable_thinking(
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
     ]
+
+
+def test_llm_regressor_qwen36_27b_with_item_stats_wrappers_disable_thinking(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_regressor, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    llm_regressor.run_qwen36_27b_with_item_stats_full(task, tmp_path)
+    llm_regressor.run_qwen36_27b_with_item_stats_summary_full(task, tmp_path)
+    llm_regressor.run_qwen36_27b_with_item_stats_smoke(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": "llm_regressor_vllm_qwen36_27b_with_item_stats_full",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_rows": None,
+            "max_workers": llm_regressor.QWEN36_27B_MAX_WORKERS,
+            "use_item_stats": True,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": (
+                "llm_regressor_vllm_qwen36_27b_with_item_stats_summary_full"
+            ),
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_rows": None,
+            "max_workers": llm_regressor.QWEN36_27B_MAX_WORKERS,
+            "use_item_stats": True,
+            "use_item_summaries": True,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": "llm_regressor_vllm_qwen36_27b_with_item_stats_smoke",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_rows": llm_regressor.SMOKE_ROWS,
+            "max_workers": llm_regressor.QWEN36_27B_MAX_WORKERS,
+            "use_item_stats": True,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+    ]

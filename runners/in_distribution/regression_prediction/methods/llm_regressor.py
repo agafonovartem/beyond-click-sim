@@ -47,6 +47,9 @@ VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
 VLLM_QWEN3_8B_METHOD_NAME = "llm_regressor_vllm_qwen3_8b"
 VLLM_QWEN3_8B_CLIENT = "vllm_local"
 VLLM_QWEN3_8B_MODEL = "Qwen/Qwen3-8B"
+VLLM_QWEN36_27B_METHOD_NAME = "llm_regressor_vllm_qwen36_27b"
+VLLM_QWEN36_27B_CLIENT = "vllm_local"
+VLLM_QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
 QWEN_EXTRA_BODY: dict = {"chat_template_kwargs": {"enable_thinking": False}}
 OPENAI_VK_GPT54_MINI_METHOD_NAME = "llm_regressor_openai_vk_gpt54_mini"
 OPENAI_VK_GPT54_MINI_CLIENT = "openai_vk_proxy"
@@ -61,6 +64,7 @@ SMOKE_ROWS = 25
 OLLAMA_MAX_WORKERS = 1
 VLLM_MAX_WORKERS = 32
 QWEN3_8B_MAX_WORKERS = 128
+QWEN36_27B_MAX_WORKERS = 128
 OPENAI_VK_MAX_WORKERS = 4
 
 
@@ -262,6 +266,58 @@ def run_qwen3_8b_with_item_stats_candidate_summary_full(
         use_item_stats=True,
         history_item_summaries=False,
         candidate_item_summaries=True,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen36_27b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_with_item_stats_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_rows=SMOKE_ROWS,
+        max_workers=QWEN36_27B_MAX_WORKERS,
+        use_item_stats=True,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen36_27b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_with_item_stats_full",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_rows=None,
+        max_workers=QWEN36_27B_MAX_WORKERS,
+        use_item_stats=True,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen36_27b_with_item_stats_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_with_item_stats_summary_full",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_rows=None,
+        max_workers=QWEN36_27B_MAX_WORKERS,
+        use_item_stats=True,
+        use_item_summaries=True,
         extra_body=QWEN_EXTRA_BODY,
     )
 

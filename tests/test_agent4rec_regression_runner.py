@@ -270,7 +270,7 @@ def test_agent4rec_regression_qwen_traits_taste_wrappers_use_openai_taste(
             "client_name": "vllm_local",
             "model": "Qwen/Qwen3.6-27B",
             "max_rows": agent4rec_regressor.SMOKE_ROWS,
-            "max_workers": agent4rec_regressor.VLLM_MAX_WORKERS,
+            "max_workers": agent4rec_regressor.QWEN36_27B_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
             "profile_components": ("traits", "taste"),
             "taste_client_name": "openai",
@@ -283,13 +283,104 @@ def test_agent4rec_regression_qwen_traits_taste_wrappers_use_openai_taste(
             "client_name": "vllm_local",
             "model": "Qwen/Qwen3.6-27B",
             "max_rows": None,
-            "max_workers": agent4rec_regressor.VLLM_MAX_WORKERS,
+            "max_workers": agent4rec_regressor.QWEN36_27B_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
             "profile_components": ("traits", "taste"),
             "taste_client_name": "openai",
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,
+        },
+    ]
+
+
+def test_agent4rec_regression_qwen36_27b_summary_wrappers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(agent4rec_regressor, "run_method", fake_run_method)
+    task = SimpleNamespace()
+
+    agent4rec_regressor.run_qwen36_27b_traits_full(task, tmp_path)
+    agent4rec_regressor.run_qwen36_27b_traits_summary_full(task, tmp_path)
+    agent4rec_regressor.run_qwen36_27b_taste_gpt4o_mini_full(task, tmp_path)
+    agent4rec_regressor.run_qwen36_27b_taste_gpt4o_mini_summary_full(
+        task,
+        tmp_path,
+    )
+    agent4rec_regressor.run_qwen36_27b_traits_taste_gpt4o_mini_full(
+        task,
+        tmp_path,
+    )
+    agent4rec_regressor.run_qwen36_27b_traits_taste_gpt4o_mini_summary_full(
+        task,
+        tmp_path,
+    )
+
+    common = {
+        "client_name": "vllm_local",
+        "model": "Qwen/Qwen3.6-27B",
+        "max_rows": None,
+        "max_workers": agent4rec_regressor.QWEN36_27B_MAX_WORKERS,
+        "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+    }
+    taste = {
+        "taste_client_name": "openai",
+        "taste_model": "gpt-4o-mini",
+        "taste_temperature": 0.0,
+        "taste_max_tokens": None,
+    }
+    assert calls == [
+        {
+            "method_name": "agent4rec_regressor_vllm_qwen36_27b_traits_full",
+            "profile_components": ("traits",),
+            **common,
+        },
+        {
+            "method_name": "agent4rec_regressor_vllm_qwen36_27b_traits_summary_full",
+            "profile_components": ("traits",),
+            "use_item_summaries": True,
+            **common,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen36_27b_taste_gpt4o_mini_full"
+            ),
+            "profile_components": ("taste",),
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen36_27b_taste_gpt4o_mini_summary_full"
+            ),
+            "profile_components": ("taste",),
+            "use_item_summaries": True,
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_full"
+            ),
+            "profile_components": ("traits", "taste"),
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_summary_full"
+            ),
+            "profile_components": ("traits", "taste"),
+            "use_item_summaries": True,
+            **common,
+            **taste,
         },
     ]
 
