@@ -89,6 +89,63 @@ def test_agent4rec_regression_runner_writes_profile_manifest(
     assert "Use this format: RATING: [integer from 1 to 5]" in first_prompt
 
 
+def test_agent4rec_regression_runner_can_add_candidate_summaries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeClient(["RATING: 5"])
+    monkeypatch.setattr(agent4rec_regressor, "make_llm_client", lambda _: client)
+
+    def fake_add_item_summaries(**kwargs: object):
+        X_train = kwargs["X_train"].copy()
+        X_test = kwargs["X_test"].copy()
+        summaries = {
+            "i-train-1": "Toys plan a rescue.",
+            "i-train-2": "A street thief finds a lamp.",
+            "i-train-3": "A detective hunts criminals.",
+            "i1": "A young lion reclaims his kingdom.",
+            "i2": "A crime family saga.",
+        }
+        X_train["item_summary"] = X_train["item_id"].map(summaries)
+        X_test["item_summary"] = X_test["item_id"].map(summaries)
+        return X_train, X_test, {"uses_item_summaries": True, "source_path": "fake.csv"}
+
+    monkeypatch.setattr(
+        agent4rec_regressor,
+        "add_ml1m_item_summaries",
+        fake_add_item_summaries,
+    )
+
+    task = _toy_task(test=_toy_task().test.head(1).copy())
+    agent4rec_regressor.run_method(
+        task,
+        tmp_path,
+        method_name="agent4rec_regressor_test_summary",
+        client_name="fake",
+        model="fake-model",
+        max_rows=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        use_item_summaries=True,
+    )
+
+    first_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "<- summary:A young lion reclaims his kingdom. ->" in first_prompt
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["candidate_description_columns"] == [
+        "item_title",
+        "item_rating_mean",
+        "item_genres",
+        "item_summary",
+    ]
+    assert manifest["scorer"]["profile_generator"]["summary_column"] == "item_summary"
+    assert manifest["scorer"]["item_summaries"] == {
+        "uses_item_summaries": True,
+        "source_path": "fake.csv",
+    }
+
+
 def test_agent4rec_regression_runner_writes_taste_manifest_and_cache(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -153,6 +210,7 @@ def test_agent4rec_regression_runner_writes_taste_manifest_and_cache(
         "hits": 0,
         "misses": 1,
         "generated": 1,
+        "max_workers": 1,
     }
 
 
@@ -243,8 +301,14 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
     task = SimpleNamespace()
 
     agent4rec_regressor.run_qwen3_8b_traits_full(task, tmp_path)
+    agent4rec_regressor.run_qwen3_8b_traits_summary_full(task, tmp_path)
     agent4rec_regressor.run_qwen3_8b_taste_gpt4o_mini_full(task, tmp_path)
+    agent4rec_regressor.run_qwen3_8b_taste_gpt4o_mini_summary_full(task, tmp_path)
     agent4rec_regressor.run_qwen3_8b_traits_taste_gpt4o_mini_full(task, tmp_path)
+    agent4rec_regressor.run_qwen3_8b_traits_taste_gpt4o_mini_summary_full(
+        task,
+        tmp_path,
+    )
     agent4rec_regressor.run_qwen3_8b_traits_smoke(task, tmp_path)
 
     common = {
@@ -267,9 +331,26 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             **common,
         },
         {
+            "method_name": "agent4rec_regressor_vllm_qwen3_8b_traits_summary_full",
+            "max_rows": None,
+            "profile_components": ("traits",),
+            "use_item_summaries": True,
+            **common,
+        },
+        {
             "method_name": "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_full",
             "max_rows": None,
             "profile_components": ("taste",),
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_summary_full"
+            ),
+            "max_rows": None,
+            "profile_components": ("taste",),
+            "use_item_summaries": True,
             **common,
             **taste,
         },
@@ -279,6 +360,16 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("traits", "taste"),
+            **common,
+            **taste,
+        },
+        {
+            "method_name": (
+                "agent4rec_regressor_vllm_qwen3_8b_traits_taste_gpt4o_mini_summary_full"
+            ),
+            "max_rows": None,
+            "profile_components": ("traits", "taste"),
+            "use_item_summaries": True,
             **common,
             **taste,
         },

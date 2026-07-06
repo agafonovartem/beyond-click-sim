@@ -76,7 +76,8 @@ def load_canonical_dataset(dataset_name: str) -> CanonicalDataset:
 
 def repo_root() -> Path:
     for path in [Path(__file__).resolve(), *Path(__file__).resolve().parents]:
-        if path.name == "beyond-click-sim" and (path / "pyproject.toml").exists():
+        pyproject = path / "pyproject.toml"
+        if pyproject.exists() and _is_beyond_click_sim_pyproject(pyproject):
             return path
     raise RuntimeError("Could not find beyond-click-sim repo root")
 
@@ -87,6 +88,10 @@ def data_root() -> Path:
         if candidate.exists():
             return candidate
     raise RuntimeError("Could not find data/canonical")
+
+
+def _is_beyond_click_sim_pyproject(path: Path) -> bool:
+    return 'name = "beyond-click-sim"' in path.read_text(encoding="utf-8")
 
 
 def _user_sampler(max_eval_users: int, seed: int):

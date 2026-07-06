@@ -38,7 +38,18 @@ def test_openai_client_uses_default_openai_constructor(monkeypatch) -> None:
 
     assert isinstance(client, FakeOpenAI)
     assert dotenv_calls == [True]
-    assert FakeOpenAI.calls == [{}]
+    assert FakeOpenAI.calls == [{"timeout": 60.0, "max_retries": 0}]
+
+
+def test_openai_client_reads_timeout_and_retries_after_dotenv(monkeypatch) -> None:
+    dotenv_calls = patch_client_dependencies(monkeypatch)
+    monkeypatch.setenv("BEYOND_CLICK_SIM_OPENAI_TIMEOUT_SECONDS", "12.5")
+    monkeypatch.setenv("BEYOND_CLICK_SIM_OPENAI_MAX_RETRIES", "2")
+
+    llm_clients.openai_client()
+
+    assert dotenv_calls == [True]
+    assert FakeOpenAI.calls == [{"timeout": 12.5, "max_retries": 2}]
 
 
 def test_openai_vk_proxy_client_uses_vk_proxy_env_key(monkeypatch) -> None:
@@ -56,6 +67,7 @@ def test_openai_vk_proxy_client_uses_vk_proxy_env_key(monkeypatch) -> None:
             "base_url": "https://ai-proxy.vk.team/v1",
             "api_key": "test-vk-proxy-key",
             "http_client": FakeOpenAI.calls[0]["http_client"],
+            "max_retries": 0,
         }
     ]
 
@@ -87,6 +99,7 @@ def test_vllm_client_passes_base_url_and_api_key(monkeypatch) -> None:
             "base_url": "http://127.0.0.1:8000/v1",
             "api_key": "EMPTY",
             "http_client": FakeOpenAI.calls[0]["http_client"],
+            "max_retries": 0,
         }
     ]
     assert isinstance(FakeOpenAI.calls[0]["http_client"], FakeHTTPXClient)
@@ -130,20 +143,24 @@ def test_make_llm_client_uses_fixed_named_clients(monkeypatch) -> None:
             "base_url": "http://127.0.0.1:8000/v1",
             "api_key": "EMPTY",
             "http_client": FakeOpenAI.calls[1]["http_client"],
+            "max_retries": 0,
         },
         {
             "base_url": "http://127.0.0.1:8001/v1",
             "api_key": "EMPTY",
             "http_client": FakeOpenAI.calls[2]["http_client"],
+            "max_retries": 0,
         },
         {
             "base_url": "http://127.0.0.1:8002/v1",
             "api_key": "EMPTY",
             "http_client": FakeOpenAI.calls[3]["http_client"],
+            "max_retries": 0,
         },
         {
             "base_url": "https://ai-proxy.vk.team/v1",
             "api_key": "test-vk-proxy-key",
             "http_client": FakeOpenAI.calls[4]["http_client"],
+            "max_retries": 0,
         },
     ]

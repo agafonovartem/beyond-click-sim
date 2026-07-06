@@ -18,6 +18,12 @@ from runners.in_distribution.regression_prediction.config import (
     DATASET_TARGET_REGRESSION_CONFIG,
     MAX_HISTORY_ITEMS,
 )
+from runners.in_distribution.regression_prediction.item_summaries import (
+    ITEM_SUMMARY_COLUMN,
+    ITEM_SUMMARY_COLUMN_LABEL,
+    add_ml1m_item_summaries,
+    maybe_add_item_summary_prompt_columns,
+)
 from runners.in_distribution.regression_prediction.methods.common import (
     current_git_commit,
     regression_metrics_for_split,
@@ -203,6 +209,24 @@ def run_qwen3_8b_with_item_stats_full(
     )
 
 
+def run_qwen3_8b_with_item_stats_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN3_8B_METHOD_NAME}_with_item_stats_summary_full",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        use_item_stats=True,
+        use_item_summaries=True,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
 def run_gpt54_mini_smoke(task: Task, output_dir: Path) -> dict[str, object]:
     return run_method(
         task,
@@ -329,6 +353,7 @@ def run_method(
     max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
     use_item_stats: bool = False,
+    use_item_summaries: bool = False,
     extra_body: dict | None = None,
 ) -> dict[str, object]:
     """Run an LLM discrete numeric scorer for regression prediction."""
@@ -351,10 +376,20 @@ def run_method(
         base_prompt_columns,
         use_item_stats=use_item_stats,
     )
+    prompt_columns = maybe_add_item_summary_prompt_columns(
+        dataset_name,
+        prompt_columns,
+        use_item_summaries=use_item_summaries,
+    )
     column_labels = item_rating_column_labels(
         dataset_name,
         use_item_stats=use_item_stats,
     )
+    if use_item_summaries:
+        column_labels = {
+            **column_labels,
+            ITEM_SUMMARY_COLUMN: ITEM_SUMMARY_COLUMN_LABEL,
+        }
 
     xy = task_xy(task)
     X_train, y_train = xy["train"]
@@ -362,6 +397,12 @@ def run_method(
     if max_rows is not None:
         X_test = X_test.head(max_rows).copy()
         y_test = y_test.loc[X_test.index].copy()
+    X_train, X_test, item_summary_metadata = add_ml1m_item_summaries(
+        dataset_name=dataset_name,
+        X_train=X_train,
+        X_test=X_test,
+        use_item_summaries=use_item_summaries,
+    )
 
     scorer = LLMRegressor(
         client=make_llm_client(client_name),
@@ -420,6 +461,7 @@ def run_method(
         "prompt_columns": prompt_columns,
         "column_labels": column_labels,
         "uses_item_stats": use_item_stats,
+        "item_summaries": item_summary_metadata,
         "target": {
             "name": target_config["target_name"],
             "description": target_config["target_description"],

@@ -12,6 +12,11 @@ from runners.in_distribution.regression_prediction.config import (
     DATASET_TARGET_REGRESSION_CONFIG,
     MAX_HISTORY_ITEMS,
 )
+from runners.in_distribution.regression_prediction.item_summaries import (
+    ITEM_SUMMARY_COLUMN,
+    ITEM_SUMMARY_COLUMN_LABEL,
+    add_ml1m_item_summaries,
+)
 from runners.in_distribution.regression_prediction.methods.common import (
     current_git_commit,
     regression_metrics_for_split,
@@ -45,6 +50,7 @@ MAX_LLM_ATTEMPTS = 5
 SMOKE_ROWS = 25
 TASTE_TEMPERATURE = 0.0
 TASTE_MAX_TOKENS = None
+TASTE_MAX_WORKERS = 32
 VLLM_MAX_WORKERS = 32
 QWEN3_8B_MAX_WORKERS = 128
 
@@ -140,6 +146,24 @@ def run_qwen3_8b_traits_full(
     )
 
 
+def run_qwen3_8b_traits_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN3_8B_METHOD_NAME}_traits_summary_full",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits",),
+        use_item_summaries=True,
+    )
+
+
 def run_qwen3_8b_taste_gpt4o_mini_smoke(
     task: Task,
     output_dir: Path,
@@ -179,6 +203,28 @@ def run_qwen3_8b_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+    )
+
+
+def run_qwen3_8b_taste_gpt4o_mini_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN3_8B_METHOD_NAME}_taste_gpt4o_mini_summary_full",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("taste",),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        use_item_summaries=True,
     )
 
 
@@ -224,6 +270,30 @@ def run_qwen3_8b_traits_taste_gpt4o_mini_full(
     )
 
 
+def run_qwen3_8b_traits_taste_gpt4o_mini_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=(
+            f"{VLLM_QWEN3_8B_METHOD_NAME}_traits_taste_gpt4o_mini_summary_full"
+        ),
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_rows=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        use_item_summaries=True,
+    )
+
+
 def run_method(
     task: Task,
     output_dir: Path,
@@ -244,8 +314,10 @@ def run_method(
     taste_temperature: float = TASTE_TEMPERATURE,
     taste_max_tokens: int | None = TASTE_MAX_TOKENS,
     taste_max_attempts: int = MAX_LLM_ATTEMPTS,
+    taste_max_workers: int = TASTE_MAX_WORKERS,
     taste_prompt_version: str = AGENT4REC_TASTE_PROMPT_VERSION,
     taste_cache_path: Path | None = None,
+    use_item_summaries: bool = False,
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based discrete rating regressor."""
 
@@ -272,8 +344,22 @@ def run_method(
     if max_rows is not None:
         X_test = X_test.head(max_rows).copy()
         y_test = y_test.loc[X_test.index].copy()
+    X_train, X_test, item_summary_metadata = add_ml1m_item_summaries(
+        dataset_name=dataset_name,
+        X_train=X_train,
+        X_test=X_test,
+        use_item_summaries=use_item_summaries,
+    )
+    candidate_columns = _candidate_columns(
+        dataset_name,
+        use_item_summaries=use_item_summaries,
+    )
+    column_labels = _column_labels(
+        dataset_name,
+        use_item_summaries=use_item_summaries,
+    )
     profile_user_ids = X_test["user_id"].drop_duplicates().tolist()
-    _require_columns(X_test, list(DATASET_CANDIDATE_COLUMNS[dataset_name]))
+    _require_columns(X_test, list(candidate_columns))
 
     uses_taste = "taste" in profile_components
     if uses_taste:
@@ -286,6 +372,7 @@ def run_method(
                 task,
                 taste_model=taste_model,
                 taste_prompt_version=taste_prompt_version,
+                use_item_summaries=use_item_summaries,
             )
         taste_client = make_llm_client(taste_client_name)
     else:
@@ -301,6 +388,8 @@ def run_method(
         taste_temperature=taste_temperature,
         taste_max_tokens=taste_max_tokens,
         taste_max_attempts=taste_max_attempts,
+        taste_max_workers=taste_max_workers,
+        summary_column=ITEM_SUMMARY_COLUMN if use_item_summaries else None,
     )
     scorer = Agent4RecRegressor(
         client=make_llm_client(client_name),
@@ -308,8 +397,8 @@ def run_method(
         target_description=str(target_config["target_description"]),
         valid_values=target_config["valid_values"],
         profile_generator=profile_generator,
-        candidate_description_columns=DATASET_CANDIDATE_COLUMNS[dataset_name],
-        column_labels=DATASET_COLUMN_LABELS[dataset_name],
+        candidate_description_columns=candidate_columns,
+        column_labels=column_labels,
         max_history_items=max_history_items,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -357,12 +446,13 @@ def run_method(
         "max_tokens": max_tokens,
         "max_history_items": max_history_items,
         "candidate_description_columns": list(
-            DATASET_CANDIDATE_COLUMNS[dataset_name]
+            candidate_columns
         ),
-        "column_labels": DATASET_COLUMN_LABELS[dataset_name],
+        "column_labels": column_labels,
         "profile_generator": scorer.profile_generator.manifest(),
         "extra_body": extra_body,
         "uses_item_stats": True,
+        "item_summaries": item_summary_metadata,
         "target": {
             "name": target_config["target_name"],
             "description": target_config["target_description"],
@@ -374,6 +464,7 @@ def run_method(
         "max_rows": max_rows,
         "max_llm_attempts": max_llm_attempts,
         "max_workers": max_workers,
+        "taste_max_workers": taste_max_workers if uses_taste else None,
     }
     manifest = {
         "method": method_name,
@@ -429,20 +520,44 @@ def agent4rec_taste_cache_path(
     *,
     taste_model: str,
     taste_prompt_version: str,
+    use_item_summaries: bool = False,
 ) -> Path:
     dataset_name = str(task.manifest["dataset"])
     dataset_version = str(task.manifest["dataset_version"])
     split_seed = task.manifest["splitter"]["seed"]
     model_slug = _cache_slug(taste_model)
+    summary_slug = "_summary" if use_item_summaries else ""
     return (
         repo_root()
         / "outputs"
         / "agent4rec_taste_cache"
         / (
             f"{dataset_name}_{dataset_version}_seed{split_seed}_"
-            f"{model_slug}_{taste_prompt_version}.jsonl"
+            f"{model_slug}_{taste_prompt_version}{summary_slug}.jsonl"
         )
     )
+
+
+def _candidate_columns(
+    dataset_name: str,
+    *,
+    use_item_summaries: bool,
+) -> tuple[str, ...]:
+    columns = DATASET_CANDIDATE_COLUMNS[dataset_name]
+    if not use_item_summaries:
+        return columns
+    return (*columns, ITEM_SUMMARY_COLUMN)
+
+
+def _column_labels(
+    dataset_name: str,
+    *,
+    use_item_summaries: bool,
+) -> dict[str, str]:
+    labels = dict(DATASET_COLUMN_LABELS[dataset_name])
+    if use_item_summaries:
+        labels[ITEM_SUMMARY_COLUMN] = ITEM_SUMMARY_COLUMN_LABEL
+    return labels
 
 
 def _require_columns(frame, columns: list[str]) -> None:

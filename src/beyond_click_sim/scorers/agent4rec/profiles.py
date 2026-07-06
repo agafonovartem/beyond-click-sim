@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -102,6 +103,7 @@ class Agent4RecProfileGenerator:
         genre_column: str = "item_genres",
         tag_column: str | None = None,
         title_column: str = "item_title",
+        summary_column: str | None = None,
         include_conformity: bool = True,
         activity_descriptions: dict[int, str] | None = None,
         conformity_descriptions: dict[int, str] | None = None,
@@ -115,6 +117,7 @@ class Agent4RecProfileGenerator:
         taste_temperature: float = 0.0,
         taste_max_tokens: int | None = None,
         taste_max_attempts: int = 5,
+        taste_max_workers: int = 1,
     ) -> None:
         profile_components_tuple = tuple(profile_components)
         if not profile_components_tuple:
@@ -148,6 +151,7 @@ class Agent4RecProfileGenerator:
         self.genre_column = genre_column
         self.tag_column = tag_column
         self.title_column = title_column
+        self.summary_column = summary_column
         self.include_conformity = include_conformity
         self.activity_descriptions = (
             AGENT4REC_ACTIVITY_DESCRIPTIONS
@@ -175,6 +179,7 @@ class Agent4RecProfileGenerator:
         self.taste_temperature = taste_temperature
         self.taste_max_tokens = taste_max_tokens
         self.taste_max_attempts = taste_max_attempts
+        self.taste_max_workers = taste_max_workers
         self.trait_thresholds_: dict[str, dict[str, float]] | None = None
         self.taste_cache_stats_: dict[str, Any] | None = None
 
@@ -187,6 +192,8 @@ class Agent4RecProfileGenerator:
                 raise ValueError("taste_cache_path is required for taste profiles")
             if self.taste_max_attempts < 1:
                 raise ValueError("taste_max_attempts must be positive")
+            if self.taste_max_workers < 1:
+                raise ValueError("taste_max_workers must be positive")
             if self.taste_max_tokens is not None and self.taste_max_tokens < 1:
                 raise ValueError("taste_max_tokens must be positive when set")
 
@@ -248,6 +255,9 @@ class Agent4RecProfileGenerator:
         updated_profiles = dict(profiles)
         hits = 0
         misses = 0
+        cached_tastes: dict[Any, str] = {}
+        generated_tastes: dict[Any, str] = {}
+        misses_to_generate: list[tuple[Any, UserHistory, str]] = []
 
         with self._taste_cache_lock(self.taste_cache_path):
             cache = self._load_taste_cache(self.taste_cache_path)
@@ -263,6 +273,7 @@ class Agent4RecProfileGenerator:
                 cache_key = self._taste_cache_key(
                     user_id=user_id,
                     history_item_ids=history.item_ids,
+                    prompt_context=self._taste_cache_prompt_context(history),
                 )
                 if cache_key in cache:
                     cached = cache[cache_key]
@@ -271,20 +282,56 @@ class Agent4RecProfileGenerator:
                         raise ValueError(
                             f"Cached Agent4Rec taste is empty for user: {user_id!r}"
                         )
+                    cached_tastes[user_id] = taste
                     hits += 1
                 else:
-                    parsed = self._generate_taste(user_id=user_id, history=history)
-                    taste = parsed.taste
-                    row = self._taste_cache_row(
-                        user_id=user_id,
-                        history=history,
-                        cache_key=cache_key,
-                        parsed=parsed,
-                    )
-                    self._append_taste_cache_row(self.taste_cache_path, row)
-                    cache[cache_key] = row
+                    misses_to_generate.append((user_id, history, cache_key))
                     misses += 1
 
+            if misses_to_generate:
+                max_workers = min(self.taste_max_workers, len(misses_to_generate))
+                if max_workers == 1:
+                    for user_id, history, cache_key in misses_to_generate:
+                        parsed = self._generate_taste(
+                            user_id=user_id,
+                            history=history,
+                        )
+                        row = self._taste_cache_row(
+                            user_id=user_id,
+                            history=history,
+                            cache_key=cache_key,
+                            parsed=parsed,
+                        )
+                        self._append_taste_cache_row(self.taste_cache_path, row)
+                        cache[cache_key] = row
+                        generated_tastes[user_id] = parsed.taste
+                else:
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        futures = {
+                            executor.submit(
+                                self._generate_taste,
+                                user_id=user_id,
+                                history=history,
+                            ): (user_id, history, cache_key)
+                            for user_id, history, cache_key in misses_to_generate
+                        }
+                        for future in as_completed(futures):
+                            user_id, history, cache_key = futures[future]
+                            parsed = future.result()
+                            row = self._taste_cache_row(
+                                user_id=user_id,
+                                history=history,
+                                cache_key=cache_key,
+                                parsed=parsed,
+                            )
+                            self._append_taste_cache_row(self.taste_cache_path, row)
+                            cache[cache_key] = row
+                            generated_tastes[user_id] = parsed.taste
+
+            for user_id in requested_user_ids:
+                taste = cached_tastes.get(user_id)
+                if taste is None:
+                    taste = generated_tastes[user_id]
                 updated_profiles[user_id] = self._with_taste(
                     updated_profiles[user_id],
                     taste=taste,
@@ -295,6 +342,7 @@ class Agent4RecProfileGenerator:
             "hits": hits,
             "misses": misses,
             "generated": misses,
+            "max_workers": min(self.taste_max_workers, max(1, misses)),
         }
         return updated_profiles
 
@@ -311,6 +359,7 @@ class Agent4RecProfileGenerator:
             "genre_column": self.genre_column,
             "tag_column": self.tag_column,
             "title_column": self.title_column,
+            "summary_column": self.summary_column,
             "include_conformity": self.include_conformity,
             "diversity_top_mass": AGENT4REC_DIVERSITY_TOP_MASS,
             "trait_thresholds": self.trait_thresholds_,
@@ -322,6 +371,7 @@ class Agent4RecProfileGenerator:
                 "temperature": self.taste_temperature,
                 "max_tokens": self.taste_max_tokens,
                 "max_attempts": self.taste_max_attempts,
+                "max_workers": self.taste_max_workers,
                 "prompt_version": self.taste_prompt_version,
                 "prompt_kind": self.taste_prompt_kind,
                 "cache_path": (
@@ -533,13 +583,10 @@ class Agent4RecProfileGenerator:
         ]
 
     def _rating_movies(self, history: UserHistory) -> dict[int, list[str]]:
-        self._require_columns(
-            history.rows,
-            [
-                self.rating_column,
-                self.title_column,
-            ],
-        )
+        required_columns = [self.rating_column, self.title_column]
+        if self.summary_column:
+            required_columns.append(self.summary_column)
+        self._require_columns(history.rows, required_columns)
         rating_movies: dict[int, list[str]] = {rating: [] for rating in range(1, 6)}
         for _, row in history.rows.iterrows():
             raw_rating = row[self.rating_column]
@@ -556,7 +603,10 @@ class Agent4RecProfileGenerator:
                     "Agent4Rec taste generation expects ratings in 1..5. "
                     f"Got {raw_rating!r} for user {history.user_id!r}"
                 )
-            rating_movies[rating].append(str(raw_title).strip())
+            if self.summary_column:
+                rating_movies[rating].append(self._history_item_description(row))
+            else:
+                rating_movies[rating].append(str(raw_title).strip())
         return rating_movies
 
     def _playtime_games(self, history: UserHistory) -> dict[str, list[str]]:
@@ -606,6 +656,10 @@ class Agent4RecProfileGenerator:
             tags = _split_genres(row[self.tag_column])
             if tags:
                 parts.append(f"tags: {', '.join(tags[:8])}")
+        if self.summary_column and self.summary_column in row.index:
+            summary = row[self.summary_column]
+            if not pd.isna(summary) and str(summary).strip():
+                parts.append(f"summary: {str(summary).strip()}")
         if len(parts) == 1:
             return parts[0]
         return f"{parts[0]} ({'; '.join(parts[1:])})"
@@ -640,31 +694,57 @@ class Agent4RecProfileGenerator:
 
     def _taste_cache_history_values(self, history: UserHistory) -> dict[str, Any]:
         if self.taste_prompt_kind == "rating":
-            return {
+            values = {
                 "history_ratings": [
                     _json_safe(value)
                     for value in history.rows[self.rating_column].tolist()
                 ]
             }
+            values.update(self._taste_cache_summary_values(history))
+            return values
         if self.taste_prompt_kind == "playtime":
-            return {
+            values = {
                 "history_playtime": [
                     _json_safe(value)
                     for value in history.rows[self.playtime_column].tolist()
                 ]
             }
+            values.update(self._taste_cache_summary_values(history))
+            return values
         raise RuntimeError(f"Unsupported taste_prompt_kind: {self.taste_prompt_kind}")
+
+    def _taste_cache_summary_values(self, history: UserHistory) -> dict[str, Any]:
+        if not self.summary_column:
+            return {}
+        self._require_columns(history.rows, [self.summary_column])
+        return {
+            "history_summaries": [
+                _json_safe(value)
+                for value in history.rows[self.summary_column].tolist()
+            ]
+        }
+
+    def _taste_cache_prompt_context(self, history: UserHistory) -> dict[str, Any] | None:
+        if not self.summary_column:
+            return None
+        return {
+            "summary_column": self.summary_column,
+            **self._taste_cache_summary_values(history),
+        }
 
     @staticmethod
     def _taste_cache_key(
         *,
         user_id: Any,
         history_item_ids: Sequence[Any],
+        prompt_context: Mapping[str, Any] | None = None,
     ) -> str:
         payload = {
             "user_id": _json_safe(user_id),
             "history_item_ids": [_json_safe(item_id) for item_id in history_item_ids],
         }
+        if prompt_context is not None:
+            payload["prompt_context"] = _json_safe(prompt_context)
         raw = json.dumps(payload, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 

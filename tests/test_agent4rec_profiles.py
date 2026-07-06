@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import json
+import threading
 import time
 from types import SimpleNamespace
 
@@ -53,6 +54,42 @@ class SlowFakeChatCompletions(FakeChatCompletions):
 class SlowFakeClient(FakeClient):
     def __init__(self, responses: list[str]) -> None:
         completions = SlowFakeChatCompletions(responses)
+        self.chat = SimpleNamespace(completions=completions)
+        self.completions = completions
+
+
+class TrackingFakeChatCompletions:
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = responses
+        self.calls: list[dict[str, object]] = []
+        self.active = 0
+        self.max_active = 0
+        self.lock = threading.Lock()
+
+    def create(self, **kwargs: object):
+        with self.lock:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        try:
+            time.sleep(0.05)
+            with self.lock:
+                self.calls.append(kwargs)
+                response = self.responses.pop(0)
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content=response),
+                    )
+                ]
+            )
+        finally:
+            with self.lock:
+                self.active -= 1
+
+
+class TrackingFakeClient:
+    def __init__(self, responses: list[str]) -> None:
+        completions = TrackingFakeChatCompletions(responses)
         self.chat = SimpleNamespace(completions=completions)
         self.completions = completions
 
@@ -204,6 +241,72 @@ def test_build_taste_generates_and_reuses_jsonl_cache(tmp_path) -> None:
     assert rows[0]["history_titles"] == ["Toy Story", "Heat"]
 
 
+def test_build_taste_can_include_item_summaries_in_history_prompt(tmp_path) -> None:
+    cache_path = tmp_path / "taste-summary.jsonl"
+    taste_client = FakeClient(
+        [
+            "TASTE: I enjoy adventurous animated movies.\n"
+            "REASON: The summaries show playful adventures.\n"
+            "HIGH RATINGS: adventurous animated movies\n"
+            "LOW RATINGS: crime movies"
+        ]
+    )
+    generator = Agent4RecProfileGenerator(
+        profile_components=("taste",),
+        taste_client=taste_client,
+        taste_client_name="openai",
+        taste_model="gpt-4o-mini",
+        taste_cache_path=cache_path,
+        summary_column="item_summary",
+    )
+    history_rows = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "item_id": ["1", "2"],
+            "item_title": ["Toy Story", "Heat"],
+            "item_summary": [
+                "Toys plan a rescue.",
+                "A detective hunts criminals.",
+            ],
+            "rating": [5, 2],
+        }
+    )
+    profiles = {"u1": Agent4RecUserProfile(user_id="u1")}
+    histories = {
+        "u1": UserHistory(
+            user_id="u1",
+            rows=history_rows,
+            item_ids=("1", "2"),
+        )
+    }
+
+    updated = generator.build_taste(
+        profiles=profiles,
+        histories=histories,
+        user_ids=["u1"],
+    )
+
+    assert updated["u1"].taste == " I enjoy adventurous animated movies."
+    prompt = taste_client.completions.calls[0]["messages"][1]["content"]
+    assert "Toy Story (summary: Toys plan a rescue.)" in prompt
+    assert "Heat (summary: A detective hunts criminals.)" in prompt
+    rows = [
+        json.loads(line)
+        for line in cache_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert rows[0]["history_summaries"] == [
+        "Toys plan a rescue.",
+        "A detective hunts criminals.",
+    ]
+    assert generator.manifest()["summary_column"] == "item_summary"
+
+    old_key = Agent4RecProfileGenerator._taste_cache_key(
+        user_id="u1",
+        history_item_ids=("1", "2"),
+    )
+    assert rows[0]["cache_key"] != old_key
+
+
 def test_build_taste_serializes_shared_jsonl_cache_writes(tmp_path) -> None:
     cache_path = tmp_path / "taste.jsonl"
     taste_client = SlowFakeClient(
@@ -259,6 +362,81 @@ def test_build_taste_serializes_shared_jsonl_cache_writes(tmp_path) -> None:
         for line in cache_path.read_text(encoding="utf-8").splitlines()
     ]
     assert len(rows) == 1
+
+
+def test_build_taste_can_generate_cache_misses_concurrently(tmp_path) -> None:
+    cache_path = tmp_path / "taste.jsonl"
+    taste_client = TrackingFakeClient(
+        [
+            "TASTE: I enjoy animated family movies.\n"
+            "REASON: I gave high ratings to animated movies.\n"
+            "HIGH RATINGS: animated family movies\n"
+            "LOW RATINGS: crime movies",
+            "TASTE: I enjoy animated family movies.\n"
+            "REASON: I gave high ratings to animated movies.\n"
+            "HIGH RATINGS: animated family movies\n"
+            "LOW RATINGS: crime movies",
+            "TASTE: I enjoy animated family movies.\n"
+            "REASON: I gave high ratings to animated movies.\n"
+            "HIGH RATINGS: animated family movies\n"
+            "LOW RATINGS: crime movies",
+        ]
+    )
+    generator = Agent4RecProfileGenerator(
+        profile_components=("taste",),
+        taste_client=taste_client,
+        taste_client_name="openai",
+        taste_model="gpt-4o-mini",
+        taste_cache_path=cache_path,
+        taste_max_workers=3,
+    )
+    profiles = {
+        "u1": Agent4RecUserProfile(user_id="u1"),
+        "u2": Agent4RecUserProfile(user_id="u2"),
+        "u3": Agent4RecUserProfile(user_id="u3"),
+    }
+    histories = {
+        user_id: UserHistory(
+            user_id=user_id,
+            rows=pd.DataFrame(
+                {
+                    "user_id": [user_id, user_id],
+                    "item_id": [f"{user_id}-i1", f"{user_id}-i2"],
+                    "item_title": ["Toy Story", "Heat"],
+                    "rating": [5, 2],
+                }
+            ),
+            item_ids=(f"{user_id}-i1", f"{user_id}-i2"),
+        )
+        for user_id in profiles
+    }
+
+    updated = generator.build_taste(
+        profiles=profiles,
+        histories=histories,
+        user_ids=["u1", "u2", "u3"],
+    )
+
+    assert set(updated) == {"u1", "u2", "u3"}
+    assert all(
+        profile.taste == " I enjoy animated family movies."
+        for profile in updated.values()
+    )
+    assert len(taste_client.completions.calls) == 3
+    assert taste_client.completions.max_active > 1
+    assert generator.taste_cache_stats_ == {
+        "requested_users": 3,
+        "hits": 0,
+        "misses": 3,
+        "generated": 3,
+        "max_workers": 3,
+    }
+    rows = [
+        json.loads(line)
+        for line in cache_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(rows) == 3
+    assert {row["user_id"] for row in rows} == {"u1", "u2", "u3"}
 
 
 def test_build_taste_uses_playtime_prompt_for_steam_like_histories(tmp_path) -> None:

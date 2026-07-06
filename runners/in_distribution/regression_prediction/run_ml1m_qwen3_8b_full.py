@@ -39,6 +39,7 @@ DEFAULT_METHODS = (*BASELINE_METHODS, *QWEN_METHODS)
 DEFAULT_OUTPUT_ROOT = (
     repo_root() / "outputs" / "in_distribution" / "regression_prediction"
 )
+DEFAULT_RUN_SUFFIX = "ml1m_qwen3_8b_regression_full"
 
 
 def task_names(*, seeds: tuple[int, ...] = SEEDS) -> list[str]:
@@ -48,18 +49,24 @@ def task_names(*, seeds: tuple[int, ...] = SEEDS) -> list[str]:
     ]
 
 
-def method_runners() -> dict[str, Callable[[Task, Path], dict[str, Any]]]:
-    return {name: METHOD_RUNNERS[name] for name in DEFAULT_METHODS}
+def method_runners(
+    method_names: tuple[str, ...] = DEFAULT_METHODS,
+) -> dict[str, Callable[[Task, Path], dict[str, Any]]]:
+    return {name: METHOD_RUNNERS[name] for name in method_names}
 
 
-def main() -> None:
+def main(
+    *,
+    default_methods: tuple[str, ...] = DEFAULT_METHODS,
+    run_suffix: str = DEFAULT_RUN_SUFFIX,
+) -> None:
     args = parse_args()
     selected_tasks = _selected_task_names(args)
-    methods = method_runners()
-    selected_methods = _selected_methods(args, methods)
+    methods = method_runners(default_methods)
+    selected_methods = _selected_methods(args, methods, default_methods=default_methods)
     output_root = Path(args.output_root).expanduser().resolve()
     run_id = args.run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    batch_root = output_root / f"{run_id}_ml1m_qwen3_8b_regression_full"
+    batch_root = output_root / f"{run_id}_{run_suffix}"
 
     print(f"batch_root={batch_root}", flush=True)
     print(f"tasks={selected_tasks}", flush=True)
@@ -253,8 +260,14 @@ def _selected_task_names(args: argparse.Namespace) -> list[str]:
 def _selected_methods(
     args: argparse.Namespace,
     methods: dict[str, Callable[[Task, Path], dict[str, Any]]],
+    *,
+    default_methods: tuple[str, ...],
 ) -> list[str]:
-    selected = list(DEFAULT_METHODS) if args.methods is None else _parse_str_list(args.methods)
+    selected = (
+        list(default_methods)
+        if args.methods is None
+        else _parse_str_list(args.methods)
+    )
     unknown = [name for name in selected if name not in methods]
     if unknown:
         raise ValueError(f"Unknown method names: {unknown}. Available: {list(methods)}")

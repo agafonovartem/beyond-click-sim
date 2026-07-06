@@ -292,6 +292,98 @@ def test_llm_regression_runner_labels_rating_only_with_item_stats(
     assert manifest["scorer"]["column_labels"]["rating"] == "user rating"
 
 
+def test_llm_regression_runner_can_add_item_summaries_to_history_and_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task = Task(
+        name="ml-1m_rating_item_stats_eval_users1_seed0",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["1"],
+                "item_title": ["Toy Story"],
+                "item_genres": ["Animation"],
+                "item_rating_mean": [4.153],
+                "item_rating_count": [2077],
+                "rating": [5],
+                "target": [5],
+            }
+        ),
+        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["364"],
+                "item_title": ["Lion King"],
+                "item_genres": ["Animation"],
+                "item_rating_mean": [3.333],
+                "item_rating_count": [0],
+                "rating": [pd.NA],
+                "target": [4],
+            },
+            index=["a"],
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            feature_columns=(
+                "item_title",
+                "item_genres",
+                "item_rating_mean",
+                "item_rating_count",
+            ),
+            history_context_columns=("rating",),
+        ),
+        manifest={
+            "protocol": "regression",
+            "dataset": "ml-1m",
+            "target_source_column": "target_rating",
+        },
+    )
+    client = FakeClient(["4"])
+    monkeypatch.setattr(
+        llm_regressor,
+        "make_llm_client",
+        lambda _client_name: client,
+    )
+
+    def fake_add_item_summaries(**kwargs: object):
+        X_train = kwargs["X_train"].copy()
+        X_test = kwargs["X_test"].copy()
+        X_train["item_summary"] = ["Toys plan a rescue."]
+        X_test["item_summary"] = ["A young lion reclaims his kingdom."]
+        return X_train, X_test, {"uses_item_summaries": True, "source_path": "fake.csv"}
+
+    monkeypatch.setattr(
+        llm_regressor,
+        "add_ml1m_item_summaries",
+        fake_add_item_summaries,
+    )
+
+    llm_regressor.run_method(
+        task,
+        tmp_path,
+        method_name="llm_regressor_fake_with_item_stats_summary_full",
+        client_name="fake",
+        model="fake-model",
+        max_rows=1,
+        max_llm_attempts=1,
+        max_workers=1,
+        use_item_stats=True,
+        use_item_summaries=True,
+    )
+
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "summary: Toys plan a rescue." in prompt
+    assert "summary: A young lion reclaims his kingdom." in prompt
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["item_summaries"] == {
+        "uses_item_summaries": True,
+        "source_path": "fake.csv",
+    }
+
+
 def test_llm_regressor_openai_vk_gpt54_mini_wrappers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -412,6 +504,7 @@ def test_llm_regressor_qwen3_8b_with_item_stats_wrappers_disable_thinking(
     task = SimpleNamespace()
 
     llm_regressor.run_qwen3_8b_with_item_stats_full(task, tmp_path)
+    llm_regressor.run_qwen3_8b_with_item_stats_summary_full(task, tmp_path)
     llm_regressor.run_qwen3_8b_with_item_stats_smoke(task, tmp_path)
 
     assert calls == [
@@ -422,6 +515,18 @@ def test_llm_regressor_qwen3_8b_with_item_stats_wrappers_disable_thinking(
             "max_rows": None,
             "max_workers": 128,
             "use_item_stats": True,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        },
+        {
+            "method_name": (
+                "llm_regressor_vllm_qwen3_8b_with_item_stats_summary_full"
+            ),
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3-8B",
+            "max_rows": None,
+            "max_workers": 128,
+            "use_item_stats": True,
+            "use_item_summaries": True,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
         {

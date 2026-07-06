@@ -34,6 +34,11 @@ VLLM_LOCAL_MAX_CONNECTIONS = int(
 VLLM_LOCAL_MAX_KEEPALIVE_CONNECTIONS = int(
     os.environ.get("BEYOND_CLICK_SIM_VLLM_LOCAL_MAX_KEEPALIVE_CONNECTIONS", "128")
 )
+VLLM_LOCAL_MAX_RETRIES = int(
+    os.environ.get("BEYOND_CLICK_SIM_VLLM_LOCAL_MAX_RETRIES", "0")
+)
+OPENAI_TIMEOUT_SECONDS_ENV = "BEYOND_CLICK_SIM_OPENAI_TIMEOUT_SECONDS"
+OPENAI_MAX_RETRIES_ENV = "BEYOND_CLICK_SIM_OPENAI_MAX_RETRIES"
 OPENAI_VK_PROXY_BASE_URL = "https://ai-proxy.vk.team/v1"
 OPENAI_VK_PROXY_API_KEY_ENV = "OPENAI_VK_PROXY_API_KEY"
 
@@ -42,7 +47,10 @@ def openai_client() -> Any:
     """Return the default OpenAI client configured from environment variables."""
 
     load_dotenv()
-    return OpenAI()
+    return OpenAI(
+        timeout=_float_env(OPENAI_TIMEOUT_SECONDS_ENV, default=60.0),
+        max_retries=_int_env(OPENAI_MAX_RETRIES_ENV, default=0),
+    )
 
 
 def openai_vk_proxy_client(
@@ -57,7 +65,12 @@ def openai_vk_proxy_client(
     if not api_key:
         raise RuntimeError(f"{api_key_env} is not set")
     http_client = httpx.Client(trust_env=trust_env)
-    return OpenAI(base_url=base_url, api_key=api_key, http_client=http_client)
+    return OpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        http_client=http_client,
+        max_retries=_int_env(OPENAI_MAX_RETRIES_ENV, default=0),
+    )
 
 
 def vllm_client(
@@ -78,7 +91,12 @@ def vllm_client(
         ),
         trust_env=False,
     )
-    return OpenAI(base_url=base_url, api_key=api_key, http_client=http_client)
+    return OpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        http_client=http_client,
+        max_retries=VLLM_LOCAL_MAX_RETRIES,
+    )
 
 
 def ollama_client(
@@ -108,3 +126,11 @@ def make_llm_client(client_name: str) -> Any:
     if client_name == "openai_vk_proxy":
         return openai_vk_proxy_client()
     raise ValueError(f"Unsupported LLM client: {client_name!r}")
+
+
+def _float_env(name: str, *, default: float) -> float:
+    return float(os.environ.get(name, str(default)))
+
+
+def _int_env(name: str, *, default: int) -> int:
+    return int(os.environ.get(name, str(default)))

@@ -251,6 +251,7 @@ def test_agent4rec_yes_no_runner_writes_taste_manifest_and_cache(
         "hits": 0,
         "misses": 1,
         "generated": 1,
+        "max_workers": 1,
     }
 
 

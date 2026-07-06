@@ -41,6 +41,22 @@ Seed average over seeds 0-2. Lower MAE/RMSE is better.
 | Agent4Rec taste + item stats | taste profile, candidate item mean | 0,1,2 | 1.000 | 1.1260 +/- 0.0063 | 1.3721 +/- 0.0043 | 1.1260 +/- 0.0064 | 1.4516 +/- 0.0083 |
 | Agent4Rec traits + taste + item stats | traits and taste profiles, candidate item mean | 0,1,2 | 1.000 | 1.0973 +/- 0.0112 | 1.3478 +/- 0.0064 | 1.0971 +/- 0.0110 | 1.4353 +/- 0.0068 |
 
+Movie-summary ablation over the same protocol. Summaries come from Agent4Rec
+`movies_augmentation.csv` and are joined by the raw MovieLens item id. For the
+LLM regressor, summaries are visible in both history and candidate rows. For
+Agent4Rec taste variants, summaries are visible in the taste-history prompt and
+candidate prompt; the traits-only variant uses summaries only in the candidate
+prompt.
+
+Run root: `outputs/in_distribution/regression_prediction/20260706T1654MSK_ml1m_qwen3_8b_regression_summary_ablation`.
+
+| method | visible metadata | seeds | coverage | macro MAE | macro RMSE | micro MAE | micro RMSE |
+|---|---|---|---:|---:|---:|---:|---:|
+| History + item stats + summaries | train history, candidate item mean/count, movie summaries | 0,1,2 | 1.000 | 0.7738 +/- 0.0004 | 0.9790 +/- 0.0055 | 0.7737 +/- 0.0003 | 1.0360 +/- 0.0062 |
+| Agent4Rec traits + item stats + summaries | traits profile, candidate item mean and summary | 0,1,2 | 1.000 | 0.9874 +/- 0.0248 | 1.2007 +/- 0.0232 | 0.9873 +/- 0.0244 | 1.2942 +/- 0.0260 |
+| Agent4Rec taste + item stats + summaries | summary-aware taste profile, candidate item mean and summary | 0,1,2 | 1.000 | 1.0533 +/- 0.0088 | 1.3080 +/- 0.0113 | 1.0533 +/- 0.0082 | 1.3862 +/- 0.0136 |
+| Agent4Rec traits + taste + item stats + summaries | traits and summary-aware taste profiles, candidate item mean and summary | 0,1,2 | 1.000 | 1.0479 +/- 0.0160 | 1.2926 +/- 0.0114 | 1.0477 +/- 0.0152 | 1.3754 +/- 0.0127 |
+
 ### ML-1M rating eval_1000 users
 
 Protocol:
