@@ -187,15 +187,17 @@ candidate-group cap remain available by explicit name, and full-scale tasks
 remain available by omitting the `eval_users1000` part, e.g.
 `ml-1m_cap20_m1_seed0`.
 
-Explicit ML-1M item-stats task variants are also available, but are not defaults.
-They add train-only `item_rating_mean` and `item_rating_count` item features, e.g.
+Explicit item-stats task variants are also available, but are not defaults.
+They add train-only `item_rating_mean` and `item_rating_count` aggregate item
+features, e.g.
 `ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed0` for reduced interaction
 prediction and `ml-1m_rating_item_stats_eval_users1000_seed0` for rating
-regression. Use ML-1M item-stats interaction tasks with LLM
-`*_with_item_stats_*` methods when the prompt should expose average rating and
-number of prior reviews. The current Agent4Rec yes/no methods also require
-ML-1M item-stats interaction tasks because their candidate prompt includes
-train-only `History ratings` (`item_rating_mean`).
+regression. On ML-1M the mean is computed from train ratings; on Steam it is
+computed from train `playtime_forever`, despite the historical column name. Use
+item-stats interaction tasks with LLM `*_with_item_stats_*` methods when the
+prompt should expose train-only item aggregates. ML-1M Agent4Rec yes/no methods
+also require ML-1M item-stats interaction tasks because their movie candidate
+prompt includes train-only `History ratings` (`item_rating_mean`).
 
 Smaller debug interaction tasks with `eval_users100_cg5` are available for
 prompt and scorer iteration, e.g.
@@ -240,18 +242,19 @@ before `_smoke` / `_full`, for example
 `llm_yes_no_ollama_llama31_8b_with_item_stats_smoke`. Use these with item-stats
 task variants when the prompt should expose average rating and number of prior reviews.
 
-The current Agent4Rec yes/no methods are ML-1M-only first versions. The base
-methods build a train-only traits profile (`activity`, `conformity`, `diversity`)
-and use an Agent4Rec-style movie prompt with labeled candidate parsing. The
-`traits_taste_gpt4o_mini` Qwen methods add a separate pre-scoring taste stage:
-they generate Agent4Rec `prompt_modify` taste profiles from the same 20-item
-train-history window used by the history LLM baseline, using OpenAI
-`gpt-4o-mini` with `temperature=0.0`. Taste outputs are cached as append-only
-JSONL under `outputs/agent4rec_taste_cache/`; `make_llm_client("openai")` loads
-`OPENAI_API_KEY` from the environment or `.env`. Agent4Rec item `Summary` fields
-are still omitted. Treat direct comparisons against `llm_yes_no_*` as exploratory
-unless temperature, token budget, visible item fields, and history/profile
-representation are controlled.
+The current Agent4Rec yes/no scorer has dataset-specific prompt/profile configs
+for ML-1M and Steam. ML-1M methods build train-only traits (`activity`,
+`conformity`, `diversity`) and use an Agent4Rec-style movie prompt with labeled
+candidate parsing; Steam methods use game title/genre/tag candidate fields and a
+playtime-oriented profile prompt. The `traits_taste_gpt4o_mini` Qwen methods add
+a separate pre-scoring taste stage: they generate cached `gpt-4o-mini` taste
+profiles from the same 20-item train-history window used by the history LLM
+baseline. Taste outputs are cached as append-only JSONL under
+`outputs/agent4rec_taste_cache/`; `make_llm_client("openai")` loads
+`OPENAI_API_KEY` from the environment or `.env`. ML-1M Agent4Rec item `Summary`
+fields are still omitted. Treat direct comparisons against `llm_yes_no_*` as
+exploratory unless temperature, token budget, visible item fields, and
+history/profile representation are controlled.
 
 > [!NOTE]
 > LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; the default vLLM client is expected at `http://127.0.0.1:8000/v1`. VK AI proxy methods use `https://ai-proxy.vk.team/v1` and load `OPENAI_VK_PROXY_API_KEY` from the environment or `.env`. Some Agent4Rec Qwen methods intentionally target additional local vLLM ports `8001` and `8002`.

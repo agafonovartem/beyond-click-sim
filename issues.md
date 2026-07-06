@@ -150,33 +150,28 @@ regression with item stats, compare against the matched train-only item baseline
 (`item_mean_regressor` / `item_mode_regressor`) before claiming user-conditioned reasoning beyond
 visible item-quality metadata.
 
-## 8. Agent4Rec yes/no scorer is still MovieLens-specific and lacks Summary
+## 8. Agent4Rec yes/no scorer lacks Summary and has incomplete profile ablations
 
 The current `Agent4RecYesNoScorer` implementation supports deterministic Agent4Rec social traits
 (`activity`, `conformity`, `diversity`) from the train split and a cached LLM-generated `taste`
-profile for the `traits + taste` Qwen method. The planned Agent4Rec profile ablations are still
-incomplete:
+profile. It now has dataset-specific prompt/profile configuration for ML-1M and Steam, but the
+planned Agent4Rec profile ablations are still incomplete:
 
 - `traits` only — currently implemented;
-- `taste` only — not implemented yet;
+- `taste` only — available through the generic runner path, but not exposed as a named default method;
 - `traits + taste` — currently implemented for the Qwen + `gpt-4o-mini` taste runner.
 
-The scorer also intentionally omits Agent4Rec's `Summary` field in `##recommended list##`. The
+The ML-1M scorer intentionally omits Agent4Rec's `Summary` field in `##recommended list##`. The
 released Agent4Rec alignment code shows title, `History ratings`, and `Summary`, but `Summary`
 comes from `movies_augmentation.csv`, an undocumented external augmentation rather than a
-reproducible MovieLens field. Our current prompt uses title, train-only `History ratings`
+reproducible MovieLens field. Our current ML-1M prompt uses title, train-only `History ratings`
 (`item_rating_mean`), and genres; this is a cleaner but not exact reproduction of their visible
-item card.
+item card. The Steam prompt uses game title, genres, tags, and playtime-derived profiles rather
+than MovieLens-specific fields.
 
-Finally, the prompt wording is still hard-coded to the MovieLens/movie domain (`movie
-recommendation system`, `movie tastes`, `watch`, `movie-watching habits`). That is acceptable for
-the first ML-1M Agent4Rec-style scorer, but it is not a reusable generic yes/no simulator for
-Steam or other domains.
-
-**Fix:** add the `taste`-only ablation if needed, and keep `Summary` out unless we add a
-reproducible summary artifact with clear provenance. Before applying Agent4Rec-style prompts
-outside ML-1M, introduce domain/task wording parameters such as item type, action verb, taste
-label, and system-domain description.
+**Fix:** expose a named `taste`-only ablation if needed, and keep ML-1M `Summary` out unless we add
+a reproducible summary artifact with clear provenance. Any cross-dataset Agent4Rec-style reporting
+should state the dataset-specific visible item fields and profile prompt version explicitly.
 
 ## 9. Agent4Rec vs history LLM comparison currently mixes multiple axes
 

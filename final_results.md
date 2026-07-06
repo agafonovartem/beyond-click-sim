@@ -6,6 +6,7 @@ Notes:
 - Interaction prediction uses the reduced `eval_users1000_cg5` protocol: seeds 0-2, 1000 validation/test users per split, and up to 5 candidate groups per selected user.
 - Regression prediction still uses the existing ML-1M `eval_users1000` rating protocol below.
 - For every listed run, the compact `manifest.json` plus relevant `metrics*.json` files should be tracked; row-level `predictions.parquet` files are local artifacts and should stay untracked.
+- Provenance exception: the Qwen3.6-27B `History + item stats` interaction rows below currently point to local ignored output directories. Treat them as local registry entries, not committed reproducible artifacts, until their compact provenance files are force-added or the rows are removed.
 - Paper-table notebooks that still reference the older uncapped interaction protocol need refresh before being used for reporting.
 
 ## Regression Prediction
@@ -162,7 +163,7 @@ Protocol:
 
 #### LLM/Agent4Rec strict seed averages
 
-These rows match the paper table convention for LLM-based methods: pointwise F1 uses `test_failure_as_negative.macro_by_user_group_mean.f1`, and NDCG@5 uses `test_failure_as_zero_group.macro_by_user_group_mean.ndcg@5`. Agent4Rec rows always include train-only item statistics in candidate descriptions; taste profiles use `gpt-4o-mini`.
+These rows match the paper table convention for LLM-based methods: pointwise F1 uses `test_failure_as_negative.macro_by_user_group_mean.f1`, and NDCG@5 uses `test_failure_as_zero_group.macro_by_user_group_mean.ndcg@5`. Agent4Rec rows always include train-only item statistics in candidate descriptions; taste profiles use `gpt-4o-mini`. Rows marked by the provenance exception above must not be treated as committed final evidence until their compact run files are tracked.
 
 | dataset | method | backbone | m | seeds | NDCG@5 mean | NDCG@5 std | F1 mean | F1 std | run root |
 |---|---|---|---:|---|---:|---:|---:|---:|---|
