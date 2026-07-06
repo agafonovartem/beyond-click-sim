@@ -80,6 +80,7 @@ def test_regression_task_builder_builds_observed_only_eval_user_task(
         "seed": 0,
         "user_column": "user_id",
         "require_train_history": True,
+        "max_rows_per_user": None,
     }
     assert manifest["candidate_group_column"] is None
     assert manifest["sampled_column"] is None

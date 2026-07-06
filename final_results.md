@@ -4,7 +4,7 @@ Snapshot of local in-distribution final-result artifacts. Metrics are copied fro
 
 Notes:
 - Interaction prediction uses the reduced `eval_users1000_cg5` protocol: seeds 0-2, 1000 validation/test users per split, and up to 5 candidate groups per selected user.
-- Regression prediction still uses the existing ML-1M `eval_users1000` rating protocol below.
+- Regression prediction rows below are older full-row ML-1M `eval_users1000` rating artifacts. Current regression runner defaults use the reduced `eval_users1000_rows_per_user5` task names; those results are not listed here until rerun.
 - For every listed run, the compact `manifest.json` plus relevant `metrics*.json` files should be tracked; row-level `predictions.parquet` files are local artifacts and should stay untracked.
 - Provenance exception: the Qwen3.6-27B `History + item stats` interaction rows below currently point to local ignored output directories. Treat them as local registry entries, not committed reproducible artifacts, until their compact provenance files are force-added or the rows are removed.
 - Paper-table notebooks that still reference the older uncapped interaction protocol need refresh before being used for reporting.

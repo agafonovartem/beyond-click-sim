@@ -45,9 +45,56 @@ def test_post_split_user_sampler_can_keep_users_without_train_history() -> None:
     assert summary["selected_users"] == 2
 
 
+def test_post_split_user_sampler_can_limit_rows_per_user_deterministically() -> None:
+    rows = pd.DataFrame(
+        [
+            {"interaction_id": f"u1-r{i}", "user_id": "u1", "item_id": f"i{i}"}
+            for i in range(6)
+        ]
+        + [
+            {"interaction_id": f"u2-r{i}", "user_id": "u2", "item_id": f"j{i}"}
+            for i in range(2)
+        ]
+        + [
+            {"interaction_id": f"u3-r{i}", "user_id": "u3", "item_id": f"k{i}"}
+            for i in range(6)
+        ]
+    )
+    shuffled = rows.sample(frac=1, random_state=123).reset_index(drop=True)
+    sampler = PostSplitUserSampler(
+        n_users=None,
+        seed=7,
+        require_train_history=False,
+        max_rows_per_user=2,
+    )
+
+    sampled, summary = sampler.sample(rows, train=pd.DataFrame())
+    sampled_from_shuffled, _ = sampler.sample(shuffled, train=pd.DataFrame())
+
+    assert sampled.groupby("user_id").size().to_dict() == {
+        "u1": 2,
+        "u2": 2,
+        "u3": 2,
+    }
+    assert set(sampled["interaction_id"]) == set(
+        sampled_from_shuffled["interaction_id"]
+    )
+    assert summary == {
+        "eligible_users": 3,
+        "selected_users": 3,
+        "rows_before": 14,
+        "rows_after": 6,
+        "max_rows_per_user": 2,
+        "rows_after_user_selection": 14,
+        "users_with_rows_capped": 2,
+    }
+
+
 def test_post_split_user_sampler_rejects_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="n_users"):
         PostSplitUserSampler(n_users=0)
+    with pytest.raises(ValueError, match="max_rows_per_user"):
+        PostSplitUserSampler(n_users=1, max_rows_per_user=0)
 
     sampler = PostSplitUserSampler(n_users=1)
     with pytest.raises(ValueError, match="Missing user column"):

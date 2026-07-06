@@ -10,6 +10,7 @@ from beyond_click_sim.data.canonical import CanonicalDataset
 from beyond_click_sim.tasks import (
     MinUserInteractionsFilter,
     PolicyRankingTaskBuilder,
+    PostSplitUserSampler,
     PopularityPolicy,
     RandomFractionSplitter,
     RandomPolicy,
@@ -51,7 +52,7 @@ def _write_toy_dataset(root: Path, *, history_context_column: str | None = None)
     )
 
 
-def _make_builder(*, policies=None, history_context_columns=()):
+def _make_builder(*, policies=None, history_context_columns=(), eval_sampler=None):
     if policies is None:
         policies = [RandomPolicy(k=3, seed=0), PopularityPolicy(k=3, seed=0)]
     return PolicyRankingTaskBuilder(
@@ -65,6 +66,7 @@ def _make_builder(*, policies=None, history_context_columns=()):
         ),
         policies=policies,
         history_context_columns=history_context_columns,
+        eval_sampler=eval_sampler,
     )
 
 
@@ -72,6 +74,17 @@ def test_val_is_always_empty(tmp_path):
     dataset = _write_toy_dataset(tmp_path / "ds")
     task = _make_builder().build(dataset)
     assert len(task.val) == 0
+
+
+def test_rejects_row_capped_eval_sampler() -> None:
+    with pytest.raises(ValueError, match="row-capped"):
+        _make_builder(
+            eval_sampler=PostSplitUserSampler(
+                n_users=2,
+                seed=0,
+                max_rows_per_user=1,
+            )
+        )
 
 
 def test_test_has_policy_and_rank_columns(tmp_path):

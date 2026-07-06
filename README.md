@@ -156,7 +156,7 @@ Run one MovieLens-1M rating-regression mode baseline:
 
 ```bash
 uv run python -m runners.in_distribution.regression_prediction.run \
-  --tasks ml-1m_rating_eval_users1000_seed0 \
+  --tasks ml-1m_rating_eval_users1000_rows_per_user5_seed0 \
   --methods mode_regressor
 ```
 
@@ -192,9 +192,12 @@ They add train-only `item_rating_mean` and `item_rating_count` aggregate item
 features, e.g.
 `ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed0` for reduced interaction
 prediction and `ml-1m_rating_item_stats_eval_users1000_seed0` for rating
-regression. On ML-1M the mean is computed from train ratings; on Steam it is
-computed from train `playtime_forever`, despite the historical column name. Use
-item-stats interaction tasks with LLM `*_with_item_stats_*` methods when the
+regression, plus
+`ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed0` for the reduced
+rating-regression protocol. On ML-1M the mean is computed from train ratings;
+on Steam it is computed from train `playtime_forever`, despite the historical
+column name. Use item-stats interaction tasks with LLM `*_with_item_stats_*`
+methods when the
 prompt should expose train-only item aggregates. ML-1M Agent4Rec yes/no methods
 also require ML-1M item-stats interaction tasks because their movie candidate
 prompt includes train-only `History ratings` (`item_rating_mean`).
@@ -312,9 +315,13 @@ methods and may be empty; constant regression baselines do not write it.
 Regression runs use observed held-out rows only: no candidate sampler, no negatives, no
 `candidate_group`, and no `sampled` column. The current ML-1M rating protocol uses
 `target_rating`, a 70/10/20 per-user random split, full filtered train, and a deterministic
-post-split `eval_users1000` cap for validation/test. LLM rating regression evaluates test rows
-only and requires a strict bare integer in `{1, 2, 3, 4, 5}`; invalid or out-of-range responses
-are logged as LLM errors rather than clamped.
+post-split `eval_users1000_rows_per_user5` cap for validation/test by default:
+sample up to 1000 users per split, then keep up to 5 observed held-out rows per
+selected user with deterministic per-user random sampling. Older full-row
+`eval_users1000` rating tasks remain available by explicit name. LLM rating
+regression evaluates test rows only and requires a strict bare integer in
+`{1, 2, 3, 4, 5}`; invalid or out-of-range responses are logged as LLM errors
+rather than clamped.
 
 For grouped pointwise interaction runs, the headline metric is
 `test.macro_by_user_group_mean.f1`: compute the metric per candidate group, average groups

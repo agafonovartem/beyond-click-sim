@@ -78,6 +78,15 @@ class PolicyRankingTaskBuilder(TaskBuilder):
             raise ValueError("PolicyRankingTaskBuilder requires splitter.")
         self.policies = list(policies)
         self.eval_sampler = eval_sampler
+        if (
+            self.eval_sampler is not None
+            and getattr(self.eval_sampler, "max_rows_per_user", None) is not None
+        ):
+            raise ValueError(
+                "PolicyRankingTaskBuilder cannot use a row-capped eval sampler: "
+                "policy-ranking target lookup needs all held-out rows for each "
+                "selected evaluation user."
+            )
         self._validate_history_context_columns()
 
     def build(self, dataset: CanonicalDataset) -> Task:

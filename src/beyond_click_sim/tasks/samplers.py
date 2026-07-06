@@ -586,6 +586,9 @@ class PostSplitUserSampler:
 
     Samples users (not candidate items): it draws a random subset of real
     held-out users and keeps their rows, adding no synthetic negatives.
+    Optionally, observed-row evaluation protocols can also cap the number of
+    held-out rows per selected user. Do not use that row cap for target-lookup
+    protocols that need the full held-out user set, such as policy ranking.
     Intentionally not a ``CandidateSampler`` — it has a different ``sample()``
     contract (``sample(rows, *, train)`` returning subset rows plus a selection
     summary) and must not be used interchangeably with one.
@@ -597,13 +600,17 @@ class PostSplitUserSampler:
         seed: int = 0,
         user_column: str = "user_id",
         require_train_history: bool = True,
+        max_rows_per_user: int | None = None,
     ) -> None:
         if n_users is not None and n_users < 1:
             raise ValueError("n_users must be positive when provided.")
+        if max_rows_per_user is not None and max_rows_per_user < 1:
+            raise ValueError("max_rows_per_user must be positive when provided.")
         self.n_users = n_users
         self.seed = seed
         self.user_column = user_column
         self.require_train_history = require_train_history
+        self.max_rows_per_user = max_rows_per_user
 
     def sample(
         self,
@@ -612,12 +619,21 @@ class PostSplitUserSampler:
         train: pd.DataFrame,
     ) -> tuple[pd.DataFrame, dict[str, int]]:
         if rows.empty:
-            return rows.copy(), {
+            summary = {
                 "eligible_users": 0,
                 "selected_users": 0,
                 "rows_before": 0,
                 "rows_after": 0,
             }
+            if self.max_rows_per_user is not None:
+                summary.update(
+                    {
+                        "max_rows_per_user": int(self.max_rows_per_user),
+                        "rows_after_user_selection": 0,
+                        "users_with_rows_capped": 0,
+                    }
+                )
+            return rows.copy(), summary
         if self.user_column not in rows.columns:
             raise ValueError(f"Missing user column: {self.user_column!r}")
         if self.require_train_history and self.user_column not in train.columns:
@@ -638,12 +654,63 @@ class PostSplitUserSampler:
         sampled = eligible_rows[
             eligible_rows[self.user_column].isin(selected_users)
         ].copy()
-        return sampled, {
+        rows_after_user_selection = int(len(sampled))
+        sampled, users_with_rows_capped = self._sample_rows_per_user(sampled)
+
+        summary = {
             "eligible_users": int(eligible_users.nunique()),
             "selected_users": int(sampled[self.user_column].nunique()),
             "rows_before": int(len(rows)),
             "rows_after": int(len(sampled)),
         }
+        if self.max_rows_per_user is not None:
+            summary.update(
+                {
+                    "max_rows_per_user": int(self.max_rows_per_user),
+                    "rows_after_user_selection": rows_after_user_selection,
+                    "users_with_rows_capped": users_with_rows_capped,
+                }
+            )
+        return sampled, summary
+
+    def _sample_rows_per_user(self, rows: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+        if self.max_rows_per_user is None or rows.empty:
+            return rows.copy(), 0
+
+        selected_indices: set[Any] = set()
+        users_with_rows_capped = 0
+        for user_id, group in rows.groupby(self.user_column, sort=False):
+            if len(group) <= self.max_rows_per_user:
+                selected_indices.update(group.index)
+                continue
+
+            users_with_rows_capped += 1
+            indexed_keys = [
+                (index, self._row_sampling_key(row, index))
+                for index, row in group.iterrows()
+            ]
+            ordered_indices = [
+                index
+                for index, _ in sorted(
+                    indexed_keys,
+                    key=lambda item: item[1],
+                )
+            ]
+            user_rng = random.Random(f"{self.seed}:rows:{user_id}")
+            selected_indices.update(
+                user_rng.sample(ordered_indices, self.max_rows_per_user)
+            )
+
+        sampled = rows.loc[rows.index.isin(selected_indices)].copy()
+        return sampled, users_with_rows_capped
+
+    @staticmethod
+    def _row_sampling_key(row: pd.Series, index: Any) -> tuple[str, str, str]:
+        if "interaction_id" in row.index:
+            return ("interaction_id", repr(row["interaction_id"]), repr(index))
+        if "item_id" in row.index:
+            return ("item_id", repr(row["item_id"]), repr(index))
+        return ("index", repr(index), repr(index))
 
 
 def _chunks(values: list[Any], size: int) -> list[list[Any]]:
