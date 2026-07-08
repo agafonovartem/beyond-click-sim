@@ -61,6 +61,7 @@ TEMPERATURE = 0.0
 MAX_TOKENS = 64
 MAX_LLM_ATTEMPTS = 5
 SMOKE_ROWS = 25
+SMOKE10_ROWS = 10
 OLLAMA_MAX_WORKERS = 1
 VLLM_MAX_WORKERS = 32
 QWEN3_8B_MAX_WORKERS = 128
@@ -80,6 +81,18 @@ def run_llama31_8b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
     )
 
 
+def run_llama31_8b_smoke10(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_smoke10",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_rows=SMOKE10_ROWS,
+        max_workers=OLLAMA_MAX_WORKERS,
+    )
+
+
 def run_llama31_8b_with_item_stats_smoke(
     task: Task,
     output_dir: Path,
@@ -93,6 +106,39 @@ def run_llama31_8b_with_item_stats_smoke(
         max_rows=SMOKE_ROWS,
         max_workers=OLLAMA_MAX_WORKERS,
         use_item_stats=True,
+    )
+
+
+def run_llama31_8b_with_item_stats_smoke10(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_with_item_stats_smoke10",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_rows=SMOKE10_ROWS,
+        max_workers=OLLAMA_MAX_WORKERS,
+        use_item_stats=True,
+    )
+
+
+def run_llama31_8b_with_item_stats_summary_smoke10(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_with_item_stats_summary_smoke10",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_rows=SMOKE10_ROWS,
+        max_workers=OLLAMA_MAX_WORKERS,
+        use_item_stats=True,
+        use_item_summaries=True,
     )
 
 

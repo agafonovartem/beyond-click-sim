@@ -50,8 +50,11 @@ from runners.in_distribution.regression_prediction.methods.llm_regressor import 
     run_gpt55_with_item_stats_smoke,
     run_llama31_8b_full,
     run_llama31_8b_smoke,
+    run_llama31_8b_smoke10,
     run_llama31_8b_with_item_stats_full,
     run_llama31_8b_with_item_stats_smoke,
+    run_llama31_8b_with_item_stats_smoke10,
+    run_llama31_8b_with_item_stats_summary_smoke10,
     run_llama33_70b_full,
     run_llama33_70b_smoke,
     run_llama33_70b_with_item_stats_full,
@@ -170,9 +173,16 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
         run_agent4rec_qwen3_8b_traits_taste_gpt4o_mini_summary_full
     ),
     "llm_regressor_ollama_llama31_8b_smoke": run_llama31_8b_smoke,
+    "llm_regressor_ollama_llama31_8b_smoke10": run_llama31_8b_smoke10,
     "llm_regressor_ollama_llama31_8b_full": run_llama31_8b_full,
     "llm_regressor_ollama_llama31_8b_with_item_stats_smoke": (
         run_llama31_8b_with_item_stats_smoke
+    ),
+    "llm_regressor_ollama_llama31_8b_with_item_stats_smoke10": (
+        run_llama31_8b_with_item_stats_smoke10
+    ),
+    "llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10": (
+        run_llama31_8b_with_item_stats_summary_smoke10
     ),
     "llm_regressor_ollama_llama31_8b_with_item_stats_full": (
         run_llama31_8b_with_item_stats_full
