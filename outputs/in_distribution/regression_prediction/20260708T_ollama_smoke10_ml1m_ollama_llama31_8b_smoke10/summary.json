@@ -1,0 +1,44 @@
+[
+  {
+    "coverage": 0.1,
+    "llm_errors": 9,
+    "macro_user_mae": 1.0,
+    "macro_user_rmse": 1.0,
+    "method": "llm_regressor_ollama_llama31_8b_smoke10",
+    "micro_mae": 1.0,
+    "micro_rmse": 1.0,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim-agent4rec-summary/outputs/in_distribution/regression_prediction/20260708T_ollama_smoke10_ml1m_ollama_llama31_8b_smoke10/ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed0/llm_regressor_ollama_llama31_8b_smoke10",
+    "requested_rows": 10,
+    "scored_rows": 1,
+    "status": "ok",
+    "task": "ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed0"
+  },
+  {
+    "coverage": 0.2,
+    "llm_errors": 8,
+    "macro_user_mae": 0.5,
+    "macro_user_rmse": 0.7071067811865476,
+    "method": "llm_regressor_ollama_llama31_8b_with_item_stats_smoke10",
+    "micro_mae": 0.5,
+    "micro_rmse": 0.7071067811865476,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim-agent4rec-summary/outputs/in_distribution/regression_prediction/20260708T_ollama_smoke10_ml1m_ollama_llama31_8b_smoke10/ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed0/llm_regressor_ollama_llama31_8b_with_item_stats_smoke10",
+    "requested_rows": 10,
+    "scored_rows": 2,
+    "status": "ok",
+    "task": "ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed0"
+  },
+  {
+    "coverage": 0.7,
+    "llm_errors": 3,
+    "macro_user_mae": 0.8333333333333333,
+    "macro_user_rmse": 1.0206207261596574,
+    "method": "llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10",
+    "micro_mae": 0.8571428571428571,
+    "micro_rmse": 1.0690449676496976,
+    "output_dir": "/Users/a.agafonov/Research/agent_simulator/repos/beyond-click-sim-agent4rec-summary/outputs/in_distribution/regression_prediction/20260708T_ollama_smoke10_ml1m_ollama_llama31_8b_smoke10/ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed0/llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10",
+    "requested_rows": 10,
+    "scored_rows": 7,
+    "status": "ok",
+    "task": "ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed0"
+  }
+]

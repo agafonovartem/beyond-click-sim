@@ -1,0 +1,31 @@
+method,user_id,item_id,item_title,target,score
+llm_regressor_ollama_llama31_8b_smoke10,1,1566,Hercules (1997),4,
+llm_regressor_ollama_llama31_8b_smoke10,1,2762,"Sixth Sense, The (1999)",4,
+llm_regressor_ollama_llama31_8b_smoke10,1,588,Aladdin (1992),4,
+llm_regressor_ollama_llama31_8b_smoke10,1,1961,Rain Man (1988),5,
+llm_regressor_ollama_llama31_8b_smoke10,1,2355,"Bug's Life, A (1998)",5,4.0
+llm_regressor_ollama_llama31_8b_smoke10,10,595,Beauty and the Beast (1991),5,
+llm_regressor_ollama_llama31_8b_smoke10,10,344,Ace Ventura: Pet Detective (1994),4,
+llm_regressor_ollama_llama31_8b_smoke10,10,932,"Affair to Remember, An (1957)",2,
+llm_regressor_ollama_llama31_8b_smoke10,10,743,Spy Hard (1996),3,
+llm_regressor_ollama_llama31_8b_smoke10,10,1380,Grease (1978),5,
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,1,1566,Hercules (1997),4,
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,1,2762,"Sixth Sense, The (1999)",4,
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,1,588,Aladdin (1992),4,4.0
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,1,1961,Rain Man (1988),5,
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,1,2355,"Bug's Life, A (1998)",5,4.0
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,10,595,Beauty and the Beast (1991),5,
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,10,344,Ace Ventura: Pet Detective (1994),4,
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,10,932,"Affair to Remember, An (1957)",2,
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,10,743,Spy Hard (1996),3,
+llm_regressor_ollama_llama31_8b_with_item_stats_smoke10,10,1380,Grease (1978),5,
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,1,1566,Hercules (1997),4,
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,1,2762,"Sixth Sense, The (1999)",4,
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,1,588,Aladdin (1992),4,4.0
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,1,1961,Rain Man (1988),5,4.0
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,1,2355,"Bug's Life, A (1998)",5,4.0
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,10,595,Beauty and the Beast (1991),5,4.0
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,10,344,Ace Ventura: Pet Detective (1994),4,4.0
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,10,932,"Affair to Remember, An (1957)",2,4.0
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,10,743,Spy Hard (1996),3,
+llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10,10,1380,Grease (1978),5,4.0

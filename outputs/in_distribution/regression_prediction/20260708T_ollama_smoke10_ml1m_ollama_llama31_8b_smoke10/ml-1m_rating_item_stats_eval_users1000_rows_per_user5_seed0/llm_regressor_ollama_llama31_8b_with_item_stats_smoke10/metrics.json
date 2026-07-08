@@ -1,0 +1,38 @@
+{
+  "coverage": 0.2,
+  "evaluated_splits": [
+    "test"
+  ],
+  "llm_errors": 8,
+  "main_metric": "test.macro_by_user_mean.mae",
+  "max_rows": 10,
+  "max_workers": 1,
+  "method": "llm_regressor_ollama_llama31_8b_with_item_stats_smoke10",
+  "protocol": "regression",
+  "regression_evaluation": {
+    "aggregations": [
+      "micro",
+      "macro_by_user_mean"
+    ],
+    "metrics": [
+      "mae",
+      "rmse"
+    ]
+  },
+  "requested_rows": 10,
+  "scored_rows": 2,
+  "task": "ml-1m_rating_item_stats_eval_users1000_rows_per_user5_seed0",
+  "test": {
+    "macro_by_user_mean": {
+      "mae": 0.5,
+      "n": 2,
+      "n_users": 1,
+      "rmse": 0.7071067811865476
+    },
+    "micro": {
+      "mae": 0.5,
+      "n": 2,
+      "rmse": 0.7071067811865476
+    }
+  }
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "coverage_mean": 0.1,
+    "coverage_std": 0.0,
+    "macro_user_mae_mean": 1.0,
+    "macro_user_mae_std": 0.0,
+    "macro_user_rmse_mean": 1.0,
+    "macro_user_rmse_std": 0.0,
+    "method": "llm_regressor_ollama_llama31_8b_smoke10",
+    "micro_mae_mean": 1.0,
+    "micro_mae_std": 0.0,
+    "micro_rmse_mean": 1.0,
+    "micro_rmse_std": 0.0,
+    "n": 1
+  },
+  {
+    "coverage_mean": 0.2,
+    "coverage_std": 0.0,
+    "macro_user_mae_mean": 0.5,
+    "macro_user_mae_std": 0.0,
+    "macro_user_rmse_mean": 0.7071067811865476,
+    "macro_user_rmse_std": 0.0,
+    "method": "llm_regressor_ollama_llama31_8b_with_item_stats_smoke10",
+    "micro_mae_mean": 0.5,
+    "micro_mae_std": 0.0,
+    "micro_rmse_mean": 0.7071067811865476,
+    "micro_rmse_std": 0.0,
+    "n": 1
+  },
+  {
+    "coverage_mean": 0.7,
+    "coverage_std": 0.0,
+    "macro_user_mae_mean": 0.8333333333333333,
+    "macro_user_mae_std": 0.0,
+    "macro_user_rmse_mean": 1.0206207261596574,
+    "macro_user_rmse_std": 0.0,
+    "method": "llm_regressor_ollama_llama31_8b_with_item_stats_summary_smoke10",
+    "micro_mae_mean": 0.8571428571428571,
+    "micro_mae_std": 0.0,
+    "micro_rmse_mean": 1.0690449676496976,
+    "micro_rmse_std": 0.0,
+    "n": 1
+  }
+]
