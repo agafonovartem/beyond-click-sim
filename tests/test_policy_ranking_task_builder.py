@@ -113,6 +113,20 @@ def test_manifest_contains_two_policies(tmp_path):
     assert len(task.manifest["policies"]) == 2
 
 
+def test_manifest_contains_policy_recommendation_metrics(tmp_path):
+    dataset = _write_toy_dataset(tmp_path / "ds")
+    task = _make_builder().build(dataset)
+    metrics = task.manifest["policy_recommendation_metrics"]
+    assert metrics["protocol"] == "held_out_recommendation_eval"
+    assert metrics["aggregation_headline"] == "macro_by_user_group_mean"
+    assert metrics["ks"] == [1, 3, 5, 10]
+    policy_entries = metrics["policies"]
+    assert len(policy_entries) == 2
+    for entry in policy_entries:
+        assert "mean_hit_rate" in entry
+        assert "ranking" in entry
+
+
 def test_target_values_are_binary(tmp_path):
     dataset = _write_toy_dataset(tmp_path / "ds")
     task = _make_builder().build(dataset)

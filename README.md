@@ -178,6 +178,7 @@ uv run python -m runners.in_distribution.interaction_prediction.run \
   --methods llm_yes_no_vllm_llama33_70b_smoke
 ```
 
+<<<<<<< HEAD
 Run the Cold Start experiment:
 
 ```bash
@@ -185,6 +186,15 @@ uv run python -m runners.in_distribution.cold_start.run \
   --tasks $(.venv/bin/python -c "from runners.in_distribution.cold_start.task_builders import TASK_BUILDERS; print(','.join(TASK_BUILDERS))") \
   --methods popularity_f1_threshold,popularity_ranking,item_knn_cold_start,item_knn_cold_start_ranking,llm_yes_no_vllm_qwen36_27b_full \
   --output-dir outputs/in_distribution/cold_start
+=======
+Run all policy ranking agreement tasks and methods (20 tasks × 25 methods = 500 runs):
+
+```bash
+uv run python -m runners.in_distribution.policy_ranking_agreement.run \
+  --tasks $(.venv/bin/python -c "from runners.in_distribution.policy_ranking_agreement.task_builders import TASK_BUILDERS; print(','.join(TASK_BUILDERS))") \
+  --methods $(.venv/bin/python -c "from runners.in_distribution.policy_ranking_agreement.methods import METHOD_RUNNERS; print(','.join(METHOD_RUNNERS))") \
+  --output-dir outputs/in_distribution/policy_ranking_agreement
+>>>>>>> aa81c05 (Added cap on groups and users count in cold start. Also added policy metrics logging in policy ranking)
 ```
 
 The default interaction tasks use the reduced `eval_users1000_cg5` protocol:

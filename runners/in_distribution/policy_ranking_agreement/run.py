@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import UTC, datetime
+import json
 from pathlib import Path
 from time import perf_counter
 
@@ -23,12 +24,22 @@ def run_one(task_name: str, method_name: str, output_root: Path = DEFAULT_OUTPUT
     print(f"Building task: {task_name}", flush=True)
     task = TASK_BUILDERS[task_name]()
     print(f"Built task: {task_name} in {_elapsed(task_start)}s", flush=True)
+    write_task_policy_metrics(output_root, task_name=task_name, task_manifest=task.manifest)
     output_dir = make_output_dir(output_root, task_name=task_name, method_name=method_name)
     method_start = perf_counter()
     print(f"Running method: {method_name} -> {output_dir}", flush=True)
     result = METHOD_RUNNERS[method_name](task, output_dir)
     print(f"Finished method: {method_name} in {_elapsed(method_start)}s", flush=True)
     return result
+
+
+def is_completed(output_root: Path, task_name: str, method_name: str) -> bool:
+    for d in output_root.glob(f"*_{task_name}_{method_name}"):
+        if not d.is_dir():
+            continue
+        if (d / "metrics.json").exists():
+            return True
+    return False
 
 
 def main() -> None:
@@ -41,11 +52,21 @@ def main() -> None:
 
     for task_name in tasks:
         task_start = perf_counter()
-        print(f"Building task: {task_name}", flush=True)
-        task = TASK_BUILDERS[task_name]()
-        print(f"Built task: {task_name} in {_elapsed(task_start)}s", flush=True)
+        task = None
         for method_name in methods:
             run_index += 1
+            if args.resume and is_completed(output_root, task_name, method_name):
+                print(f"Skipping (already done) {run_index}/{total_runs}: task={task_name}, method={method_name}", flush=True)
+                continue
+            if task is None:
+                print(f"Building task: {task_name}", flush=True)
+                task = TASK_BUILDERS[task_name]()
+                print(f"Built task: {task_name} in {_elapsed(task_start)}s", flush=True)
+                write_task_policy_metrics(
+                    output_root,
+                    task_name=task_name,
+                    task_manifest=task.manifest,
+                )
             print(f"Run {run_index}/{total_runs}: task={task_name}, method={method_name}", flush=True)
             output_dir = make_output_dir(
                 output_root,
@@ -76,6 +97,11 @@ def parse_args() -> argparse.Namespace:
         default=str(DEFAULT_OUTPUT_DIR),
         help="Directory for run artifacts.",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip task-method pairs that already have output in --output-dir.",
+    )
     return parser.parse_args()
 
 
@@ -95,6 +121,25 @@ def parse_names(
 def make_output_dir(output_root: Path, *, task_name: str, method_name: str) -> Path:
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     return output_root / f"{timestamp}_{task_name}_{method_name}"
+
+
+def write_task_policy_metrics(
+    output_root: Path,
+    *,
+    task_name: str,
+    task_manifest: dict[str, object],
+) -> None:
+    payload = {
+        "task": task_name,
+        "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "policy_recommendation_metrics": task_manifest.get("policy_recommendation_metrics"),
+    }
+    task_artifacts_dir = output_root / "_task_artifacts" / task_name
+    task_artifacts_dir.mkdir(parents=True, exist_ok=True)
+    (task_artifacts_dir / "policy_metrics.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _elapsed(start: float) -> float:

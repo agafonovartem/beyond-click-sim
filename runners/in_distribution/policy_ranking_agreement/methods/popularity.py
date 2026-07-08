@@ -17,6 +17,7 @@ from runners.in_distribution.policy_ranking_agreement.methods.common import (
     current_git_commit,
     json_safe,
     task_xy,
+    write_policy_metrics,
     write_json,
 )
 
@@ -93,6 +94,7 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
     }
     write_json(output_dir / "manifest.json", manifest)
     write_json(output_dir / METRICS_FILENAME, metrics)
+    write_policy_metrics(task, output_dir)
     _record(stage_times, "write_metadata", t)
 
     return metrics

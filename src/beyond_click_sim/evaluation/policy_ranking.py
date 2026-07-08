@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import pandas as pd
+
+from beyond_click_sim.evaluation.ranking import (
+    grouped_ranking_metrics,
+    user_grouped_ranking_metrics,
+)
+
 
 def policy_ranking_agreement_metrics(
     policy_names: list[str],
@@ -92,3 +99,72 @@ def policy_ranking_agreement_metrics(
         "real_utilities": dict(zip(policy_names, [float(v) for v in real_utilities])),
         "warning": warning,
     }
+
+
+def evaluate_policy_recommendations(
+    recs: pd.DataFrame,
+    *,
+    targets: pd.Series,
+    user_column: str = "user_id",
+    policy_name: str,
+    k: int,
+    ks: tuple[int, ...] = (1, 3, 5, 10),
+    tie_policy: str = "average",
+    fit_recommend_seconds: float | None = None,
+) -> dict[str, object]:
+    """Compute held-out ranking quality for one policy recommendation frame."""
+
+    if len(recs) != len(targets):
+        raise ValueError(
+            "recs and targets must have same length. "
+            f"Got {len(recs)} and {len(targets)}."
+        )
+    if "rank" not in recs.columns:
+        raise ValueError("recs must contain 'rank' column.")
+    if user_column not in recs.columns:
+        raise ValueError(f"recs must contain user column: {user_column!r}")
+
+    frame = recs.copy()
+    frame["target"] = targets.to_numpy()
+    # rank 1 should be highest score for ranking metrics.
+    frame["score"] = -frame["rank"].astype(float)
+    frame["candidate_group"] = (
+        frame[user_column].astype(str) + "::" + str(policy_name)
+    )
+
+    macro_by_group = grouped_ranking_metrics(
+        frame["target"],
+        frame["score"],
+        frame["candidate_group"],
+        ks=ks,
+        tie_policy=tie_policy,  # type: ignore[arg-type]
+    )
+    macro_by_user = user_grouped_ranking_metrics(
+        frame["target"],
+        frame["score"],
+        frame["candidate_group"],
+        frame[user_column],
+        ks=ks,
+        tie_policy=tie_policy,  # type: ignore[arg-type]
+    )
+
+    headline_k = k if k in ks else max(ks)
+    headline_key = f"ndcg@{headline_k}"
+    result: dict[str, object] = {
+        "policy": policy_name,
+        "k": int(k),
+        "n_users": int(frame[user_column].nunique()),
+        "n_recommendations": int(len(frame)),
+        "mean_hit_rate": float(frame["target"].mean()) if len(frame) else 0.0,
+        "headline_metric": f"macro_by_user_group_mean.{headline_key}",
+        "headline_value": float(macro_by_user[headline_key]),
+        "ranking": {
+            "ks": list(ks),
+            "tie_policy": tie_policy,
+            "macro_by_group": macro_by_group,
+            "macro_by_user_group_mean": macro_by_user,
+        },
+    }
+    if fit_recommend_seconds is not None:
+        result["fit_recommend_seconds"] = float(fit_recommend_seconds)
+    return result

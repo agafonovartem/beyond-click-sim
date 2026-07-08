@@ -11,6 +11,8 @@ import pandas as pd
 
 from beyond_click_sim.tasks import Task, split_xy
 
+POLICY_METRICS_FILENAME = "policy_metrics.json"
+
 
 def task_xy(task: Task) -> dict[str, tuple[pd.DataFrame, pd.Series]]:
     """Return train and test (X, y) pairs. Val is omitted (always empty for Q3)."""
@@ -57,6 +59,17 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
         json.dumps(json_safe(payload), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def write_policy_metrics(task: Task, output_dir: Path) -> None:
+    """Write per-policy recommendation metrics from task manifest."""
+    payload = {
+        "task": task.name,
+        "policy_recommendation_metrics": task.manifest.get(
+            "policy_recommendation_metrics"
+        ),
+    }
+    write_json(output_dir / POLICY_METRICS_FILENAME, payload)
 
 
 def json_safe(value: Any) -> Any:
