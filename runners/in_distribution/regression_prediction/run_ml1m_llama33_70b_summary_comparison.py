@@ -15,6 +15,7 @@ LLAMA33_70B_METHODS = (
     "agent4rec_regressor_vllm_llama33_70b_taste_gpt4o_mini_full",
     "agent4rec_regressor_vllm_llama33_70b_taste_gpt4o_mini_summary_full",
     "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_full",
+    "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full",
     "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_summary_full",
 )
 

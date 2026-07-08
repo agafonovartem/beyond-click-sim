@@ -10,12 +10,14 @@ from runners.in_distribution.regression_prediction.methods.agent4rec_regressor i
     run_llama33_70b_taste_gpt4o_mini_summary_full as run_agent4rec_llama33_70b_taste_gpt4o_mini_summary_full,
     run_llama33_70b_traits_full as run_agent4rec_llama33_70b_traits_full,
     run_llama33_70b_traits_summary_full as run_agent4rec_llama33_70b_traits_summary_full,
+    run_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full as run_agent4rec_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full,
     run_llama33_70b_traits_taste_gpt4o_mini_full as run_agent4rec_llama33_70b_traits_taste_gpt4o_mini_full,
     run_llama33_70b_traits_taste_gpt4o_mini_summary_full as run_agent4rec_llama33_70b_traits_taste_gpt4o_mini_summary_full,
     run_qwen36_27b_taste_gpt4o_mini_full as run_agent4rec_qwen36_27b_taste_gpt4o_mini_full,
     run_qwen36_27b_taste_gpt4o_mini_summary_full as run_agent4rec_qwen36_27b_taste_gpt4o_mini_summary_full,
     run_qwen36_27b_traits_full as run_agent4rec_qwen36_27b_traits_full,
     run_qwen36_27b_traits_summary_full as run_agent4rec_qwen36_27b_traits_summary_full,
+    run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full as run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full,
     run_qwen3_8b_taste_gpt4o_mini_candidate_summary_full as run_agent4rec_qwen3_8b_taste_gpt4o_mini_candidate_summary_full,
     run_qwen3_8b_taste_gpt4o_mini_full as run_agent4rec_qwen3_8b_taste_gpt4o_mini_full,
     run_qwen3_8b_taste_gpt4o_mini_history_summary_full as run_agent4rec_qwen3_8b_taste_gpt4o_mini_history_summary_full,
@@ -69,6 +71,7 @@ from runners.in_distribution.regression_prediction.methods.mode import run as ru
 from runners.in_distribution.regression_prediction.methods.user import (
     run_user_mean,
     run_user_mode,
+    run_user_mode_full_history,
 )
 
 
@@ -81,6 +84,7 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     "item_mode_regressor": run_item_mode,
     "user_mean_regressor": run_user_mean,
     "user_mode_regressor": run_user_mode,
+    "user_mode_full_history_regressor": run_user_mode_full_history,
     "agent4rec_regressor_vllm_llama33_70b_traits_full": (
         run_agent4rec_llama33_70b_traits_full
     ),
@@ -95,6 +99,9 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     ),
     "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_full": (
         run_agent4rec_llama33_70b_traits_taste_gpt4o_mini_full
+    ),
+    "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full": (
+        run_agent4rec_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full
     ),
     "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_summary_full": (
         run_agent4rec_llama33_70b_traits_taste_gpt4o_mini_summary_full
@@ -119,6 +126,9 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     ),
     "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_summary_full": (
         run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_summary_full
+    ),
+    "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full": (
+        run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full
     ),
     "agent4rec_regressor_vllm_qwen3_8b_traits_smoke": (
         run_agent4rec_qwen3_8b_traits_smoke

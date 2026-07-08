@@ -28,6 +28,7 @@ from runners.in_distribution.regression_prediction.task_builders import repo_roo
 
 USER_MEAN_METHOD_NAME = "user_mean_regressor"
 USER_MODE_METHOD_NAME = "user_mode_regressor"
+USER_MODE_FULL_HISTORY_METHOD_NAME = "user_mode_full_history_regressor"
 
 
 def run_user_mean(task: Task, output_dir: Path) -> dict[str, object]:
@@ -45,6 +46,16 @@ def run_user_mode(task: Task, output_dir: Path) -> dict[str, object]:
         output_dir,
         method_name=USER_MODE_METHOD_NAME,
         scorer_class=UserModeRegressor,
+    )
+
+
+def run_user_mode_full_history(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=USER_MODE_FULL_HISTORY_METHOD_NAME,
+        scorer_class=UserModeRegressor,
+        max_history_items=None,
     )
 
 
@@ -166,7 +177,7 @@ def _scorer_manifest(
             "source": "train_rows",
             "selection": scorer.history_selection,
             "max_history_items": max_history_items,
-            "matched_llm_regressor_history": True,
+            "matched_llm_regressor_history": max_history_items == MAX_HISTORY_ITEMS,
         },
         "prompt_columns": {
             "history_description_columns": target_config["history_description_columns"],

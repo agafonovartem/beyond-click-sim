@@ -15,6 +15,7 @@ QWEN36_27B_METHODS = (
     "agent4rec_regressor_vllm_qwen36_27b_taste_gpt4o_mini_full",
     "agent4rec_regressor_vllm_qwen36_27b_taste_gpt4o_mini_summary_full",
     "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+    "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full",
     "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_summary_full",
 )
 

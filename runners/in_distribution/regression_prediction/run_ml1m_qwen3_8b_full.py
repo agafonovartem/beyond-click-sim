@@ -62,8 +62,12 @@ def main(
 ) -> None:
     args = parse_args()
     selected_tasks = _selected_task_names(args)
-    methods = method_runners(default_methods)
-    selected_methods = _selected_methods(args, methods, default_methods=default_methods)
+    selected_methods = _selected_methods(
+        args,
+        METHOD_RUNNERS,
+        default_methods=default_methods,
+    )
+    methods = method_runners(tuple(selected_methods))
     output_root = Path(args.output_root).expanduser().resolve()
     run_id = args.run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     batch_root = output_root / f"{run_id}_{run_suffix}"

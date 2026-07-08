@@ -15,6 +15,9 @@ Notes:
 
 Run root: `outputs/in_distribution/regression_prediction/20260706T1605MSK_ml1m_qwen3_8b_regression_full`.
 
+Additional full-history user-mode run root:
+`outputs/in_distribution/regression_prediction/20260707T_user_mode_full_history_ml1m_qwen3_8b_regression_full`.
+
 Protocol:
 - Dataset: `ml-1m` canonical `v1`.
 - Target: `target_rating`; `rating` is available as train history context and hidden on val/test rows.
@@ -24,9 +27,55 @@ Protocol:
 - Candidate construction: none; no negatives, no `candidate_group`, no `sampled`.
 - Item statistics: train-split-only `item_rating_mean` and `item_rating_count`.
 - LLM backend: local LiteLLM/vLLM `Qwen/Qwen3-8B`, `enable_thinking=false`, runner concurrency `max_workers=128`.
+- Baselines: `user_mean_regressor` and `user_mode_regressor` use the same per-user last-20 train-history window in input order that is shown to `LLMRegressor`; `user_mode_full_history_regressor` uses all available train rows for the user.
 - Caveat: Agent4Rec regression candidate prompts expose `item_title`, train-only item mean rating, and genres. They do not expose `item_rating_count`; raw history statistics are not separately injected into the Agent4Rec profile text.
 
 Seed average over seeds 0-2. Lower MAE/RMSE is better.
+
+Compact grid for the reduced regression protocol. MAE/RMSE are macro-by-user
+means over seeds 0-2.
+
+| Method | Backbone | Summaries | MAE | RMSE |
+|---|---|---|---:|---:|
+| MeanRegressor | non-LLM | -- | 0.9287 +/- 0.0052 | 1.0478 +/- 0.0063 |
+| ModeRegressor | non-LLM | -- | 0.8237 +/- 0.0142 | 1.0471 +/- 0.0154 |
+| ItemMeanRegressor | non-LLM | -- | 0.7810 +/- 0.0139 | 0.9142 +/- 0.0163 |
+| ItemModeRegressor | non-LLM | -- | 0.7623 +/- 0.0210 | 1.0033 +/- 0.0223 |
+| UserMeanRegressor | non-LLM | -- | 0.8362 +/- 0.0075 | 0.9833 +/- 0.0083 |
+| UserModeRegressor | non-LLM | -- | 0.8930 +/- 0.0111 | 1.1486 +/- 0.0146 |
+| UserModeRegressor (full history) | non-LLM | -- | 0.8561 +/- 0.0144 | 1.1173 +/- 0.0182 |
+| History + item stats | Qwen3-8B | -- | 0.7816 +/- 0.0057 | 0.9877 +/- 0.0094 |
+| History + item stats | Qwen3-8B | history only | 0.7777 +/- 0.0023 | 0.9807 +/- 0.0066 |
+| History + item stats | Qwen3-8B | candidate only | 0.7804 +/- 0.0030 | 0.9836 +/- 0.0057 |
+| History + item stats | Qwen3-8B | history + candidate | 0.7738 +/- 0.0004 | 0.9790 +/- 0.0055 |
+| Agent4Rec traits + item stats | Qwen3-8B | -- | 0.9948 +/- 0.0244 | 1.2128 +/- 0.0218 |
+| Agent4Rec traits + item stats | Qwen3-8B | candidate only | 0.9874 +/- 0.0248 | 1.2007 +/- 0.0232 |
+| Agent4Rec taste + item stats | Qwen3-8B | -- | 1.1260 +/- 0.0063 | 1.3721 +/- 0.0043 |
+| Agent4Rec taste + item stats | Qwen3-8B | history only | 1.1074 +/- 0.0063 | 1.3584 +/- 0.0038 |
+| Agent4Rec taste + item stats | Qwen3-8B | candidate only | 1.0861 +/- 0.0178 | 1.3412 +/- 0.0254 |
+| Agent4Rec taste + item stats | Qwen3-8B | history + candidate | 1.0533 +/- 0.0088 | 1.3080 +/- 0.0113 |
+| Agent4Rec traits + taste + item stats | Qwen3-8B | -- | 1.0973 +/- 0.0112 | 1.3478 +/- 0.0064 |
+| Agent4Rec traits + taste + item stats | Qwen3-8B | history only | 1.0598 +/- 0.0152 | 1.3087 +/- 0.0109 |
+| Agent4Rec traits + taste + item stats | Qwen3-8B | candidate only | 1.0752 +/- 0.0189 | 1.3228 +/- 0.0176 |
+| Agent4Rec traits + taste + item stats | Qwen3-8B | history + candidate | 1.0479 +/- 0.0160 | 1.2926 +/- 0.0114 |
+| History + item stats | Qwen3.6-27B | -- | 0.6976 +/- 0.0099 | 0.9165 +/- 0.0098 |
+| History + item stats | Qwen3.6-27B | history + candidate | 0.7067 +/- 0.0146 | 0.9280 +/- 0.0147 |
+| Agent4Rec traits + item stats | Qwen3.6-27B | -- | 1.1092 +/- 0.0193 | 1.3317 +/- 0.0173 |
+| Agent4Rec traits + item stats | Qwen3.6-27B | candidate only | 1.1840 +/- 0.0164 | 1.4096 +/- 0.0158 |
+| Agent4Rec taste + item stats | Qwen3.6-27B | -- | 0.8888 +/- 0.0250 | 1.1428 +/- 0.0216 |
+| Agent4Rec taste + item stats | Qwen3.6-27B | history + candidate | 0.9035 +/- 0.0193 | 1.1567 +/- 0.0189 |
+| Agent4Rec traits + taste + item stats | Qwen3.6-27B | -- | 0.9273 +/- 0.0231 | 1.1823 +/- 0.0198 |
+| Agent4Rec traits + taste + item stats | Qwen3.6-27B | candidate only | 0.9423 +/- 0.0239 | 1.1987 +/- 0.0233 |
+| Agent4Rec traits + taste + item stats | Qwen3.6-27B | history + candidate | 0.9456 +/- 0.0232 | 1.2022 +/- 0.0223 |
+| History + item stats | Llama-3.3-70B | -- | 0.7388 +/- 0.0116 | 0.9738 +/- 0.0097 |
+| History + item stats | Llama-3.3-70B | history + candidate | 0.7344 +/- 0.0096 | 0.9731 +/- 0.0061 |
+| Agent4Rec traits + item stats | Llama-3.3-70B | -- | 1.0261 +/- 0.0261 | 1.2722 +/- 0.0314 |
+| Agent4Rec traits + item stats | Llama-3.3-70B | candidate only | 0.9865 +/- 0.0177 | 1.2335 +/- 0.0219 |
+| Agent4Rec taste + item stats | Llama-3.3-70B | -- | 0.9484 +/- 0.0183 | 1.2150 +/- 0.0157 |
+| Agent4Rec taste + item stats | Llama-3.3-70B | history + candidate | 0.9533 +/- 0.0178 | 1.2202 +/- 0.0204 |
+| Agent4Rec traits + taste + item stats | Llama-3.3-70B | -- | 0.9803 +/- 0.0303 | 1.2491 +/- 0.0254 |
+| Agent4Rec traits + taste + item stats | Llama-3.3-70B | candidate only | 0.9800 +/- 0.0216 | 1.2492 +/- 0.0144 |
+| Agent4Rec traits + taste + item stats | Llama-3.3-70B | history + candidate | 0.9798 +/- 0.0184 | 1.2472 +/- 0.0184 |
 
 | method | visible metadata | seeds | coverage | macro MAE | macro RMSE | micro MAE | micro RMSE |
 |---|---|---|---:|---:|---:|---:|---:|
@@ -36,6 +85,7 @@ Seed average over seeds 0-2. Lower MAE/RMSE is better.
 | ItemModeRegressor | train item mode | 0,1,2 | n/a | 0.7623 +/- 0.0210 | 1.0033 +/- 0.0223 | 0.7622 +/- 0.0210 | 1.0888 +/- 0.0250 |
 | UserMeanRegressor | last-20 train history | 0,1,2 | n/a | 0.8362 +/- 0.0075 | 0.9833 +/- 0.0083 | 0.8359 +/- 0.0074 | 1.0475 +/- 0.0112 |
 | UserModeRegressor | last-20 train history | 0,1,2 | n/a | 0.8930 +/- 0.0111 | 1.1486 +/- 0.0146 | 0.8924 +/- 0.0105 | 1.2603 +/- 0.0183 |
+| UserModeRegressor | full train history | 0,1,2 | n/a | 0.8561 +/- 0.0144 | 1.1173 +/- 0.0182 | 0.8553 +/- 0.0140 | 1.2292 +/- 0.0218 |
 | History + item stats | train history, candidate item mean/count | 0,1,2 | 1.000 | 0.7816 +/- 0.0057 | 0.9877 +/- 0.0094 | 0.7816 +/- 0.0054 | 1.0444 +/- 0.0094 |
 | Agent4Rec traits + item stats | traits profile, candidate item mean | 0,1,2 | 1.000 | 0.9948 +/- 0.0244 | 1.2128 +/- 0.0218 | 0.9947 +/- 0.0240 | 1.3180 +/- 0.0245 |
 | Agent4Rec taste + item stats | taste profile, candidate item mean | 0,1,2 | 1.000 | 1.1260 +/- 0.0063 | 1.3721 +/- 0.0043 | 1.1260 +/- 0.0064 | 1.4516 +/- 0.0083 |
@@ -77,13 +127,15 @@ in both history and candidate text is best. Even with summaries, Agent4Rec
 regression remains worse than the plain history+item-stats LLM and the strongest
 item-statistic baselines above.
 
-Qwen3.6-27B check over the same reduced protocol. This run tests only the
-original no-summary prompt and the best Qwen3-8B placement from above, not the
-separate history-only/candidate-only ablation. The `traits` Agent4Rec summary
-variant can only add summaries to candidate rows because traits-only profiles do
-not use the taste-history prompt.
+Qwen3.6-27B check over the same reduced protocol. The main comparison run tests
+the original no-summary prompt and the best Qwen3-8B placement from above, not
+the full separate history-only/candidate-only ablation. A follow-up run adds the
+original-like Agent4Rec traits+taste candidate-only summary variant.
 
 Run root: `outputs/in_distribution/regression_prediction/20260706T1912MSK_ml1m_qwen36_27b_regression_summary_comparison`.
+
+Additional candidate-only run root:
+`outputs/in_distribution/regression_prediction/20260707T104257Z_ml1m_qwen36_27b_original_like_candidate_summary_ml1m_qwen36_27b_regression_summary_comparison`.
 
 Protocol differences relative to the Qwen3-8B run:
 - LLM backend: local LiteLLM/vLLM `Qwen/Qwen3.6-27B`, `enable_thinking=false`, runner concurrency `max_workers=128`.
@@ -98,14 +150,51 @@ Protocol differences relative to the Qwen3-8B run:
 | Agent4Rec taste + item stats | none | 0,1,2 | 1.000 | 0.8888 +/- 0.0250 | 0.0000 | 1.1428 +/- 0.0216 | 0.8888 +/- 0.0248 | 1.2248 +/- 0.0243 |
 | Agent4Rec taste + item stats | history + candidate | 0,1,2 | 1.000 | 0.9035 +/- 0.0193 | 0.0148 | 1.1567 +/- 0.0189 | 0.9037 +/- 0.0189 | 1.2419 +/- 0.0215 |
 | Agent4Rec traits + taste + item stats | none | 0,1,2 | 1.000 | 0.9273 +/- 0.0231 | 0.0000 | 1.1823 +/- 0.0198 | 0.9270 +/- 0.0234 | 1.2943 +/- 0.0213 |
+| Agent4Rec traits + taste + item stats | candidate only | 0,1,2 | 1.000 | 0.9423 +/- 0.0239 | 0.0150 | 1.1987 +/- 0.0233 | 0.9419 +/- 0.0242 | 1.3149 +/- 0.0243 |
 | Agent4Rec traits + taste + item stats | history + candidate | 0,1,2 | 1.000 | 0.9456 +/- 0.0232 | 0.0182 | 1.2022 +/- 0.0223 | 0.9453 +/- 0.0230 | 1.3163 +/- 0.0295 |
 
 Interpretation: the Qwen3.6-27B run reverses the Qwen3-8B summary result under
 this reduced regression protocol. Summaries worsen macro MAE for every tested
 family: +0.0091 for the plain history LLM, +0.0748 for Agent4Rec traits, +0.0148
-for Agent4Rec taste, and +0.0182 for Agent4Rec traits+taste. The larger model is
-substantially stronger than Qwen3-8B for the plain history+item-stats prompt, but
-Agent4Rec profiles still lag behind that prompt.
+for Agent4Rec taste, and +0.0150 to +0.0182 for Agent4Rec traits+taste depending
+on placement. Candidate-only summaries are slightly less harmful than
+history+candidate summaries for traits+taste, but still worse than no summaries.
+The larger model is substantially stronger than Qwen3-8B for the plain
+history+item-stats prompt, but Agent4Rec profiles still lag behind that prompt.
+
+Llama 3.3 70B check over the same reduced protocol. This run tests the same
+no-summary and history+candidate summary settings as the Qwen3.6-27B check. The
+`traits` Agent4Rec summary variant can only add summaries to candidate rows
+because traits-only profiles do not use the taste-history prompt.
+
+Run root: `outputs/in_distribution/regression_prediction/20260706T204935Z_ml1m_llama33_70b_regression_summary_comparison`.
+
+Additional candidate-only run root:
+`outputs/in_distribution/regression_prediction/20260707T092511Z_ml1m_llama33_70b_original_like_candidate_summary_ml1m_llama33_70b_regression_summary_comparison`.
+
+Protocol differences relative to the Qwen3.6-27B run:
+- LLM backend: local LiteLLM/vLLM `meta-llama/Llama-3.3-70B-Instruct`, runner concurrency `max_workers=128`.
+- Same dataset, split, target, 1000-user/5-row post-split evaluation budget, train-only item statistics, and Agent4Rec `movies_augmentation.csv` summary join.
+
+| method | summary placement | seeds | coverage | macro MAE | delta MAE | macro RMSE | micro MAE | micro RMSE |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| History + item stats | none | 0,1,2 | 1.000 | 0.7388 +/- 0.0116 | 0.0000 | 0.9738 +/- 0.0097 | 0.7386 +/- 0.0114 | 1.0590 +/- 0.0115 |
+| History + item stats | history + candidate | 0,1,2 | 1.000 | 0.7344 +/- 0.0096 | -0.0044 | 0.9731 +/- 0.0061 | 0.7342 +/- 0.0094 | 1.0572 +/- 0.0102 |
+| Agent4Rec traits + item stats | none | 0,1,2 | 1.000 | 1.0261 +/- 0.0261 | 0.0000 | 1.2722 +/- 0.0314 | 1.0253 +/- 0.0254 | 1.4400 +/- 0.0378 |
+| Agent4Rec traits + item stats | candidate only | 0,1,2 | 1.000 | 0.9865 +/- 0.0177 | -0.0396 | 1.2335 +/- 0.0219 | 0.9858 +/- 0.0171 | 1.3939 +/- 0.0276 |
+| Agent4Rec taste + item stats | none | 0,1,2 | 1.000 | 0.9484 +/- 0.0183 | 0.0000 | 1.2150 +/- 0.0157 | 0.9485 +/- 0.0185 | 1.3025 +/- 0.0192 |
+| Agent4Rec taste + item stats | history + candidate | 0,1,2 | 1.000 | 0.9533 +/- 0.0178 | 0.0050 | 1.2202 +/- 0.0204 | 0.9535 +/- 0.0176 | 1.3121 +/- 0.0264 |
+| Agent4Rec traits + taste + item stats | none | 0,1,2 | 1.000 | 0.9803 +/- 0.0303 | 0.0000 | 1.2491 +/- 0.0254 | 0.9801 +/- 0.0304 | 1.3613 +/- 0.0296 |
+| Agent4Rec traits + taste + item stats | candidate only | 0,1,2 | 1.000 | 0.9800 +/- 0.0216 | -0.0003 | 1.2492 +/- 0.0144 | 0.9799 +/- 0.0217 | 1.3598 +/- 0.0207 |
+| Agent4Rec traits + taste + item stats | history + candidate | 0,1,2 | 1.000 | 0.9798 +/- 0.0184 | -0.0005 | 1.2472 +/- 0.0184 | 0.9795 +/- 0.0182 | 1.3573 +/- 0.0279 |
+
+Interpretation: Llama 3.3 70B does not dominate Qwen3.6-27B under this reduced
+regression protocol. Qwen3.6-27B remains stronger for the plain history prompt
+and the Agent4Rec taste / traits+taste variants, while Llama 3.3 70B is stronger
+for Agent4Rec traits. Summaries are mixed for Llama: they slightly help the
+plain history prompt (-0.0044 macro MAE) and traits (-0.0396), slightly hurt
+taste (+0.0050), and are effectively neutral for traits+taste in both
+candidate-only (-0.0003) and history+candidate (-0.0005) placements.
 
 ### ML-1M rating eval_1000 users
 

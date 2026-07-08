@@ -188,6 +188,30 @@ def run_llama33_70b_traits_taste_gpt4o_mini_summary_full(
     )
 
 
+def run_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=(
+            f"{VLLM_LLAMA33_70B_METHOD_NAME}_traits_taste_gpt4o_mini_candidate_summary_full"
+        ),
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_rows=None,
+        max_workers=VLLM_MAX_WORKERS,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        history_item_summaries=False,
+        candidate_item_summaries=True,
+    )
+
+
 def run_qwen36_27b_traits_taste_gpt4o_mini_smoke(
     task: Task,
     output_dir: Path,
@@ -333,6 +357,31 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_summary_full(
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
         use_item_summaries=True,
+    )
+
+
+def run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=(
+            f"{VLLM_QWEN36_27B_METHOD_NAME}_traits_taste_gpt4o_mini_candidate_summary_full"
+        ),
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_rows=None,
+        max_workers=QWEN36_27B_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        history_item_summaries=False,
+        candidate_item_summaries=True,
     )
 
 
