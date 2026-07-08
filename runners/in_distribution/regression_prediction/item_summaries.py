@@ -14,14 +14,19 @@ ITEM_SUMMARY_COLUMN_LABEL = "summary"
 
 
 def agent4rec_ml1m_movies_augmentation_path() -> Path:
-    return (
-        repo_root().parent
-        / "Agent4Rec"
+    root = repo_root()
+    relative_path = (
+        Path("Agent4Rec")
         / "datasets"
         / "ml-1m"
         / "raw_data"
         / "movies_augmentation.csv"
     )
+    for base_path in (root.parent, *root.parents):
+        candidate = base_path / relative_path
+        if candidate.exists():
+            return candidate
+    return root.parent / relative_path
 
 
 def maybe_add_item_summary_prompt_columns(
