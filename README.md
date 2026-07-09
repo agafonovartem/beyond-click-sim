@@ -182,7 +182,6 @@ Run the Cold Start experiment:
 
 ```bash
 uv run python -m runners.in_distribution.cold_start.run \
-  --tasks $(.venv/bin/python -c "from runners.in_distribution.cold_start.task_builders import TASK_BUILDERS; print(','.join(TASK_BUILDERS))") \
   --methods popularity_f1_threshold,popularity_ranking,item_knn_cold_start,item_knn_cold_start_ranking,llm_yes_no_vllm_qwen36_27b_full \
   --output-dir outputs/in_distribution/cold_start
 ```

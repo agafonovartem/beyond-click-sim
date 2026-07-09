@@ -1,0 +1,108 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 2978,
+      "positives_max": 10,
+      "positives_mean": 9.658159838818,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.316319677636,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 9.658159838818,
+      "sampled_min": 1
+    },
+    "val": {
+      "groups": 1768,
+      "positives_max": 10,
+      "positives_mean": 9.582013574660634,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.164027149321267,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 9.582013574660634,
+      "sampled_min": 1
+    }
+  },
+  "main_metric": "test.macro_by_user_group_mean.f1",
+  "method": "popularity_f1_threshold",
+  "stage_times_seconds": {
+    "apply_threshold": 0.0,
+    "candidate_group_summary": 0.023,
+    "compute_metrics": 0.171,
+    "fit": 0.09,
+    "prepare_xy": 0.014,
+    "score_test": 0.01,
+    "score_val": 0.007,
+    "select_threshold": 0.055,
+    "write_predictions": 0.065
+  },
+  "task": "ml-1m_cold_start_k1_cap20_eval_users1000_cg5_m1_seed1",
+  "test": {
+    "macro_by_group": {
+      "accuracy": 0.7855403248158451,
+      "f1": 0.8016913129830534,
+      "n": 57524,
+      "n_groups": 2978,
+      "n_positive": 28762,
+      "n_predicted_positive": 34237,
+      "precision": 0.7468915757850791,
+      "recall": 0.880396052533393
+    },
+    "macro_by_user_group_mean": {
+      "accuracy": 0.7833771221118342,
+      "f1": 0.799856364998117,
+      "n": 57524,
+      "n_groups": 2978,
+      "n_positive": 28762,
+      "n_predicted_positive": 34237,
+      "n_users": 695,
+      "precision": 0.745690150968293,
+      "recall": 0.8792123063453998
+    },
+    "micro": {
+      "accuracy": 0.785915443988596,
+      "f1": 0.8045207066778838,
+      "n": 57524,
+      "n_positive": 28762,
+      "n_predicted_positive": 34237,
+      "precision": 0.7401933580629144,
+      "recall": 0.8810931089632154
+    }
+  },
+  "threshold": 155.0,
+  "threshold_metric": "macro_by_user_group_mean_f1",
+  "val": {
+    "macro_by_group": {
+      "accuracy": 0.7875972985347985,
+      "f1": 0.803923839368677,
+      "n": 33882,
+      "n_groups": 1768,
+      "n_positive": 16941,
+      "n_predicted_positive": 20258,
+      "precision": 0.7491690343932824,
+      "recall": 0.8844396412411119
+    },
+    "macro_by_user_group_mean": {
+      "accuracy": 0.7847748999417617,
+      "f1": 0.8012027671133626,
+      "n": 33882,
+      "n_groups": 1768,
+      "n_positive": 16941,
+      "n_predicted_positive": 20258,
+      "n_users": 427,
+      "precision": 0.7484283406510986,
+      "recall": 0.8807767524131692
+    },
+    "micro": {
+      "accuracy": 0.7882356413434862,
+      "f1": 0.8071184709266378,
+      "n": 33882,
+      "n_positive": 16941,
+      "n_predicted_positive": 20258,
+      "precision": 0.7410405765623458,
+      "recall": 0.8861342305649017
+    }
+  }
+}

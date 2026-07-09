@@ -1,0 +1,122 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 3625,
+      "positives_max": 6,
+      "positives_mean": 5.855172413793103,
+      "positives_min": 1,
+      "rows_max": 18,
+      "rows_mean": 17.56551724137931,
+      "rows_min": 3,
+      "sampled_max": 12,
+      "sampled_mean": 11.710344827586207,
+      "sampled_min": 2
+    },
+    "val": {
+      "groups": 2237,
+      "positives_max": 6,
+      "positives_mean": 5.8430934286991505,
+      "positives_min": 1,
+      "rows_max": 18,
+      "rows_mean": 17.529280286097453,
+      "rows_min": 3,
+      "sampled_max": 12,
+      "sampled_mean": 11.686186857398301,
+      "sampled_min": 2
+    }
+  },
+  "decision_rule": {
+    "kind": "threshold_on_validation",
+    "metric": "macro_by_user_group_mean_f1",
+    "metric_value": 0.7083448132585858,
+    "selection_metric": "macro_by_user_group_mean_f1",
+    "threshold": 184.0
+  },
+  "git_commit": "85e53dfe8de5680bdb47ad2b02232bf0f0c546d5",
+  "method": "popularity_f1_threshold",
+  "scorer": {
+    "class": "PopularityScorer",
+    "item_column": "item_id"
+  },
+  "stage_times_seconds": {
+    "apply_threshold": 0.0,
+    "candidate_group_summary": 0.024,
+    "compute_metrics": 0.199,
+    "fit": 0.097,
+    "prepare_xy": 0.017,
+    "score_test": 0.012,
+    "score_val": 0.008,
+    "select_threshold": 0.06,
+    "write_predictions": 0.07
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_feature_builder": null,
+      "items": 3883,
+      "k": 5,
+      "rows": {
+        "online_session_history": 9060,
+        "test": 63675,
+        "train": 708878,
+        "val": 39213
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "TemporalColdStartCandidateSampler",
+        "group_offset": 5,
+        "item_column": "item_id",
+        "max_candidate_groups_per_user": 5,
+        "max_eval_users": 1000,
+        "negative_ratio": 2,
+        "sampled_column": "sampled",
+        "seed": 1,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "ColdUserHoldoutSplitter",
+        "item_column": "item_id",
+        "k": 5,
+        "seed": 1,
+        "test_fraction": 0.2,
+        "timestamp_column": "timestamp",
+        "train_fraction": 0.7,
+        "user_column": "user_id",
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": {
+        "dropped_test_cold": 0,
+        "dropped_val_cold": 0,
+        "test_cold": 1208,
+        "val_cold": 604,
+        "warm": 4228
+      }
+    },
+    "name": "ml-1m_cold_start_k5_cap20_eval_users1000_cg5_m2_seed1"
+  }
+}

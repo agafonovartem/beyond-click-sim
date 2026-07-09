@@ -1,0 +1,68 @@
+{
+  "candidate_groups": {
+    "requested": {
+      "groups": 2202,
+      "positives_max": 10,
+      "positives_mean": 9.727974568574023,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.455949137148046,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 9.727974568574023,
+      "sampled_min": 1
+    },
+    "scored": {
+      "groups": 2202,
+      "positives_max": 10,
+      "positives_mean": 9.727974568574023,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.455949137148046,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 9.727974568574023,
+      "sampled_min": 1
+    }
+  },
+  "llm_errors": 0,
+  "main_metric": "test.macro_by_user_group_mean.f1",
+  "max_candidate_groups": null,
+  "max_workers": 128,
+  "method": "llm_yes_no_vllm_qwen36_27b_full",
+  "requested_rows": 42842,
+  "scored_rows": 42842,
+  "task": "ml-1m_cold_start_k1_cap20_eval_users1000_cg5_m1_seed2",
+  "test": {
+    "macro_by_group": {
+      "accuracy": 0.5638435657338928,
+      "f1": 0.3538032218696751,
+      "n": 42842,
+      "n_groups": 2202,
+      "n_positive": 21421,
+      "n_predicted_positive": 11041,
+      "precision": 0.469631085953814,
+      "recall": 0.3212977379871113
+    },
+    "macro_by_user_group_mean": {
+      "accuracy": 0.5638619358385925,
+      "f1": 0.350863462259004,
+      "n": 42842,
+      "n_groups": 2202,
+      "n_positive": 21421,
+      "n_predicted_positive": 11041,
+      "n_users": 498,
+      "precision": 0.4663949825045679,
+      "recall": 0.31854557117358323
+    },
+    "micro": {
+      "accuracy": 0.5644461042901825,
+      "f1": 0.4251740496580617,
+      "n": 42842,
+      "n_positive": 21421,
+      "n_predicted_positive": 11041,
+      "precision": 0.6250339643148266,
+      "recall": 0.3221604967088371
+    }
+  }
+}
