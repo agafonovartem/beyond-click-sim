@@ -25,6 +25,10 @@ VLLM_LOCAL_8003_BASE_URL = os.environ.get(
     "BEYOND_CLICK_SIM_VLLM_LOCAL_8003_BASE_URL",
     "http://127.0.0.1:8003/v1",
 )
+LITELLM_LOCAL_BASE_URL = os.environ.get(
+    "BEYOND_CLICK_SIM_LITELLM_LOCAL_BASE_URL",
+    "http://127.0.0.1:8080/v1",
+)
 VLLM_LOCAL_TIMEOUT_SECONDS = float(
     os.environ.get("BEYOND_CLICK_SIM_VLLM_LOCAL_TIMEOUT_SECONDS", "120")
 )
@@ -103,6 +107,8 @@ def make_llm_client(client_name: str) -> Any:
         return vllm_client(base_url=VLLM_LOCAL_8002_BASE_URL)
     if client_name == "vllm_local_8003":
         return vllm_client(base_url=VLLM_LOCAL_8003_BASE_URL)
+    if client_name == "litellm_local":
+        return vllm_client(base_url=LITELLM_LOCAL_BASE_URL)
     if client_name == "openai":
         return openai_client()
     if client_name == "openai_vk_proxy":
