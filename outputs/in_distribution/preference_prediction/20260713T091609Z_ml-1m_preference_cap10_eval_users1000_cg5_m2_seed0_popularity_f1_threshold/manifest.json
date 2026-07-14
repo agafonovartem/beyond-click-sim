@@ -1,0 +1,111 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 2596,
+      "positives_max": 3,
+      "positives_mean": 2.8640215716486903,
+      "positives_min": 1,
+      "rows_max": 9,
+      "rows_mean": 8.592064714946071,
+      "rows_min": 3,
+      "sampled_max": 0,
+      "sampled_mean": 0.0,
+      "sampled_min": 0
+    },
+    "val": {
+      "groups": 1633,
+      "positives_max": 3,
+      "positives_mean": 2.706062461726883,
+      "positives_min": 1,
+      "rows_max": 9,
+      "rows_mean": 8.118187385180649,
+      "rows_min": 3,
+      "sampled_max": 0,
+      "sampled_mean": 0.0,
+      "sampled_min": 0
+    }
+  },
+  "decision_rule": {
+    "kind": "threshold_on_validation",
+    "metric": "macro_by_user_group_mean_f1",
+    "metric_value": 0.5517592548301572,
+    "selection_metric": "macro_by_user_group_mean_f1",
+    "threshold": 130.0
+  },
+  "git_commit": "002b89b0b7cab65d36af87df88f0e1aeac970fe7",
+  "method": "popularity_f1_threshold",
+  "scorer": {
+    "class": "PopularityScorer",
+    "item_column": "item_id"
+  },
+  "stage_times_seconds": {
+    "apply_threshold": 0.0,
+    "candidate_group_summary": 0.009,
+    "compute_metrics": 0.037,
+    "fit": 0.051,
+    "prepare_xy": 0.011,
+    "score_test": 0.003,
+    "score_val": 0.002,
+    "select_threshold": 0.021,
+    "write_predictions": 0.018
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_feature_builder": null,
+      "items": 3883,
+      "rows": {
+        "test": 22305,
+        "train": 694335,
+        "val": 13257
+      },
+      "sampled_column": null,
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedObservedPreferenceCandidateSampler",
+        "item_column": "item_id",
+        "max_candidate_groups_per_user": 5,
+        "max_eval_users": 1000,
+        "negative_ratio": 2,
+        "seed": 0,
+        "target_column": "target",
+        "target_source_column": "target_like_ge4",
+        "total_items": 10,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 0,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_like_ge4",
+      "users": 6040
+    },
+    "name": "ml-1m_preference_cap10_eval_users1000_cg5_m2_seed0"
+  }
+}
