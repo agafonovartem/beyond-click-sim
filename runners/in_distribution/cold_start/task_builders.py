@@ -21,7 +21,6 @@ from runners.in_distribution.interaction_prediction.task_builders import (
 K_VALUES = (1, 3, 5)
 DATASETS = ("ml-1m",)  # Steam has no timestamps; ColdUserHoldoutSplitter raises
 SEEDS = (0, 1, 2)
-REDUCED_SEEDS = (0, 1, 2)
 MIN_INTERACTIONS = 10
 NEGATIVE_RATIOS = (1, 2, 3, 9, 19)
 TRAIN_FRACTION = 0.7

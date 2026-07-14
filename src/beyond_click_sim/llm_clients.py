@@ -9,6 +9,7 @@ from openai import OpenAI
 
 
 OLLAMA_LOCAL_BASE_URL = "http://localhost:11434/v1"
+<<<<<<< HEAD
 VLLM_LOCAL_BASE_URL = os.environ.get(
     "BEYOND_CLICK_SIM_VLLM_LOCAL_BASE_URL",
     "http://127.0.0.1:8000/v1",
@@ -25,6 +26,11 @@ VLLM_LOCAL_8003_BASE_URL = os.environ.get(
     "BEYOND_CLICK_SIM_VLLM_LOCAL_8003_BASE_URL",
     "http://127.0.0.1:8003/v1",
 )
+=======
+VLLM_LOCAL_BASE_URL = "http://127.0.0.1:8089/v1"
+VLLM_LOCAL_8001_BASE_URL = "http://127.0.0.1:8001/v1"
+VLLM_LOCAL_8002_BASE_URL = "http://127.0.0.1:8002/v1"
+>>>>>>> 4bc1b81 (Added Agent4Rec into cold start and policy ranking agreement)
 OPENAI_VK_PROXY_BASE_URL = "https://ai-proxy.vk.team/v1"
 OPENAI_VK_PROXY_API_KEY_ENV = "OPENAI_VK_PROXY_API_KEY"
 

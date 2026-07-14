@@ -1,0 +1,25 @@
+# litellm_config.yaml
+model_list:
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8080/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8081/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8082/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8083/v1
+      api_key: "not-needed"
+
+router_settings:
+  routing_strategy: least-busy  # or "usage-based-routing", "latency-based-routing"

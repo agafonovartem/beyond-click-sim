@@ -13,6 +13,7 @@ import threading
 from typing import Any
 
 import pandas as pd
+from tqdm import tqdm
 
 from beyond_click_sim.scorers.agent4rec.prompts import (
     AGENT4REC_PLAYTIME_TASTE_SYSTEM_PROMPT,

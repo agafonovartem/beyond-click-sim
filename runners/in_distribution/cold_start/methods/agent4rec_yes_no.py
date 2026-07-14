@@ -56,7 +56,7 @@ MAX_LLM_ATTEMPTS = 5
 TASTE_TEMPERATURE = 0.0
 TASTE_MAX_TOKENS = None
 OLLAMA_MAX_WORKERS = 1
-VLLM_MAX_WORKERS = 32
+VLLM_MAX_WORKERS = 128
 
 DATASET_CANDIDATE_COLUMNS: dict[str, tuple[str, ...]] = {
     "ml-1m": ("item_title", "item_genres"),
