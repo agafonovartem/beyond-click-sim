@@ -8,6 +8,12 @@ from runners.in_distribution.interaction_prediction.methods.popularity import (
     run as run_popularity,
     run_ranking as run_popularity_ranking,
 )
+from runners.in_distribution.preference_prediction.methods.llm_yes_no import (
+    run_qwen3_8b_full,
+    run_qwen3_8b_smoke,
+    run_qwen36_27b_full,
+    run_qwen36_27b_smoke,
+)
 
 
 MethodRunner = Callable[[Task, Path], dict[str, object]]
@@ -15,4 +21,8 @@ MethodRunner = Callable[[Task, Path], dict[str, object]]
 METHOD_RUNNERS: dict[str, MethodRunner] = {
     "popularity_f1_threshold": run_popularity,
     "popularity_ranking": run_popularity_ranking,
+    "llm_preference_yes_no_litellm_qwen3_8b_smoke": run_qwen3_8b_smoke,
+    "llm_preference_yes_no_litellm_qwen3_8b_full": run_qwen3_8b_full,
+    "llm_preference_yes_no_litellm_qwen36_27b_smoke": run_qwen36_27b_smoke,
+    "llm_preference_yes_no_litellm_qwen36_27b_full": run_qwen36_27b_full,
 }

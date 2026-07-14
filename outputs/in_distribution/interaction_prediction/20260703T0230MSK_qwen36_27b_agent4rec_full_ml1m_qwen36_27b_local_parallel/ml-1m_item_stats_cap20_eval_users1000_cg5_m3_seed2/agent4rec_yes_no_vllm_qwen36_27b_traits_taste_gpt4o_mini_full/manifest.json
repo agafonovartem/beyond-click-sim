@@ -13,15 +13,15 @@
       "sampled_min": 3
     },
     "scored": {
-      "groups": 1268,
+      "groups": 3671,
       "positives_max": 5,
-      "positives_mean": 4.720820189274448,
+      "positives_mean": 4.703622991010624,
       "positives_min": 1,
       "rows_max": 20,
-      "rows_mean": 18.883280757097793,
+      "rows_mean": 18.814491964042496,
       "rows_min": 4,
       "sampled_max": 15,
-      "sampled_mean": 14.162460567823343,
+      "sampled_mean": 14.110868973031872,
       "sampled_min": 3
     }
   },
@@ -30,13 +30,13 @@
     "parser_contract": "agent4rec_labeled_id_movie_watch_reason",
     "threshold": null
   },
-  "git_commit": "6b5d950db61a5ea267fc36e0d5c60ef34c65b01e",
+  "git_commit": "002b89b0b7cab65d36af87df88f0e1aeac970fe7",
   "limits": {
     "max_candidate_groups": null,
     "max_llm_attempts": 5,
     "max_workers": 8
   },
-  "llm_errors": 2404,
+  "llm_errors": 1,
   "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
   "scorer": {
     "candidate_description_columns": [
@@ -45,7 +45,7 @@
       "item_genres"
     ],
     "class": "Agent4RecYesNoScorer",
-    "client_name": "vllm_local_8002",
+    "client_name": "vllm_local",
     "column_labels": {
       "item_genres": "genres",
       "item_rating_mean": "History ratings",
@@ -57,7 +57,7 @@
       }
     },
     "max_history_items": 20,
-    "max_tokens": 1000,
+    "max_tokens": 4096,
     "model": "Qwen/Qwen3.6-27B",
     "profile_generator": {
       "class": "Agent4RecProfileGenerator",

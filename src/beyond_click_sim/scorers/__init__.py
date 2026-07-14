@@ -18,6 +18,7 @@ from beyond_click_sim.scorers.agent4rec import (
 )
 from beyond_click_sim.scorers.history import (
     LLMInteractionYesNoScorer,
+    LLMPreferenceYesNoScorer,
     LLMRegressor,
 )
 from beyond_click_sim.scorers.item_knn import ColdItemKNNScorer
@@ -33,6 +34,7 @@ __all__ = [
     "Agent4RecUserProfile",
     "Agent4RecYesNoScorer",
     "LLMInteractionYesNoScorer",
+    "LLMPreferenceYesNoScorer",
     "LLMRegressor",
     "MeanRegressor",
     "ModeRegressor",

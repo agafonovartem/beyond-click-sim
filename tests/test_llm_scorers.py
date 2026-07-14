@@ -5,7 +5,11 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from beyond_click_sim.scorers import LLMInteractionYesNoScorer, LLMRegressor
+from beyond_click_sim.scorers import (
+    LLMInteractionYesNoScorer,
+    LLMPreferenceYesNoScorer,
+    LLMRegressor,
+)
 from beyond_click_sim.scorers.constant import select_user_history_positions
 from beyond_click_sim.scorers.llm import (
     parse_regression_value_response,
@@ -123,6 +127,40 @@ def test_llm_interaction_scorer_scores_candidate_groups() -> None:
 
     second_prompt = client.completions.calls[1]["messages"][1]["content"]
     assert "- No interaction history available." in second_prompt
+
+
+def test_llm_preference_scorer_uses_explicit_target_prompt() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "item_title": ["Toy Story", "Heat"],
+            "rating": [5, 2],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "candidate_group": ["g1", "g1"],
+            "item_title": ["Aladdin", "Casino"],
+        }
+    )
+    client = FakeClient(["C1: yes\nC2: no"])
+
+    scorer = LLMPreferenceYesNoScorer(
+        client=client,
+        model="fake-model",
+        history_description_columns=("item_title", "rating"),
+        candidate_description_columns=("item_title",),
+        target_description="The user would rate the movie at least 4 out of 5.",
+    ).fit(X_train, pd.Series([1, 0]))
+
+    assert scorer.score(X_test).tolist() == [1.0, 0.0]
+    messages = client.completions.calls[0]["messages"]
+    assert "positive preference response" in messages[0]["content"]
+    assert "User feedback history:" in messages[1]["content"]
+    assert "H1. item_title: Toy Story; rating: 5" in messages[1]["content"]
+    assert "rate the movie at least 4 out of 5" in messages[1]["content"]
+    assert "whether the user would interact" not in messages[1]["content"]
 
 
 def test_llm_regressor_passes_extra_body() -> None:
