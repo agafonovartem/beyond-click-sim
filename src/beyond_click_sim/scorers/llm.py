@@ -7,6 +7,7 @@ from beyond_click_sim.scorers.agent4rec import (
 )
 from beyond_click_sim.scorers.history import (
     LLMInteractionYesNoScorer,
+    LLMPreferenceYesNoScorer,
     LLMRegressor,
     parse_regression_value_response,
     parse_single_yes_no_response,
@@ -18,6 +19,7 @@ __all__ = [
     "Agent4RecUserProfile",
     "Agent4RecYesNoScorer",
     "LLMInteractionYesNoScorer",
+    "LLMPreferenceYesNoScorer",
     "LLMRegressor",
     "parse_regression_value_response",
     "parse_single_yes_no_response",

@@ -381,8 +381,12 @@ def run_method(
     max_workers: int = 1,
     use_item_stats: bool = False,
     extra_body: dict | None = None,
+    scorer_class: type[LLMInteractionYesNoScorer] = LLMInteractionYesNoScorer,
+    scorer_kwargs: dict[str, object] | None = None,
+    serving_metadata: dict[str, object] | None = None,
+    source_metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    """Run the yes/no LLM scorer for pointwise interaction alignment."""
+    """Run a history-conditioned yes/no LLM scorer on candidate groups."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
@@ -408,7 +412,7 @@ def run_method(
     )
     history_user_ids = X_test["user_id"].drop_duplicates().tolist()
 
-    scorer = LLMInteractionYesNoScorer(
+    scorer = scorer_class(
         client=make_llm_client(client_name),
         model=model,
         history_description_columns=prompt_columns["history_description_columns"],
@@ -418,6 +422,7 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
+        **({} if scorer_kwargs is None else scorer_kwargs),
     ).fit(X_train, y_train, history_user_ids=history_user_ids)
 
     scores, errors = _score_groups(
@@ -487,7 +492,7 @@ def run_method(
     manifest = {
         "method": method_name,
         "scorer": {
-            "class": "LLMInteractionYesNoScorer",
+            "class": scorer.__class__.__name__,
             "client_name": client_name,
             "model": model,
             "max_history_items": max_history_items,
@@ -497,6 +502,8 @@ def run_method(
             "column_labels": column_labels,
             "uses_item_stats": use_item_stats,
             "extra_body": extra_body,
+            "scorer_kwargs": scorer_kwargs,
+            "serving": serving_metadata,
         },
         "decision_rule": {
             "kind": "hard_binary_yes_no_parser",
@@ -517,6 +524,7 @@ def run_method(
             "manifest": task.manifest,
         },
         "git_commit": current_git_commit(root),
+        "source": source_metadata,
     }
     result = {
         "method": method_name,

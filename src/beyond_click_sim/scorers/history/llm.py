@@ -14,6 +14,8 @@ from beyond_click_sim.scorers.history.prompts import (
     INTERACTION_YES_NO_USER_PROMPT_TEMPLATE,
     POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT,
     POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE,
+    PREFERENCE_YES_NO_SYSTEM_PROMPT,
+    PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE,
     REGRESSION_SYSTEM_PROMPT,
     REGRESSION_USER_PROMPT_TEMPLATE,
 )
@@ -296,6 +298,51 @@ class LLMInteractionYesNoScorer(Scorer):
         missing = [column for column in columns if column not in frame.columns]
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
+
+
+class LLMPreferenceYesNoScorer(LLMInteractionYesNoScorer):
+    """LLM scorer for an explicit binary positive-preference target.
+
+    The formatting, grouping, strict parser, and history selection are shared
+    with :class:`LLMInteractionYesNoScorer`. The prompt is intentionally
+    separate: preference prediction asks whether an observed response meets a
+    dataset-specific target, rather than whether an interaction occurs.
+    """
+
+    name = "llm_preference_yes_no"
+
+    def __init__(self, *, target_description: str, **kwargs: Any) -> None:
+        if not target_description.strip():
+            raise ValueError("target_description must be non-empty")
+        super().__init__(**kwargs)
+        self.target_description = target_description
+
+    def _build_messages(
+        self,
+        *,
+        user_id: Any,
+        candidates: pd.DataFrame,
+        labels: Sequence[str],
+    ) -> list[dict[str, str]]:
+        history = self.history_by_user_.get(user_id, []) if self.history_by_user_ else []
+        candidate_lines = [
+            self._format_item_description(
+                row=row,
+                label=label,
+                columns=self.candidate_description_columns,
+            )
+            for label, row in zip(labels, candidates.itertuples(index=False), strict=True)
+        ]
+        user_prompt = PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE.format(
+            history="\n".join(history) if history else "- No feedback history available.",
+            target_description=self.target_description,
+            candidates="\n".join(candidate_lines),
+            output_labels="\n".join(f"{label}:" for label in labels),
+        )
+        return [
+            {"role": "system", "content": PREFERENCE_YES_NO_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
 
 
 def parse_yes_no_response(text: str, *, labels: Sequence[str]) -> dict[str, float]:
