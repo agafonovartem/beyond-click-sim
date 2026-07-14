@@ -13,7 +13,7 @@
       "sampled_min": 19
     },
     "scored": {
-      "groups": 3087,
+      "groups": 4980,
       "positives_max": 1,
       "positives_mean": 1.0,
       "positives_min": 1,
@@ -30,13 +30,13 @@
     "parser_contract": "agent4rec_labeled_id_movie_watch_reason",
     "threshold": null
   },
-  "git_commit": "6b5d950db61a5ea267fc36e0d5c60ef34c65b01e",
+  "git_commit": "002b89b0b7cab65d36af87df88f0e1aeac970fe7",
   "limits": {
     "max_candidate_groups": null,
     "max_llm_attempts": 5,
     "max_workers": 8
   },
-  "llm_errors": 1901,
+  "llm_errors": 8,
   "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_full",
   "scorer": {
     "candidate_description_columns": [
@@ -45,7 +45,7 @@
       "item_genres"
     ],
     "class": "Agent4RecYesNoScorer",
-    "client_name": "vllm_local",
+    "client_name": "vllm_local_8001",
     "column_labels": {
       "item_genres": "genres",
       "item_rating_mean": "History ratings",
@@ -57,7 +57,7 @@
       }
     },
     "max_history_items": 20,
-    "max_tokens": 1000,
+    "max_tokens": 4096,
     "model": "Qwen/Qwen3.6-27B",
     "profile_generator": {
       "class": "Agent4RecProfileGenerator",
