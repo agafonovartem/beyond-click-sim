@@ -39,6 +39,7 @@ from beyond_click_sim.tasks.samplers import (
     CappedUserInteractionCandidateSampler,
     NonInteractionCandidateSampler,
     PostSplitUserSampler,
+    TemporalColdStartCandidateSampler,
 )
 from beyond_click_sim.tasks.splitters import RandomFractionSplitter
 
@@ -74,6 +75,7 @@ __all__ = [
     "TaskBuilder",
     "TaskSchema",
     "TaskSplit",
+    "TemporalColdStartCandidateSampler",
     "TrainItemRatingStatistics",
     "split_xy",
 ]

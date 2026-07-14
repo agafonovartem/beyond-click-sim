@@ -5,6 +5,20 @@ from pathlib import Path
 
 from beyond_click_sim.tasks.cold_start import ColdStartTask
 
+from runners.in_distribution.cold_start.methods.agent4rec_yes_no import (
+    run_llama31_8b_full as run_agent4rec_llama31_8b_full,
+    run_llama31_8b_smoke as run_agent4rec_llama31_8b_smoke,
+    run_llama33_70b_full as run_agent4rec_llama33_70b_full,
+    run_llama33_70b_smoke as run_agent4rec_llama33_70b_smoke,
+    run_qwen36_27b_full as run_agent4rec_qwen36_27b_full,
+    run_qwen36_27b_item_stats_full,
+    run_qwen36_27b_item_stats_smoke,
+    run_qwen36_27b_item_stats_traits_taste_gpt4o_mini_full,
+    run_qwen36_27b_item_stats_traits_taste_gpt4o_mini_smoke,
+    run_qwen36_27b_smoke as run_agent4rec_qwen36_27b_smoke,
+    run_qwen36_27b_traits_taste_gpt4o_mini_full,
+    run_qwen36_27b_traits_taste_gpt4o_mini_smoke,
+)
 from runners.in_distribution.cold_start.methods.llm_yes_no import (
     run_llama31_8b_full,
     run_llama31_8b_smoke,
@@ -40,4 +54,20 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     "llm_yes_no_vllm_llama33_70b_full": run_llama33_70b_full,
     "llm_yes_no_vllm_qwen36_27b_smoke": run_qwen36_27b_smoke,
     "llm_yes_no_vllm_qwen36_27b_full": run_qwen36_27b_full,
+    # Agent4Rec — traits only
+    "agent4rec_yes_no_ollama_llama31_8b_smoke": run_agent4rec_llama31_8b_smoke,
+    "agent4rec_yes_no_ollama_llama31_8b_full": run_agent4rec_llama31_8b_full,
+    "agent4rec_yes_no_vllm_llama33_70b_smoke": run_agent4rec_llama33_70b_smoke,
+    "agent4rec_yes_no_vllm_llama33_70b_full": run_agent4rec_llama33_70b_full,
+    "agent4rec_yes_no_vllm_qwen36_27b_smoke": run_agent4rec_qwen36_27b_smoke,
+    "agent4rec_yes_no_vllm_qwen36_27b_full": run_agent4rec_qwen36_27b_full,
+    # Agent4Rec — traits + taste (requires OPENAI_API_KEY)
+    "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_smoke": run_qwen36_27b_traits_taste_gpt4o_mini_smoke,
+    "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full": run_qwen36_27b_traits_taste_gpt4o_mini_full,
+    # Agent4Rec — traits only + item_stats (requires *_item_stats_* tasks)
+    "agent4rec_yes_no_vllm_qwen36_27b_item_stats_smoke": run_qwen36_27b_item_stats_smoke,
+    "agent4rec_yes_no_vllm_qwen36_27b_item_stats_full": run_qwen36_27b_item_stats_full,
+    # Agent4Rec — traits + taste + item_stats
+    "agent4rec_yes_no_vllm_qwen36_27b_item_stats_traits_taste_gpt4o_mini_smoke": run_qwen36_27b_item_stats_traits_taste_gpt4o_mini_smoke,
+    "agent4rec_yes_no_vllm_qwen36_27b_item_stats_traits_taste_gpt4o_mini_full": run_qwen36_27b_item_stats_traits_taste_gpt4o_mini_full,
 }

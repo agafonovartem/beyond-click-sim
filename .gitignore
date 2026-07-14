@@ -11,6 +11,7 @@ __pycache__/
 /data/
 *.parquet
 .vscode/
+*.vsix
 
 # Generated outputs are large. Track only compact run provenance/metric JSONs.
 /outputs/*
@@ -28,3 +29,9 @@ __pycache__/
 /outputs/in_distribution/regression_prediction/*/*
 !/outputs/in_distribution/regression_prediction/*eval_users1000*/manifest.json
 !/outputs/in_distribution/regression_prediction/*eval_users1000*/metrics*.json
+!/outputs/in_distribution/cold_start/
+/outputs/in_distribution/cold_start/*
+!/outputs/in_distribution/cold_start/*eval_users1000*/
+/outputs/in_distribution/cold_start/*/*
+!/outputs/in_distribution/cold_start/*eval_users1000*/manifest.json
+!/outputs/in_distribution/cold_start/*eval_users1000*/metrics*.json

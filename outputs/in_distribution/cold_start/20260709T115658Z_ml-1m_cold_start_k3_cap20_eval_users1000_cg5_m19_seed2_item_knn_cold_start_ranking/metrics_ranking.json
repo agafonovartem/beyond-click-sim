@@ -1,0 +1,140 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 5000,
+      "positives_max": 1,
+      "positives_mean": 1.0,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 20.0,
+      "rows_min": 20,
+      "sampled_max": 19,
+      "sampled_mean": 19.0,
+      "sampled_min": 19
+    },
+    "val": {
+      "groups": 3020,
+      "positives_max": 1,
+      "positives_mean": 1.0,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 20.0,
+      "rows_min": 20,
+      "sampled_max": 19,
+      "sampled_mean": 19.0,
+      "sampled_min": 19
+    }
+  },
+  "main_metric": "test.macro_by_user_group_mean.ndcg@5",
+  "method": "item_knn_cold_start_ranking",
+  "protocol": "ranking",
+  "ranking_evaluation": {
+    "ks": [
+      1,
+      3,
+      5,
+      10
+    ],
+    "tie_policy": "average"
+  },
+  "stage_times_seconds": {
+    "candidate_group_summary": 0.033,
+    "compute_ranking_metrics": 2.093,
+    "fit": 0.616,
+    "prepare_xy": 0.027,
+    "score_test": 0.332,
+    "score_val": 0.203,
+    "write_predictions": 0.103
+  },
+  "task": "ml-1m_cold_start_k3_cap20_eval_users1000_cg5_m19_seed2",
+  "test": {
+    "macro_by_group": {
+      "groups_with_score_ties": 5000,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.15621000000000002,
+      "hit_rate@10": 0.5591941176470588,
+      "hit_rate@3": 0.25062999999999996,
+      "hit_rate@5": 0.33879117647058826,
+      "n": 100000,
+      "n_groups": 5000,
+      "n_positive": 5000,
+      "ndcg@1": 0.15621000000000002,
+      "ndcg@10": 0.31631792825548616,
+      "ndcg@3": 0.2099677969761086,
+      "ndcg@5": 0.24600497229850898,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 5000,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.15621000000000004,
+      "hit_rate@10": 0.5591941176470588,
+      "hit_rate@3": 0.25063,
+      "hit_rate@5": 0.33879117647058826,
+      "n": 100000,
+      "n_groups": 5000,
+      "n_positive": 5000,
+      "n_users": 1000,
+      "ndcg@1": 0.15621000000000002,
+      "ndcg@10": 0.31631792825548627,
+      "ndcg@3": 0.20996779697610857,
+      "ndcg@5": 0.246004972298509,
+      "tie_policy": "average"
+    }
+  },
+  "val": {
+    "macro_by_group": {
+      "groups_with_score_ties": 3020,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.1466721854304636,
+      "hit_rate@10": 0.5540343074606395,
+      "hit_rate@3": 0.24189971341156422,
+      "hit_rate@5": 0.33105146119095946,
+      "n": 60400,
+      "n_groups": 3020,
+      "n_positive": 3020,
+      "ndcg@1": 0.14667218543046356,
+      "ndcg@10": 0.3084644907522724,
+      "ndcg@3": 0.20088731441874663,
+      "ndcg@5": 0.23732849335935177,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 3020,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.1466721854304636,
+      "hit_rate@10": 0.5540343074606396,
+      "hit_rate@3": 0.24189971341156427,
+      "hit_rate@5": 0.33105146119095946,
+      "n": 60400,
+      "n_groups": 3020,
+      "n_positive": 3020,
+      "n_users": 604,
+      "ndcg@1": 0.1466721854304636,
+      "ndcg@10": 0.3084644907522724,
+      "ndcg@3": 0.20088731441874663,
+      "ndcg@5": 0.2373284933593518,
+      "tie_policy": "average"
+    }
+  }
+}

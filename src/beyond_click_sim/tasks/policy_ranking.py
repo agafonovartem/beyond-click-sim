@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any
 
 import pandas as pd
 
 from beyond_click_sim.data.canonical import CanonicalDataset
+from beyond_click_sim.evaluation import evaluate_policy_recommendations
 from beyond_click_sim.tasks.base import (
     DatasetFilter,
     ItemFeatureBuilder,
@@ -15,6 +17,8 @@ from beyond_click_sim.tasks.base import (
 )
 from beyond_click_sim.tasks.policies import Policy
 from beyond_click_sim.tasks.samplers import PostSplitUserSampler
+
+POLICY_EVAL_KS = (1, 3, 5, 10)
 
 
 class PolicyRankingTaskBuilder(TaskBuilder):
@@ -121,8 +125,16 @@ class PolicyRankingTaskBuilder(TaskBuilder):
                 test_interactions[self.user_column].unique()
             )].copy()
         )
+        # Compute real targets: 1 if (user, item) in test interactions with positive label.
+        test_targets: dict[tuple[Any, Any], Any] = {}
+        for _, row in test_interactions.iterrows():
+            key = (row[self.user_column], row[self.item_column])
+            test_targets[key] = row[self.target_source_column]
+
         rec_frames: list[pd.DataFrame] = []
+        policy_metrics: list[dict[str, object]] = []
         for policy in self.policies:
+            t0 = perf_counter()
             policy.fit(
                 split.train,
                 items=items,
@@ -136,27 +148,58 @@ class PolicyRankingTaskBuilder(TaskBuilder):
                 user_column=self.user_column,
                 item_column=self.item_column,
             )
+            recs = recs.copy()
+            recs[self.target_column] = [
+                test_targets.get(
+                    (row[self.user_column], row[self.item_column]),
+                    0,
+                )
+                for _, row in recs.iterrows()
+            ]
+            policy_metric = evaluate_policy_recommendations(
+                recs,
+                targets=recs[self.target_column],
+                user_column=self.user_column,
+                policy_name=policy.name,
+                k=policy.k,
+                ks=POLICY_EVAL_KS,
+                fit_recommend_seconds=perf_counter() - t0,
+            )
+            policy_metrics.append(policy_metric)
+            k_for_metrics = policy.k if policy.k in POLICY_EVAL_KS else max(POLICY_EVAL_KS)
+            ndcg_at_k_key = f"ndcg@{k_for_metrics}"
+            hr_at_k_key = f"hit_rate@{k_for_metrics}"
+            ranking = policy_metric["ranking"]
+            if not isinstance(ranking, dict):
+                raise TypeError("policy_metric['ranking'] must be a dict.")
+            macro_by_user = ranking.get("macro_by_user_group_mean")
+            if not isinstance(macro_by_user, dict):
+                raise TypeError(
+                    "policy_metric['ranking']['macro_by_user_group_mean'] must be a dict."
+                )
+            hr_at_k = float(macro_by_user.get(hr_at_k_key, 0.0))
+            ndcg_at_k = float(macro_by_user[ndcg_at_k_key])
+            print(
+                f"Policy {policy.name}: "
+                f"mean_hit_rate={policy_metric['mean_hit_rate']:.4f} "
+                f"HR@{k_for_metrics}={hr_at_k:.4f} "
+                f"NDCG@{k_for_metrics}={ndcg_at_k:.4f} "
+                f"users={policy_metric['n_users']} "
+                f"recs={policy_metric['n_recommendations']} "
+                f"({policy_metric.get('fit_recommend_seconds', 0.0):.3f}s)",
+                flush=True,
+            )
             rec_frames.append(recs)
 
         all_recs = pd.concat(rec_frames, ignore_index=True) if rec_frames else pd.DataFrame(
-            columns=[self.user_column, self.item_column, "policy", "rank"]
+            columns=[
+                self.user_column,
+                self.item_column,
+                "policy",
+                "rank",
+                self.target_column,
+            ]
         )
-
-        # Compute real targets: 1 if (user, item) in test interactions with positive label.
-        test_targets: dict[tuple[Any, Any], Any] = {}
-        for _, row in test_interactions.iterrows():
-            key = (row[self.user_column], row[self.item_column])
-            test_targets[key] = row[self.target_source_column]
-
-        target_values = [
-            test_targets.get(
-                (row[self.user_column], row[self.item_column]),
-                0,
-            )
-            for _, row in all_recs.iterrows()
-        ]
-        all_recs = all_recs.copy()
-        all_recs[self.target_column] = target_values
 
         # Mask history context columns to NA for test rows (no leakage).
         for col in self.history_context_columns:
@@ -247,6 +290,14 @@ class PolicyRankingTaskBuilder(TaskBuilder):
                 "eval_user_selection": {
                     "kind": "post_split",
                     "test": test_eval_summary,
+                },
+                "policy_recommendation_metrics": {
+                    "protocol": "held_out_recommendation_eval",
+                    "target_source_column": self.target_source_column,
+                    "ks": list(POLICY_EVAL_KS),
+                    "ranking_score": "negative_rank",
+                    "aggregation_headline": "macro_by_user_group_mean",
+                    "policies": policy_metrics,
                 },
                 "rows": {
                     "train": int(len(train)),

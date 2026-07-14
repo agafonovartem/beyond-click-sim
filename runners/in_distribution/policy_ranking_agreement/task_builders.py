@@ -14,7 +14,7 @@ from beyond_click_sim.tasks.policy_ranking import PolicyRankingTaskBuilder
 
 
 VERSION = "v1"
-SEEDS = (0, 1, 2, 3, 4)
+SEEDS = (0, 1, 2)
 MIN_INTERACTIONS = 10
 DATASETS = ("ml-1m", "steam")
 TRAIN_FRACTION = 0.8

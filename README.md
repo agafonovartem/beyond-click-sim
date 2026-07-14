@@ -178,6 +178,14 @@ uv run python -m runners.in_distribution.interaction_prediction.run \
   --methods llm_yes_no_vllm_llama33_70b_smoke
 ```
 
+Run the Cold Start experiment:
+
+```bash
+uv run python -m runners.in_distribution.cold_start.run \
+  --methods popularity_f1_threshold,popularity_ranking,item_knn_cold_start,item_knn_cold_start_ranking,llm_yes_no_vllm_qwen36_27b_full \
+  --output-dir outputs/in_distribution/cold_start
+```
+
 The default interaction tasks use the reduced `eval_users1000_cg5` protocol:
 classic scorers are trained on the full train split, while validation/test
 candidate construction is capped to a deterministic 1000 held-out users per

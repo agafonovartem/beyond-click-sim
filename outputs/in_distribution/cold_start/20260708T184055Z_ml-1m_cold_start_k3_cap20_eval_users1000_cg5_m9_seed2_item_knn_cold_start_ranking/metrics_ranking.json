@@ -1,0 +1,140 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 4416,
+      "positives_max": 2,
+      "positives_mean": 1.9873188405797102,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.8731884057971,
+      "rows_min": 10,
+      "sampled_max": 18,
+      "sampled_mean": 17.88586956521739,
+      "sampled_min": 9
+    },
+    "val": {
+      "groups": 2748,
+      "positives_max": 2,
+      "positives_mean": 1.9909024745269286,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.909024745269285,
+      "rows_min": 10,
+      "sampled_max": 18,
+      "sampled_mean": 17.91812227074236,
+      "sampled_min": 9
+    }
+  },
+  "main_metric": "test.macro_by_user_group_mean.ndcg@5",
+  "method": "item_knn_cold_start_ranking",
+  "protocol": "ranking",
+  "ranking_evaluation": {
+    "ks": [
+      1,
+      3,
+      5,
+      10
+    ],
+    "tie_policy": "average"
+  },
+  "stage_times_seconds": {
+    "candidate_group_summary": 0.029,
+    "compute_ranking_metrics": 1.841,
+    "fit": 0.607,
+    "prepare_xy": 0.017,
+    "score_test": 0.305,
+    "score_val": 0.187,
+    "write_predictions": 0.085
+  },
+  "task": "ml-1m_cold_start_k3_cap20_eval_users1000_cg5_m9_seed2",
+  "test": {
+    "macro_by_group": {
+      "groups_with_score_ties": 4416,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 56,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.2541213768115942,
+      "hit_rate@10": 0.8100961673284875,
+      "hit_rate@3": 0.41784579201627253,
+      "hit_rate@5": 0.5510177536721528,
+      "n": 87760,
+      "n_groups": 4416,
+      "n_positive": 8776,
+      "ndcg@1": 0.25412137681159425,
+      "ndcg@10": 0.3695393450193254,
+      "ndcg@3": 0.236020267912283,
+      "ndcg@5": 0.2812612802803323,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 4416,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 56,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.2517936337625179,
+      "hit_rate@10": 0.8135620545936921,
+      "hit_rate@3": 0.4158220285453739,
+      "hit_rate@5": 0.550177363255118,
+      "n": 87760,
+      "n_groups": 4416,
+      "n_positive": 8776,
+      "n_users": 932,
+      "ndcg@1": 0.2517936337625179,
+      "ndcg@10": 0.37146259550323,
+      "ndcg@3": 0.23608242136711607,
+      "ndcg@5": 0.28195420342706823,
+      "tie_policy": "average"
+    }
+  },
+  "val": {
+    "macro_by_group": {
+      "groups_with_score_ties": 2748,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 25,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.2495269286754003,
+      "hit_rate@10": 0.807549312531264,
+      "hit_rate@3": 0.4124841458328013,
+      "hit_rate@5": 0.5467433174653963,
+      "n": 54710,
+      "n_groups": 2748,
+      "n_positive": 5471,
+      "ndcg@1": 0.2495269286754003,
+      "ndcg@10": 0.36509583810857954,
+      "ndcg@3": 0.23107852612761196,
+      "ndcg@5": 0.27648686757750723,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 2748,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 25,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.24713869463869464,
+      "hit_rate@10": 0.8099349051361435,
+      "hit_rate@3": 0.4103926239452555,
+      "hit_rate@5": 0.5456659053021281,
+      "n": 54710,
+      "n_groups": 2748,
+      "n_positive": 5471,
+      "n_users": 572,
+      "ndcg@1": 0.24713869463869464,
+      "ndcg@10": 0.36590233069373257,
+      "ndcg@3": 0.23036150904654562,
+      "ndcg@5": 0.2762862534539425,
+      "tie_policy": "average"
+    }
+  }
+}
