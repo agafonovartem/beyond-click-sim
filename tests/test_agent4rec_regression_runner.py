@@ -58,6 +58,7 @@ def test_agent4rec_regression_runner_writes_profile_manifest(
         max_rows=None,
         max_llm_attempts=1,
         max_workers=1,
+        summary_usage="none",
     )
 
     assert result["scored_rows"] == 2
@@ -96,32 +97,10 @@ def test_agent4rec_regression_runner_can_add_candidate_summaries(
     client = FakeClient(["RATING: 5"])
     monkeypatch.setattr(agent4rec_regressor, "make_llm_client", lambda _: client)
 
-    def fake_add_item_summaries(**kwargs: object):
-        X_train = kwargs["X_train"].copy()
-        X_test = kwargs["X_test"].copy()
-        summaries = {
-            "i-train-1": "Toys plan a rescue.",
-            "i-train-2": "A street thief finds a lamp.",
-            "i-train-3": "A detective hunts criminals.",
-            "i1": "A young lion reclaims his kingdom.",
-            "i2": "A crime family saga.",
-        }
-        X_train["item_summary"] = X_train["item_id"].map(summaries)
-        X_test["item_summary"] = X_test["item_id"].map(summaries)
-        return X_train, X_test, {
-            "uses_item_summaries": True,
-            "history_item_summaries": kwargs["summary_visibility"]["history"],
-            "candidate_item_summaries": kwargs["summary_visibility"]["candidate"],
-            "source_path": "fake.csv",
-        }
-
-    monkeypatch.setattr(
-        agent4rec_regressor,
-        "add_ml1m_item_summaries",
-        fake_add_item_summaries,
+    task = _toy_task(
+        test=_toy_task().test.head(1).copy(),
+        with_item_summaries=True,
     )
-
-    task = _toy_task(test=_toy_task().test.head(1).copy())
     agent4rec_regressor.run_method(
         task,
         tmp_path,
@@ -131,7 +110,7 @@ def test_agent4rec_regression_runner_can_add_candidate_summaries(
         max_rows=None,
         max_llm_attempts=1,
         max_workers=1,
-        use_item_summaries=True,
+        summary_usage="candidate",
     )
 
     first_prompt = client.completions.calls[0]["messages"][1]["content"]
@@ -145,11 +124,14 @@ def test_agent4rec_regression_runner_can_add_candidate_summaries(
         "item_summary",
     ]
     assert manifest["scorer"]["profile_generator"]["summary_column"] is None
+    assert manifest["scorer"]["summary_usage"] == "candidate"
     assert manifest["scorer"]["item_summaries"] == {
         "uses_item_summaries": True,
+        "summary_column": "item_summary",
         "history_item_summaries": False,
+        "profile_item_summaries": False,
         "candidate_item_summaries": True,
-        "source_path": "fake.csv",
+        "canonical_enrichment": task.manifest["item_enrichment"],
     }
 
 
@@ -192,6 +174,7 @@ def test_agent4rec_regression_runner_writes_taste_manifest_and_cache(
         taste_client_name="openai",
         taste_model="gpt-4o-mini",
         taste_cache_path=cache_path,
+        summary_usage="none",
     )
 
     assert result["scored_rows"] == 1
@@ -245,6 +228,23 @@ def test_agent4rec_regression_runner_requires_item_rating_mean(
             max_rows=None,
             max_llm_attempts=1,
             max_workers=1,
+            summary_usage="none",
+        )
+
+
+def test_agent4rec_regression_runner_rejects_profile_summaries_without_taste(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="requires 'taste' in profile_components"):
+        agent4rec_regressor.run_method(
+            _toy_task(with_item_summaries=True),
+            tmp_path,
+            method_name="agent4rec_regressor_test",
+            client_name="fake",
+            model="fake-model",
+            max_rows=1,
+            profile_components=("traits",),
+            summary_usage="profile",
         )
 
 
@@ -277,6 +277,7 @@ def test_agent4rec_regression_qwen_traits_taste_wrappers_use_openai_taste(
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,
+            "summary_usage": "none",
         },
         {
             "method_name": "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
@@ -290,6 +291,7 @@ def test_agent4rec_regression_qwen_traits_taste_wrappers_use_openai_taste(
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,
+            "summary_usage": "none",
         },
     ]
 
@@ -340,12 +342,13 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
         {
             "method_name": "agent4rec_regressor_vllm_qwen36_27b_traits_full",
             "profile_components": ("traits",),
+            "summary_usage": "none",
             **common,
         },
         {
             "method_name": "agent4rec_regressor_vllm_qwen36_27b_traits_summary_full",
             "profile_components": ("traits",),
-            "use_item_summaries": True,
+            "summary_usage": "candidate",
             **common,
         },
         {
@@ -353,6 +356,7 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
                 "agent4rec_regressor_vllm_qwen36_27b_taste_gpt4o_mini_full"
             ),
             "profile_components": ("taste",),
+            "summary_usage": "none",
             **common,
             **taste,
         },
@@ -361,7 +365,7 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
                 "agent4rec_regressor_vllm_qwen36_27b_taste_gpt4o_mini_summary_full"
             ),
             "profile_components": ("taste",),
-            "use_item_summaries": True,
+            "summary_usage": "both",
             **common,
             **taste,
         },
@@ -370,6 +374,7 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
                 "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_full"
             ),
             "profile_components": ("traits", "taste"),
+            "summary_usage": "none",
             **common,
             **taste,
         },
@@ -378,7 +383,7 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
                 "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_summary_full"
             ),
             "profile_components": ("traits", "taste"),
-            "use_item_summaries": True,
+            "summary_usage": "both",
             **common,
             **taste,
         },
@@ -430,6 +435,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
         {
             "method_name": "agent4rec_regressor_vllm_llama33_70b_traits_full",
             "profile_components": ("traits",),
+            "summary_usage": "none",
             **common,
         },
         {
@@ -437,7 +443,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
                 "agent4rec_regressor_vllm_llama33_70b_traits_summary_full"
             ),
             "profile_components": ("traits",),
-            "use_item_summaries": True,
+            "summary_usage": "candidate",
             **common,
         },
         {
@@ -445,6 +451,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
                 "agent4rec_regressor_vllm_llama33_70b_taste_gpt4o_mini_full"
             ),
             "profile_components": ("taste",),
+            "summary_usage": "none",
             **common,
             **taste,
         },
@@ -453,7 +460,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
                 "agent4rec_regressor_vllm_llama33_70b_taste_gpt4o_mini_summary_full"
             ),
             "profile_components": ("taste",),
-            "use_item_summaries": True,
+            "summary_usage": "both",
             **common,
             **taste,
         },
@@ -462,6 +469,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
                 "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_full"
             ),
             "profile_components": ("traits", "taste"),
+            "summary_usage": "none",
             **common,
             **taste,
         },
@@ -470,7 +478,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
                 "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_summary_full"
             ),
             "profile_components": ("traits", "taste"),
-            "use_item_summaries": True,
+            "summary_usage": "both",
             **common,
             **taste,
         },
@@ -534,19 +542,21 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             "method_name": "agent4rec_regressor_vllm_qwen3_8b_traits_full",
             "max_rows": None,
             "profile_components": ("traits",),
+            "summary_usage": "none",
             **common,
         },
         {
             "method_name": "agent4rec_regressor_vllm_qwen3_8b_traits_summary_full",
             "max_rows": None,
             "profile_components": ("traits",),
-            "use_item_summaries": True,
+            "summary_usage": "candidate",
             **common,
         },
         {
             "method_name": "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_full",
             "max_rows": None,
             "profile_components": ("taste",),
+            "summary_usage": "none",
             **common,
             **taste,
         },
@@ -556,8 +566,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("taste",),
-            "history_item_summaries": True,
-            "candidate_item_summaries": False,
+            "summary_usage": "profile",
             **common,
             **taste,
         },
@@ -567,8 +576,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("taste",),
-            "history_item_summaries": False,
-            "candidate_item_summaries": True,
+            "summary_usage": "candidate",
             **common,
             **taste,
         },
@@ -578,7 +586,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("taste",),
-            "use_item_summaries": True,
+            "summary_usage": "both",
             **common,
             **taste,
         },
@@ -588,6 +596,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("traits", "taste"),
+            "summary_usage": "none",
             **common,
             **taste,
         },
@@ -597,8 +606,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("traits", "taste"),
-            "history_item_summaries": True,
-            "candidate_item_summaries": False,
+            "summary_usage": "profile",
             **common,
             **taste,
         },
@@ -608,8 +616,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("traits", "taste"),
-            "history_item_summaries": False,
-            "candidate_item_summaries": True,
+            "summary_usage": "candidate",
             **common,
             **taste,
         },
@@ -619,7 +626,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("traits", "taste"),
-            "use_item_summaries": True,
+            "summary_usage": "both",
             **common,
             **taste,
         },
@@ -627,58 +634,85 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             "method_name": "agent4rec_regressor_vllm_qwen3_8b_traits_smoke",
             "max_rows": agent4rec_regressor.SMOKE_ROWS,
             "profile_components": ("traits",),
+            "summary_usage": "none",
             **common,
         },
     ]
 
 
-def _toy_task(*, test: pd.DataFrame | None = None) -> Task:
+def _toy_task(
+    *,
+    test: pd.DataFrame | None = None,
+    with_item_summaries: bool = False,
+) -> Task:
+    train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1"],
+            "item_id": ["i-train-1", "i-train-2", "i-train-3"],
+            "item_title": ["Toy Story", "Aladdin", "Heat"],
+            "item_genres": ["Animation|Comedy", "Animation", "Crime"],
+            "item_rating_mean": [4.15, 3.95, 3.60],
+            "rating": [5, 4, 2],
+            "target": [5, 4, 2],
+        }
+    )
+    test_frame = (
+        test
+        if test is not None
+        else pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": ["i1", "i2"],
+                "item_title": ["Lion King", "Godfather"],
+                "item_genres": ["Animation", "Crime"],
+                "item_rating_mean": [4.153, 4.567],
+                "rating": [pd.NA, pd.NA],
+                "target": [5, 2],
+            },
+            index=["a", "b"],
+        )
+    ).copy()
+    val = pd.DataFrame(columns=["user_id", "item_id", "target"])
+    manifest: dict[str, object] = {
+        "protocol": "regression",
+        "dataset": "ml-1m",
+        "dataset_version": "v1",
+        "target_source_column": "target_rating",
+        "splitter": {"seed": 0},
+    }
+    feature_columns = ["item_title", "item_genres", "item_rating_mean"]
+    if with_item_summaries:
+        summaries = {
+            "i-train-1": "Toys plan a rescue.",
+            "i-train-2": "A street thief finds a lamp.",
+            "i-train-3": "A detective hunts criminals.",
+            "i1": "A young lion reclaims his kingdom.",
+            "i2": "A crime family saga.",
+        }
+        train["item_summary"] = train["item_id"].map(summaries)
+        test_frame["item_summary"] = test_frame["item_id"].map(summaries)
+        val["item_summary"] = pd.Series(dtype="string")
+        feature_columns.append("item_summary")
+        manifest["item_enrichment"] = {
+            "movie_summaries": {
+                "enabled": True,
+                "canonical_column": "summary",
+                "task_column": "item_summary",
+                "source_sha256": "fake-sha256",
+            }
+        }
+
     return Task(
         name="ml-1m_rating_item_stats_eval_users1_seed0",
-        train=pd.DataFrame(
-            {
-                "user_id": ["u1", "u1", "u1"],
-                "item_id": ["i-train-1", "i-train-2", "i-train-3"],
-                "item_title": ["Toy Story", "Aladdin", "Heat"],
-                "item_genres": ["Animation|Comedy", "Animation", "Crime"],
-                "item_rating_mean": [4.15, 3.95, 3.60],
-                "rating": [5, 4, 2],
-                "target": [5, 4, 2],
-            }
-        ),
-        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
-        test=(
-            test
-            if test is not None
-            else pd.DataFrame(
-                {
-                    "user_id": ["u1", "u1"],
-                    "item_id": ["i1", "i2"],
-                    "item_title": ["Lion King", "Godfather"],
-                    "item_genres": ["Animation", "Crime"],
-                    "item_rating_mean": [4.153, 4.567],
-                    "rating": [pd.NA, pd.NA],
-                    "target": [5, 2],
-                },
-                index=["a", "b"],
-            )
-        ),
+        train=train,
+        val=val,
+        test=test_frame,
         schema=TaskSchema(
             target_column="target",
             candidate_group_column=None,
             sampled_column=None,
-            feature_columns=(
-                "item_title",
-                "item_genres",
-                "item_rating_mean",
-            ),
+            feature_columns=tuple(feature_columns),
             history_context_columns=("rating",),
         ),
-        manifest={
-            "protocol": "regression",
-            "dataset": "ml-1m",
-            "dataset_version": "v1",
-            "target_source_column": "target_rating",
-            "splitter": {"seed": 0},
-        },
+        manifest=manifest,
     )

@@ -306,11 +306,14 @@ def test_llm_regression_runner_can_add_item_summaries_to_history_and_candidate(
                 "item_genres": ["Animation"],
                 "item_rating_mean": [4.153],
                 "item_rating_count": [2077],
+                "item_summary": ["Toys plan a rescue."],
                 "rating": [5],
                 "target": [5],
             }
         ),
-        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        val=pd.DataFrame(
+            columns=["user_id", "item_id", "item_summary", "target"]
+        ),
         test=pd.DataFrame(
             {
                 "user_id": ["u1"],
@@ -319,6 +322,7 @@ def test_llm_regression_runner_can_add_item_summaries_to_history_and_candidate(
                 "item_genres": ["Animation"],
                 "item_rating_mean": [3.333],
                 "item_rating_count": [0],
+                "item_summary": ["A young lion reclaims his kingdom."],
                 "rating": [pd.NA],
                 "target": [4],
             },
@@ -331,6 +335,7 @@ def test_llm_regression_runner_can_add_item_summaries_to_history_and_candidate(
                 "item_genres",
                 "item_rating_mean",
                 "item_rating_count",
+                "item_summary",
             ),
             history_context_columns=("rating",),
         ),
@@ -338,6 +343,14 @@ def test_llm_regression_runner_can_add_item_summaries_to_history_and_candidate(
             "protocol": "regression",
             "dataset": "ml-1m",
             "target_source_column": "target_rating",
+            "item_enrichment": {
+                "movie_summaries": {
+                    "enabled": True,
+                    "canonical_column": "summary",
+                    "task_column": "item_summary",
+                    "source_sha256": "fake-sha256",
+                }
+            },
         },
     )
     client = FakeClient(["4"])
@@ -345,19 +358,6 @@ def test_llm_regression_runner_can_add_item_summaries_to_history_and_candidate(
         llm_regressor,
         "make_llm_client",
         lambda _client_name: client,
-    )
-
-    def fake_add_item_summaries(**kwargs: object):
-        X_train = kwargs["X_train"].copy()
-        X_test = kwargs["X_test"].copy()
-        X_train["item_summary"] = ["Toys plan a rescue."]
-        X_test["item_summary"] = ["A young lion reclaims his kingdom."]
-        return X_train, X_test, {"uses_item_summaries": True, "source_path": "fake.csv"}
-
-    monkeypatch.setattr(
-        llm_regressor,
-        "add_ml1m_item_summaries",
-        fake_add_item_summaries,
     )
 
     llm_regressor.run_method(
@@ -370,7 +370,7 @@ def test_llm_regression_runner_can_add_item_summaries_to_history_and_candidate(
         max_llm_attempts=1,
         max_workers=1,
         use_item_stats=True,
-        use_item_summaries=True,
+        summary_visibility="both",
     )
 
     prompt = client.completions.calls[0]["messages"][1]["content"]
@@ -378,9 +378,14 @@ def test_llm_regression_runner_can_add_item_summaries_to_history_and_candidate(
     assert "summary: A young lion reclaims his kingdom." in prompt
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["summary_visibility"] == "both"
     assert manifest["scorer"]["item_summaries"] == {
         "uses_item_summaries": True,
-        "source_path": "fake.csv",
+        "summary_column": "item_summary",
+        "history_item_summaries": True,
+        "profile_item_summaries": False,
+        "candidate_item_summaries": True,
+        "canonical_enrichment": task.manifest["item_enrichment"],
     }
 
 
@@ -528,8 +533,7 @@ def test_llm_regressor_qwen3_8b_with_item_stats_wrappers_disable_thinking(
             "max_rows": None,
             "max_workers": 128,
             "use_item_stats": True,
-            "history_item_summaries": True,
-            "candidate_item_summaries": False,
+            "summary_visibility": "history",
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
         {
@@ -541,8 +545,7 @@ def test_llm_regressor_qwen3_8b_with_item_stats_wrappers_disable_thinking(
             "max_rows": None,
             "max_workers": 128,
             "use_item_stats": True,
-            "history_item_summaries": False,
-            "candidate_item_summaries": True,
+            "summary_visibility": "candidate",
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
         {
@@ -554,7 +557,7 @@ def test_llm_regressor_qwen3_8b_with_item_stats_wrappers_disable_thinking(
             "max_rows": None,
             "max_workers": 128,
             "use_item_stats": True,
-            "use_item_summaries": True,
+            "summary_visibility": "both",
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
         {
@@ -605,7 +608,7 @@ def test_llm_regressor_qwen36_27b_with_item_stats_wrappers_disable_thinking(
             "max_rows": None,
             "max_workers": llm_regressor.QWEN36_27B_MAX_WORKERS,
             "use_item_stats": True,
-            "use_item_summaries": True,
+            "summary_visibility": "both",
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
         {
@@ -654,6 +657,6 @@ def test_llm_regressor_llama33_70b_summary_wrapper(
             "max_rows": None,
             "max_workers": llm_regressor.VLLM_MAX_WORKERS,
             "use_item_stats": True,
-            "use_item_summaries": True,
+            "summary_visibility": "both",
         },
     ]

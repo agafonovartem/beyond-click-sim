@@ -161,17 +161,16 @@ planned Agent4Rec profile ablations are still incomplete:
 - `taste` only — available through the generic runner path, but not exposed as a named default method;
 - `traits + taste` — currently implemented for the Qwen + `gpt-4o-mini` taste runner.
 
-The ML-1M scorer intentionally omits Agent4Rec's `Summary` field in `##recommended list##`. The
-released Agent4Rec alignment code shows title, `History ratings`, and `Summary`, but `Summary`
-comes from `movies_augmentation.csv`, an undocumented external augmentation rather than a
-reproducible MovieLens field. Our current ML-1M prompt uses title, train-only `History ratings`
-(`item_rating_mean`), and genres; this is a cleaner but not exact reproduction of their visible
-item card. The Steam prompt uses game title, genres, tags, and playtime-derived profiles rather
-than MovieLens-specific fields.
+The released Agent4Rec alignment code shows title, `History ratings`, and `Summary` in
+`##recommended list##`. Its `movies_augmentation.csv` is now vendored with source commits,
+license, and SHA256 provenance, and MovieLens canonicalization can expose it as `item_summary`.
+Regression runners consume that canonical field, but `Agent4RecYesNoScorer` still omits it. The
+Steam prompt uses game title, genres, tags, and playtime-derived profiles rather than
+MovieLens-specific fields.
 
-**Fix:** expose a named `taste`-only ablation if needed, and keep ML-1M `Summary` out unless we add
-a reproducible summary artifact with clear provenance. Any cross-dataset Agent4Rec-style reporting
-should state the dataset-specific visible item fields and profile prompt version explicitly.
+**Fix:** propagate canonical `item_summary` into explicit ML-1M yes/no summary variants and expose
+a named `taste`-only ablation if needed. Any cross-dataset Agent4Rec-style reporting should state
+the dataset-specific visible item fields and profile prompt version explicitly.
 
 ## 9. Agent4Rec vs history LLM comparison currently mixes multiple axes
 

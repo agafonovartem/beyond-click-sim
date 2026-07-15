@@ -1,62 +1,50 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 import pandas as pd
+import pytest
+
+from beyond_click_sim.tasks import Task, TaskSchema
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from runners.in_distribution.regression_prediction.item_summaries import (
     ITEM_SUMMARY_COLUMN,
-    add_ml1m_item_summaries,
-    load_ml1m_item_summaries,
     maybe_add_item_summary_prompt_columns,
+    resolve_agent4rec_summary_usage,
     resolve_item_summary_visibility,
+    task_item_summary_metadata,
 )
 
 
-def test_load_ml1m_item_summaries_uses_raw_movie_id_as_item_id(tmp_path: Path) -> None:
-    source = tmp_path / "movies_augmentation.csv"
-    source.write_text(
-        "movie_id,title,genres,rating,summary\n"
-        "1,Toy Story (1995),Animation,9.5,Toys plan a rescue.\n"
-        "2,Jumanji (1995),Adventure,8.5,A magical board game.\n",
-        encoding="utf-8",
-    )
-
-    summaries = load_ml1m_item_summaries(source)
-
-    assert summaries["_item_summary_item_id"].tolist() == ["1", "2"]
-    assert summaries[ITEM_SUMMARY_COLUMN].tolist() == [
-        "Toys plan a rescue.",
-        "A magical board game.",
-    ]
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("none", {"history": False, "candidate": False, "any": False}),
+        ("history", {"history": True, "candidate": False, "any": True}),
+        ("candidate", {"history": False, "candidate": True, "any": True}),
+        ("both", {"history": True, "candidate": True, "any": True}),
+    ],
+)
+def test_resolve_item_summary_visibility(value: str, expected: dict[str, bool]) -> None:
+    assert resolve_item_summary_visibility(value) == expected
 
 
-def test_add_ml1m_item_summaries_merges_train_and_test(tmp_path: Path) -> None:
-    source = tmp_path / "movies_augmentation.csv"
-    source.write_text(
-        "movie_id,title,genres,rating,summary\n"
-        "1,Toy Story (1995),Animation,9.5,Toys plan a rescue.\n"
-        "2,Jumanji (1995),Adventure,8.5,A magical board game.\n",
-        encoding="utf-8",
-    )
-    X_train = pd.DataFrame({"item_id": ["1", "missing"], "value": [1, 2]})
-    X_test = pd.DataFrame({"item_id": ["2"], "value": [3]})
-
-    train, test, metadata = add_ml1m_item_summaries(
-        dataset_name="ml-1m",
-        X_train=X_train,
-        X_test=X_test,
-        use_item_summaries=True,
-        source_path=source,
-    )
-
-    assert train[ITEM_SUMMARY_COLUMN].iloc[0] == "Toys plan a rescue."
-    assert pd.isna(train[ITEM_SUMMARY_COLUMN].iloc[1])
-    assert test[ITEM_SUMMARY_COLUMN].tolist() == ["A magical board game."]
-    assert metadata["history_item_summaries"] is True
-    assert metadata["candidate_item_summaries"] is True
-    assert metadata["train_missing_summaries"] == 1
-    assert metadata["test_missing_summaries"] == 0
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("none", {"profile": False, "candidate": False, "any": False}),
+        ("profile", {"profile": True, "candidate": False, "any": True}),
+        ("candidate", {"profile": False, "candidate": True, "any": True}),
+        ("both", {"profile": True, "candidate": True, "any": True}),
+    ],
+)
+def test_resolve_agent4rec_summary_usage(value: str, expected: dict[str, bool]) -> None:
+    assert resolve_agent4rec_summary_usage(value) == expected
 
 
 def test_item_summary_prompt_columns_can_be_split() -> None:
@@ -91,17 +79,83 @@ def test_item_summary_prompt_columns_can_be_split() -> None:
     )
 
 
-def test_resolve_item_summary_visibility_keeps_legacy_bool_as_both() -> None:
-    assert resolve_item_summary_visibility(use_item_summaries=True) == {
-        "history": True,
-        "candidate": True,
-        "any": True,
+def test_task_item_summary_metadata_records_visibility_and_provenance() -> None:
+    task = _summary_task()
+
+    metadata = task_item_summary_metadata(
+        task,
+        profile=True,
+        candidate=True,
+    )
+
+    assert metadata == {
+        "uses_item_summaries": True,
+        "summary_column": "item_summary",
+        "history_item_summaries": False,
+        "profile_item_summaries": True,
+        "candidate_item_summaries": True,
+        "canonical_enrichment": {
+            "movie_summaries": {
+                "enabled": True,
+                "canonical_column": "summary",
+                "task_column": "item_summary",
+                "source_sha256": "fixture-sha256",
+            }
+        },
     }
-    assert resolve_item_summary_visibility(
-        history_item_summaries=True,
-        candidate_item_summaries=False,
-    ) == {
-        "history": True,
-        "candidate": False,
-        "any": True,
-    }
+
+
+def test_task_item_summary_metadata_requires_canonical_task_column() -> None:
+    task = _summary_task()
+    for frame in (task.train, task.val, task.test):
+        frame.drop(columns=[ITEM_SUMMARY_COLUMN], inplace=True)
+
+    with pytest.raises(ValueError, match="Rebuild canonical MovieLens data"):
+        task_item_summary_metadata(task, candidate=True)
+
+
+def test_task_item_summary_metadata_rejects_missing_values() -> None:
+    task = _summary_task()
+    task.test.loc[0, ITEM_SUMMARY_COLUMN] = pd.NA
+
+    with pytest.raises(ValueError, match="missing values"):
+        task_item_summary_metadata(task, history=True)
+
+
+def test_task_item_summary_metadata_requires_canonical_provenance() -> None:
+    task = _summary_task()
+    task.manifest.clear()
+
+    with pytest.raises(ValueError, match="canonical movie-summary provenance"):
+        task_item_summary_metadata(task, candidate=True)
+
+
+def _summary_task() -> Task:
+    frame = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_id": ["i1"],
+            ITEM_SUMMARY_COLUMN: ["A movie summary."],
+            "target": [5],
+        }
+    )
+    return Task(
+        name="summary-task",
+        train=frame.copy(),
+        val=frame.copy(),
+        test=frame.copy(),
+        schema=TaskSchema(
+            target_column="target",
+            feature_columns=(ITEM_SUMMARY_COLUMN,),
+        ),
+        manifest={
+            "item_enrichment": {
+                "movie_summaries": {
+                    "enabled": True,
+                    "canonical_column": "summary",
+                    "task_column": "item_summary",
+                    "source_sha256": "fixture-sha256",
+                }
+            }
+        },
+    )

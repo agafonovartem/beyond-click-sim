@@ -21,9 +21,10 @@ from runners.in_distribution.regression_prediction.config import (
 from runners.in_distribution.regression_prediction.item_summaries import (
     ITEM_SUMMARY_COLUMN,
     ITEM_SUMMARY_COLUMN_LABEL,
-    add_ml1m_item_summaries,
+    SummaryVisibility,
     maybe_add_item_summary_prompt_columns,
     resolve_item_summary_visibility,
+    task_item_summary_metadata,
 )
 from runners.in_distribution.regression_prediction.methods.common import (
     current_git_commit,
@@ -138,7 +139,7 @@ def run_llama31_8b_with_item_stats_summary_smoke10(
         max_rows=SMOKE10_ROWS,
         max_workers=OLLAMA_MAX_WORKERS,
         use_item_stats=True,
-        use_item_summaries=True,
+        summary_visibility="both",
     )
 
 
@@ -239,7 +240,7 @@ def run_llama33_70b_with_item_stats_summary_full(
         max_rows=None,
         max_workers=VLLM_MAX_WORKERS,
         use_item_stats=True,
-        use_item_summaries=True,
+        summary_visibility="both",
     )
 
 
@@ -290,7 +291,7 @@ def run_qwen3_8b_with_item_stats_summary_full(
         max_rows=None,
         max_workers=QWEN3_8B_MAX_WORKERS,
         use_item_stats=True,
-        use_item_summaries=True,
+        summary_visibility="both",
         extra_body=QWEN_EXTRA_BODY,
     )
 
@@ -308,8 +309,7 @@ def run_qwen3_8b_with_item_stats_history_summary_full(
         max_rows=None,
         max_workers=QWEN3_8B_MAX_WORKERS,
         use_item_stats=True,
-        history_item_summaries=True,
-        candidate_item_summaries=False,
+        summary_visibility="history",
         extra_body=QWEN_EXTRA_BODY,
     )
 
@@ -327,8 +327,7 @@ def run_qwen3_8b_with_item_stats_candidate_summary_full(
         max_rows=None,
         max_workers=QWEN3_8B_MAX_WORKERS,
         use_item_stats=True,
-        history_item_summaries=False,
-        candidate_item_summaries=True,
+        summary_visibility="candidate",
         extra_body=QWEN_EXTRA_BODY,
     )
 
@@ -380,7 +379,7 @@ def run_qwen36_27b_with_item_stats_summary_full(
         max_rows=None,
         max_workers=QWEN36_27B_MAX_WORKERS,
         use_item_stats=True,
-        use_item_summaries=True,
+        summary_visibility="both",
         extra_body=QWEN_EXTRA_BODY,
     )
 
@@ -511,9 +510,7 @@ def run_method(
     max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
     use_item_stats: bool = False,
-    use_item_summaries: bool = False,
-    history_item_summaries: bool | None = None,
-    candidate_item_summaries: bool | None = None,
+    summary_visibility: SummaryVisibility = "none",
     extra_body: dict | None = None,
 ) -> dict[str, object]:
     """Run an LLM discrete numeric scorer for regression prediction."""
@@ -527,11 +524,7 @@ def run_method(
     dataset_name = str(task.manifest["dataset"])
     target_source_column = str(task.manifest["target_source_column"])
     target_config = DATASET_TARGET_REGRESSION_CONFIG[dataset_name][target_source_column]
-    summary_visibility = resolve_item_summary_visibility(
-        use_item_summaries=use_item_summaries,
-        history_item_summaries=history_item_summaries,
-        candidate_item_summaries=candidate_item_summaries,
-    )
+    resolved_summary_visibility = resolve_item_summary_visibility(summary_visibility)
     base_prompt_columns = {
         "history_description_columns": target_config["history_description_columns"],
         "candidate_description_columns": target_config["candidate_description_columns"],
@@ -544,14 +537,14 @@ def run_method(
     prompt_columns = maybe_add_item_summary_prompt_columns(
         dataset_name,
         prompt_columns,
-        history_item_summaries=summary_visibility["history"],
-        candidate_item_summaries=summary_visibility["candidate"],
+        history_item_summaries=resolved_summary_visibility["history"],
+        candidate_item_summaries=resolved_summary_visibility["candidate"],
     )
     column_labels = item_rating_column_labels(
         dataset_name,
         use_item_stats=use_item_stats,
     )
-    if summary_visibility["any"]:
+    if resolved_summary_visibility["any"]:
         column_labels = {
             **column_labels,
             ITEM_SUMMARY_COLUMN: ITEM_SUMMARY_COLUMN_LABEL,
@@ -563,12 +556,10 @@ def run_method(
     if max_rows is not None:
         X_test = X_test.head(max_rows).copy()
         y_test = y_test.loc[X_test.index].copy()
-    X_train, X_test, item_summary_metadata = add_ml1m_item_summaries(
-        dataset_name=dataset_name,
-        X_train=X_train,
-        X_test=X_test,
-        use_item_summaries=summary_visibility["any"],
-        summary_visibility=summary_visibility,
+    item_summary_metadata = task_item_summary_metadata(
+        task,
+        history=resolved_summary_visibility["history"],
+        candidate=resolved_summary_visibility["candidate"],
     )
 
     scorer = LLMRegressor(
@@ -628,6 +619,7 @@ def run_method(
         "prompt_columns": prompt_columns,
         "column_labels": column_labels,
         "uses_item_stats": use_item_stats,
+        "summary_visibility": summary_visibility,
         "item_summaries": item_summary_metadata,
         "target": {
             "name": target_config["target_name"],

@@ -1,32 +1,43 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from pathlib import Path
-from typing import Any
+from typing import Literal
 
-import pandas as pd
-
-from runners.in_distribution.regression_prediction.task_builders import repo_root
+from beyond_click_sim.tasks import Task
 
 
 ITEM_SUMMARY_COLUMN = "item_summary"
 ITEM_SUMMARY_COLUMN_LABEL = "summary"
 
+SummaryVisibility = Literal["none", "history", "candidate", "both"]
+Agent4RecSummaryUsage = Literal["none", "profile", "candidate", "both"]
 
-def agent4rec_ml1m_movies_augmentation_path() -> Path:
-    root = repo_root()
-    relative_path = (
-        Path("Agent4Rec")
-        / "datasets"
-        / "ml-1m"
-        / "raw_data"
-        / "movies_augmentation.csv"
-    )
-    for base_path in (root.parent, *root.parents):
-        candidate = base_path / relative_path
-        if candidate.exists():
-            return candidate
-    return root.parent / relative_path
+
+def resolve_item_summary_visibility(
+    summary_visibility: SummaryVisibility,
+) -> dict[str, bool]:
+    if summary_visibility not in {"none", "history", "candidate", "both"}:
+        raise ValueError(f"Unsupported summary_visibility: {summary_visibility!r}")
+    history = summary_visibility in {"history", "both"}
+    candidate = summary_visibility in {"candidate", "both"}
+    return {
+        "history": history,
+        "candidate": candidate,
+        "any": history or candidate,
+    }
+
+
+def resolve_agent4rec_summary_usage(
+    summary_usage: Agent4RecSummaryUsage,
+) -> dict[str, bool]:
+    if summary_usage not in {"none", "profile", "candidate", "both"}:
+        raise ValueError(f"Unsupported summary_usage: {summary_usage!r}")
+    profile = summary_usage in {"profile", "both"}
+    candidate = summary_usage in {"candidate", "both"}
+    return {
+        "profile": profile,
+        "candidate": candidate,
+        "any": profile or candidate,
+    }
 
 
 def maybe_add_item_summary_prompt_columns(
@@ -42,142 +53,76 @@ def maybe_add_item_summary_prompt_columns(
     return {
         "history_description_columns": (
             *prompt_columns["history_description_columns"],
-            *(
-                (ITEM_SUMMARY_COLUMN,)
-                if history_item_summaries
-                else ()
-            ),
+            *((ITEM_SUMMARY_COLUMN,) if history_item_summaries else ()),
         ),
         "candidate_description_columns": (
             *prompt_columns["candidate_description_columns"],
-            *(
-                (ITEM_SUMMARY_COLUMN,)
-                if candidate_item_summaries
-                else ()
-            ),
+            *((ITEM_SUMMARY_COLUMN,) if candidate_item_summaries else ()),
         ),
     }
 
 
-def add_ml1m_item_summaries(
+def task_item_summary_metadata(
+    task: Task,
     *,
-    dataset_name: str,
-    X_train: pd.DataFrame,
-    X_test: pd.DataFrame,
-    use_item_summaries: bool,
-    summary_visibility: Mapping[str, bool] | None = None,
-    source_path: Path | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
-    if not use_item_summaries:
-        return X_train, X_test, {
-            "uses_item_summaries": False,
-            "history_item_summaries": False,
-            "candidate_item_summaries": False,
-        }
-    _require_ml1m(dataset_name)
-    visibility = (
-        {"history": True, "candidate": True}
-        if summary_visibility is None
-        else dict(summary_visibility)
+    history: bool = False,
+    profile: bool = False,
+    candidate: bool = False,
+) -> dict[str, object]:
+    requested = history or profile or candidate
+    available = all(
+        ITEM_SUMMARY_COLUMN in frame.columns
+        for frame in (task.train, task.val, task.test)
     )
-
-    source = (
-        agent4rec_ml1m_movies_augmentation_path()
-        if source_path is None
-        else source_path.expanduser().resolve()
-    )
-    summaries = load_ml1m_item_summaries(source)
-    train_with_summary = _merge_item_summaries(X_train, summaries)
-    test_with_summary = _merge_item_summaries(X_test, summaries)
-    metadata = {
-        "uses_item_summaries": True,
-        "history_item_summaries": bool(visibility.get("history", False)),
-        "candidate_item_summaries": bool(visibility.get("candidate", False)),
-        "source_path": str(source),
-        "summary_column": ITEM_SUMMARY_COLUMN,
-        "train_rows": int(len(train_with_summary)),
-        "test_rows": int(len(test_with_summary)),
-        "train_missing_summaries": int(
-            train_with_summary[ITEM_SUMMARY_COLUMN].isna().sum()
-        ),
-        "test_missing_summaries": int(
-            test_with_summary[ITEM_SUMMARY_COLUMN].isna().sum()
-        ),
-    }
-    return train_with_summary, test_with_summary, metadata
-
-
-def resolve_item_summary_visibility(
-    *,
-    use_item_summaries: bool = False,
-    history_item_summaries: bool | None = None,
-    candidate_item_summaries: bool | None = None,
-) -> dict[str, bool]:
-    """Resolve summary visibility while keeping the old bool as "both"."""
-
-    history = (
-        use_item_summaries
-        if history_item_summaries is None
-        else history_item_summaries
-    )
-    candidate = (
-        use_item_summaries
-        if candidate_item_summaries is None
-        else candidate_item_summaries
-    )
-    return {
-        "history": bool(history),
-        "candidate": bool(candidate),
-        "any": bool(history or candidate),
-    }
-
-
-def load_ml1m_item_summaries(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(
-            "Agent4Rec MovieLens summary file is missing: "
-            f"{path}. Expected raw_data/movies_augmentation.csv."
+    if requested and not available:
+        raise ValueError(
+            "Item summaries were requested but the task has no item_summary column. "
+            "Rebuild canonical MovieLens data with movie summary enrichment enabled."
         )
-    rows = pd.read_csv(
-        path,
-        usecols=["movie_id", "summary"],
-        dtype={"movie_id": "string", "summary": "string"},
-    )
-    rows = rows.rename(
-        columns={
-            "movie_id": "_item_summary_item_id",
-            "summary": ITEM_SUMMARY_COLUMN,
+    if requested:
+        missing_by_split = {
+            split_name: int(frame[ITEM_SUMMARY_COLUMN].isna().sum())
+            for split_name, frame in (
+                ("train", task.train),
+                ("val", task.val),
+                ("test", task.test),
+            )
         }
-    )
-    rows[ITEM_SUMMARY_COLUMN] = rows[ITEM_SUMMARY_COLUMN].str.strip()
-    rows = rows.dropna(subset=["_item_summary_item_id", ITEM_SUMMARY_COLUMN])
-    rows = rows[rows[ITEM_SUMMARY_COLUMN] != ""]
-    return rows.drop_duplicates(subset=["_item_summary_item_id"], keep="first")
+        if any(missing_by_split.values()):
+            raise ValueError(
+                "Item summaries were requested but task rows contain missing values: "
+                f"{missing_by_split}"
+            )
 
-
-def _merge_item_summaries(
-    frame: pd.DataFrame,
-    summaries: pd.DataFrame,
-) -> pd.DataFrame:
-    if "item_id" not in frame.columns:
-        raise ValueError("Item summaries require an item_id column")
-    frame_without_old_summary = frame.drop(
-        columns=[ITEM_SUMMARY_COLUMN],
-        errors="ignore",
-    ).copy()
-    frame_without_old_summary["_item_summary_item_id"] = frame_without_old_summary[
-        "item_id"
-    ].astype("string")
-    merged = frame_without_old_summary.merge(
-        summaries,
-        on="_item_summary_item_id",
-        how="left",
-        validate="many_to_one",
-        sort=False,
-    )
-    return merged.drop(columns=["_item_summary_item_id"])
+    canonical_enrichment = task.manifest.get("item_enrichment")
+    if requested:
+        movie_summaries = (
+            canonical_enrichment.get("movie_summaries")
+            if isinstance(canonical_enrichment, dict)
+            else None
+        )
+        if (
+            not isinstance(movie_summaries, dict)
+            or movie_summaries.get("enabled") is not True
+            or movie_summaries.get("task_column") != ITEM_SUMMARY_COLUMN
+            or not movie_summaries.get("source_sha256")
+        ):
+            raise ValueError(
+                "Item summaries were requested but the task lacks valid canonical "
+                "movie-summary provenance"
+            )
+    return {
+        "uses_item_summaries": requested,
+        "summary_column": ITEM_SUMMARY_COLUMN if requested else None,
+        "history_item_summaries": history,
+        "profile_item_summaries": profile,
+        "candidate_item_summaries": candidate,
+        "canonical_enrichment": canonical_enrichment,
+    }
 
 
 def _require_ml1m(dataset_name: str) -> None:
     if dataset_name != "ml-1m":
-        raise ValueError(f"Item summaries are configured only for ml-1m, got {dataset_name!r}")
+        raise ValueError(
+            f"Item summaries are configured only for ml-1m, got {dataset_name!r}"
+        )

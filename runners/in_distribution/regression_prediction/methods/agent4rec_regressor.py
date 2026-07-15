@@ -13,10 +13,11 @@ from runners.in_distribution.regression_prediction.config import (
     MAX_HISTORY_ITEMS,
 )
 from runners.in_distribution.regression_prediction.item_summaries import (
+    Agent4RecSummaryUsage,
     ITEM_SUMMARY_COLUMN,
     ITEM_SUMMARY_COLUMN_LABEL,
-    add_ml1m_item_summaries,
-    resolve_item_summary_visibility,
+    resolve_agent4rec_summary_usage,
+    task_item_summary_metadata,
 )
 from runners.in_distribution.regression_prediction.methods.common import (
     current_git_commit,
@@ -84,6 +85,7 @@ def run_llama33_70b_traits_full(
         max_rows=None,
         max_workers=VLLM_MAX_WORKERS,
         profile_components=("traits",),
+        summary_usage="none",
     )
 
 
@@ -100,7 +102,7 @@ def run_llama33_70b_traits_summary_full(
         max_rows=None,
         max_workers=VLLM_MAX_WORKERS,
         profile_components=("traits",),
-        use_item_summaries=True,
+        summary_usage="candidate",
     )
 
 
@@ -121,6 +123,7 @@ def run_llama33_70b_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
     )
 
 
@@ -141,7 +144,7 @@ def run_llama33_70b_taste_gpt4o_mini_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        use_item_summaries=True,
+        summary_usage="both",
     )
 
 
@@ -162,6 +165,7 @@ def run_llama33_70b_traits_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
     )
 
 
@@ -184,7 +188,7 @@ def run_llama33_70b_traits_taste_gpt4o_mini_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        use_item_summaries=True,
+        summary_usage="both",
     )
 
 
@@ -207,8 +211,7 @@ def run_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        history_item_summaries=False,
-        candidate_item_summaries=True,
+        summary_usage="candidate",
     )
 
 
@@ -232,6 +235,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_smoke(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
     )
 
 
@@ -255,6 +259,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
     )
 
 
@@ -272,6 +277,7 @@ def run_qwen36_27b_traits_full(
         max_workers=QWEN36_27B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits",),
+        summary_usage="none",
     )
 
 
@@ -289,7 +295,7 @@ def run_qwen36_27b_traits_summary_full(
         max_workers=QWEN36_27B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits",),
-        use_item_summaries=True,
+        summary_usage="candidate",
     )
 
 
@@ -311,6 +317,7 @@ def run_qwen36_27b_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
     )
 
 
@@ -332,7 +339,7 @@ def run_qwen36_27b_taste_gpt4o_mini_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        use_item_summaries=True,
+        summary_usage="both",
     )
 
 
@@ -356,7 +363,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        use_item_summaries=True,
+        summary_usage="both",
     )
 
 
@@ -380,8 +387,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        history_item_summaries=False,
-        candidate_item_summaries=True,
+        summary_usage="candidate",
     )
 
 
@@ -399,6 +405,7 @@ def run_qwen3_8b_traits_smoke(
         max_workers=QWEN3_8B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits",),
+        summary_usage="none",
     )
 
 
@@ -416,6 +423,7 @@ def run_qwen3_8b_traits_full(
         max_workers=QWEN3_8B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits",),
+        summary_usage="none",
     )
 
 
@@ -433,7 +441,7 @@ def run_qwen3_8b_traits_summary_full(
         max_workers=QWEN3_8B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits",),
-        use_item_summaries=True,
+        summary_usage="candidate",
     )
 
 
@@ -455,6 +463,7 @@ def run_qwen3_8b_taste_gpt4o_mini_smoke(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
     )
 
 
@@ -476,6 +485,7 @@ def run_qwen3_8b_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
     )
 
 
@@ -497,7 +507,7 @@ def run_qwen3_8b_taste_gpt4o_mini_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        use_item_summaries=True,
+        summary_usage="both",
     )
 
 
@@ -519,8 +529,7 @@ def run_qwen3_8b_taste_gpt4o_mini_history_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        history_item_summaries=True,
-        candidate_item_summaries=False,
+        summary_usage="profile",
     )
 
 
@@ -542,8 +551,7 @@ def run_qwen3_8b_taste_gpt4o_mini_candidate_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        history_item_summaries=False,
-        candidate_item_summaries=True,
+        summary_usage="candidate",
     )
 
 
@@ -565,6 +573,7 @@ def run_qwen3_8b_traits_taste_gpt4o_mini_smoke(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
     )
 
 
@@ -586,6 +595,7 @@ def run_qwen3_8b_traits_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
     )
 
 
@@ -609,7 +619,7 @@ def run_qwen3_8b_traits_taste_gpt4o_mini_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        use_item_summaries=True,
+        summary_usage="both",
     )
 
 
@@ -633,8 +643,7 @@ def run_qwen3_8b_traits_taste_gpt4o_mini_history_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        history_item_summaries=True,
-        candidate_item_summaries=False,
+        summary_usage="profile",
     )
 
 
@@ -658,8 +667,7 @@ def run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        history_item_summaries=False,
-        candidate_item_summaries=True,
+        summary_usage="candidate",
     )
 
 
@@ -686,9 +694,7 @@ def run_method(
     taste_max_workers: int = TASTE_MAX_WORKERS,
     taste_prompt_version: str = AGENT4REC_TASTE_PROMPT_VERSION,
     taste_cache_path: Path | None = None,
-    use_item_summaries: bool = False,
-    history_item_summaries: bool | None = None,
-    candidate_item_summaries: bool | None = None,
+    summary_usage: Agent4RecSummaryUsage = "candidate",
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based discrete rating regressor."""
 
@@ -709,14 +715,12 @@ def run_method(
     if target_config["target_name"] != "rating":
         raise ValueError("Agent4Rec regression v1 supports only rating targets")
     uses_taste = "taste" in profile_components
-    summary_visibility = resolve_item_summary_visibility(
-        use_item_summaries=use_item_summaries,
-        history_item_summaries=history_item_summaries,
-        candidate_item_summaries=candidate_item_summaries,
-    )
-    if not uses_taste:
-        summary_visibility["history"] = False
-        summary_visibility["any"] = summary_visibility["candidate"]
+    resolved_summary_usage = resolve_agent4rec_summary_usage(summary_usage)
+    if resolved_summary_usage["profile"] and not uses_taste:
+        raise ValueError(
+            "Agent4Rec summary_usage='profile' or 'both' requires "
+            "'taste' in profile_components"
+        )
 
     xy = task_xy(task)
     X_train, y_train = xy["train"]
@@ -724,20 +728,18 @@ def run_method(
     if max_rows is not None:
         X_test = X_test.head(max_rows).copy()
         y_test = y_test.loc[X_test.index].copy()
-    X_train, X_test, item_summary_metadata = add_ml1m_item_summaries(
-        dataset_name=dataset_name,
-        X_train=X_train,
-        X_test=X_test,
-        use_item_summaries=summary_visibility["any"],
-        summary_visibility=summary_visibility,
+    item_summary_metadata = task_item_summary_metadata(
+        task,
+        profile=resolved_summary_usage["profile"],
+        candidate=resolved_summary_usage["candidate"],
     )
     candidate_columns = _candidate_columns(
         dataset_name,
-        use_item_summaries=summary_visibility["candidate"],
+        use_item_summaries=resolved_summary_usage["candidate"],
     )
     column_labels = _column_labels(
         dataset_name,
-        use_item_summaries=summary_visibility["candidate"],
+        use_item_summaries=resolved_summary_usage["candidate"],
     )
     profile_user_ids = X_test["user_id"].drop_duplicates().tolist()
     _require_columns(X_test, list(candidate_columns))
@@ -752,7 +754,7 @@ def run_method(
                 task,
                 taste_model=taste_model,
                 taste_prompt_version=taste_prompt_version,
-                use_history_item_summaries=summary_visibility["history"],
+                use_history_item_summaries=resolved_summary_usage["profile"],
             )
         taste_client = make_llm_client(taste_client_name)
     else:
@@ -771,7 +773,7 @@ def run_method(
         taste_max_workers=taste_max_workers,
         summary_column=(
             ITEM_SUMMARY_COLUMN
-            if summary_visibility["history"]
+            if resolved_summary_usage["profile"]
             else None
         ),
     )
@@ -836,6 +838,7 @@ def run_method(
         "profile_generator": scorer.profile_generator.manifest(),
         "extra_body": extra_body,
         "uses_item_stats": True,
+        "summary_usage": summary_usage,
         "item_summaries": item_summary_metadata,
         "target": {
             "name": target_config["target_name"],
