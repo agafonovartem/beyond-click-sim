@@ -14,6 +14,14 @@ from beyond_click_sim.scorers.agent4rec.prompts import (
     AGENT4REC_PLAYTIME_TASTE_PROMPT_VERSION,
 )
 from beyond_click_sim.tasks import PREFIXED_ITEM_RATING_MEAN_COLUMN, Task
+from runners.in_distribution.item_summaries import (
+    Agent4RecSummaryUsage,
+    ITEM_SUMMARY_COLUMN,
+    ITEM_SUMMARY_COLUMN_LABEL,
+    canonical_agent4rec_summary_usage,
+    resolve_agent4rec_summary_usage,
+    task_item_summary_metadata,
+)
 from runners.in_distribution.interaction_prediction.methods.common import (
     candidate_group_summary,
     current_git_commit,
@@ -133,6 +141,7 @@ def run_llama31_8b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
         model=OLLAMA_LLAMA31_8B_MODEL,
         max_candidate_groups=25,
         max_workers=OLLAMA_MAX_WORKERS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -145,6 +154,7 @@ def run_llama31_8b_full(task: Task, output_dir: Path) -> dict[str, object]:
         model=OLLAMA_LLAMA31_8B_MODEL,
         max_candidate_groups=None,
         max_workers=OLLAMA_MAX_WORKERS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -157,6 +167,7 @@ def run_llama33_70b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
         model=VLLM_LLAMA33_70B_MODEL,
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -169,6 +180,7 @@ def run_llama33_70b_full(task: Task, output_dir: Path) -> dict[str, object]:
         model=VLLM_LLAMA33_70B_MODEL,
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -192,6 +204,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_smoke(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -215,6 +228,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -231,6 +245,7 @@ def run_qwen36_27b_port8001_smoke(
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -247,6 +262,7 @@ def run_qwen36_27b_port8001_full(
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -263,6 +279,7 @@ def run_qwen36_27b_port8002_smoke(
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -279,6 +296,7 @@ def run_qwen36_27b_port8002_full(
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -311,6 +329,7 @@ def run_method(
     parser_contract: str = "agent4rec_labeled_id_movie_watch_reason",
     serving_metadata: dict[str, object] | None = None,
     source_metadata: dict[str, object] | None = None,
+    summary_usage: Agent4RecSummaryUsage = "candidate",
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based yes/no scorer."""
 
@@ -329,6 +348,19 @@ def run_method(
     if candidate_group_column is None:
         raise ValueError("Agent4Rec yes/no method requires candidate_group_column")
 
+    uses_taste = "taste" in profile_components
+    resolved_summary_usage = resolve_agent4rec_summary_usage(summary_usage)
+    if resolved_summary_usage["profile"] and not uses_taste:
+        raise ValueError(
+            "Agent4Rec summary_usage='profile' or 'both' requires "
+            "'taste' in profile_components"
+        )
+    if resolved_summary_usage["any"] and dataset_name != "ml-1m":
+        raise ValueError(
+            "Agent4Rec movie summaries are configured only for ml-1m, got "
+            f"{dataset_name!r}"
+        )
+
     xy = task_xy(task)
     X_train, y_train = xy["train"]
     X_test, y_test = limit_candidate_groups(
@@ -336,10 +368,22 @@ def run_method(
         candidate_group_column=candidate_group_column,
         max_candidate_groups=max_candidate_groups,
     )
+    item_summary_metadata = task_item_summary_metadata(
+        task,
+        profile=resolved_summary_usage["profile"],
+        candidate=resolved_summary_usage["candidate"],
+    )
+    candidate_columns = _candidate_columns(
+        candidate_description_columns,
+        use_item_summaries=resolved_summary_usage["candidate"],
+    )
+    column_labels = _column_labels(
+        column_labels,
+        use_item_summaries=resolved_summary_usage["candidate"],
+    )
     profile_user_ids = X_test["user_id"].drop_duplicates().tolist()
-    _require_columns(X_test, list(candidate_description_columns))
+    _require_columns(X_test, list(candidate_columns))
 
-    uses_taste = "taste" in profile_components
     if uses_taste and not DATASET_SUPPORTS_TASTE[dataset_name]:
         raise ValueError(
             "Agent4Rec taste profiles are currently configured only for "
@@ -358,6 +402,7 @@ def run_method(
                 task,
                 taste_model=taste_model,
                 taste_prompt_version=taste_prompt_version,
+                use_history_item_summaries=resolved_summary_usage["profile"],
             )
         taste_client = make_llm_client(taste_client_name)
     else:
@@ -375,13 +420,16 @@ def run_method(
         taste_temperature=taste_temperature,
         taste_max_tokens=taste_max_tokens,
         taste_max_attempts=taste_max_attempts,
+        summary_column=(
+            ITEM_SUMMARY_COLUMN if resolved_summary_usage["profile"] else None
+        ),
         **DATASET_PROFILE_GENERATOR_KWARGS[dataset_name],
     )
     scorer = scorer_class(
         client=make_llm_client(client_name),
         model=model,
         profile_generator=profile_generator,
-        candidate_description_columns=candidate_description_columns,
+        candidate_description_columns=candidate_columns,
         column_labels=column_labels,
         json_list_columns=DATASET_JSON_LIST_COLUMNS[dataset_name],
         max_history_items=max_history_items,
@@ -467,9 +515,7 @@ def run_method(
             "temperature": temperature,
             "max_tokens": max_tokens,
             "max_history_items": max_history_items,
-            "candidate_description_columns": list(
-                candidate_description_columns
-            ),
+            "candidate_description_columns": list(candidate_columns),
             "column_labels": column_labels,
             "json_list_columns": list(DATASET_JSON_LIST_COLUMNS[dataset_name]),
             "profile_generator": scorer.profile_generator.manifest(),
@@ -477,6 +523,8 @@ def run_method(
             "prompt": DATASET_PROMPT_KWARGS[dataset_name],
             "scorer_kwargs": scorer_kwargs,
             "serving": serving_metadata,
+            "summary_usage": summary_usage,
+            "item_summaries": item_summary_metadata,
         },
         "decision_rule": {
             "kind": "hard_binary_yes_no_parser",
@@ -546,6 +594,27 @@ def run_method(
     return result
 
 
+def _candidate_columns(
+    columns: tuple[str, ...],
+    *,
+    use_item_summaries: bool,
+) -> tuple[str, ...]:
+    if use_item_summaries and ITEM_SUMMARY_COLUMN not in columns:
+        return (*columns, ITEM_SUMMARY_COLUMN)
+    return columns
+
+
+def _column_labels(
+    base_labels: dict[str, str],
+    *,
+    use_item_summaries: bool,
+) -> dict[str, str]:
+    labels = dict(base_labels)
+    if use_item_summaries:
+        labels[ITEM_SUMMARY_COLUMN] = ITEM_SUMMARY_COLUMN_LABEL
+    return labels
+
+
 def _require_columns(frame, columns: list[str]) -> None:
     missing = [column for column in columns if column not in frame.columns]
     if missing:
@@ -560,18 +629,20 @@ def agent4rec_taste_cache_path(
     *,
     taste_model: str,
     taste_prompt_version: str,
+    use_history_item_summaries: bool = False,
 ) -> Path:
     dataset_name = str(task.manifest["dataset"])
     dataset_version = str(task.manifest["dataset_version"])
     split_seed = task.manifest["splitter"]["seed"]
     model_slug = _cache_slug(taste_model)
+    summary_slug = "_summary" if use_history_item_summaries else ""
     return (
         repo_root()
         / "outputs"
         / "agent4rec_taste_cache"
         / (
             f"{dataset_name}_{dataset_version}_seed{split_seed}_"
-            f"{model_slug}_{taste_prompt_version}.jsonl"
+            f"{model_slug}_{taste_prompt_version}{summary_slug}.jsonl"
         )
     )
 

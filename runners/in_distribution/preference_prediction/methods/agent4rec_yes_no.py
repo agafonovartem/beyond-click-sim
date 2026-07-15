@@ -4,6 +4,9 @@ from pathlib import Path
 
 from beyond_click_sim.scorers import Agent4RecPreferenceYesNoScorer
 from beyond_click_sim.tasks import Task
+from runners.in_distribution.item_summaries import (
+    canonical_agent4rec_summary_usage,
+)
 from runners.in_distribution.interaction_prediction.methods.agent4rec_yes_no import (
     run_method as run_grouped_agent4rec_method,
 )
@@ -123,4 +126,5 @@ def run_method(
         parser_contract="agent4rec_labeled_id_entity_preference_reason",
         serving_metadata=_serving_metadata(),
         source_metadata=_source_metadata(),
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )

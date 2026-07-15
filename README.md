@@ -132,6 +132,10 @@ summaries to `items.parquet` as the optional `summary` column. Override the
 source with `--movies-augmentation PATH`, or use `--without-movie-summaries`
 to build the original canonical tables without this enrichment. The join is
 strict: summary IDs must match the canonical MovieLens item IDs exactly.
+Regression, interaction, preference, cold-start, and policy-ranking task
+builders expose this canonical field as `item_summary` and copy its source
+SHA256 into the task manifest. Runners that request summaries reject tasks
+with missing values or missing canonical provenance.
 
 Materialize Steam:
 
@@ -268,13 +272,26 @@ a separate pre-scoring taste stage: they generate cached `gpt-4o-mini` taste
 profiles from the same 20-item train-history window used by the history LLM
 baseline. Taste outputs are cached as append-only JSONL under
 `outputs/agent4rec_taste_cache/`; `make_llm_client("openai")` loads
-`OPENAI_API_KEY` from the environment or `.env`. ML-1M Agent4Rec item `Summary`
-fields are still omitted. Treat direct comparisons against `llm_yes_no_*` as
-exploratory unless temperature, token budget, visible item fields, and
-history/profile representation are controlled.
+`OPENAI_API_KEY` from the environment or `.env`. The generic ML-1M Agent4Rec
+runner accepts `summary_usage=none|profile|candidate|both`; `profile` controls
+only the taste-generation history, while `candidate` controls the final movie
+rows. Canonical named Agent4Rec methods use candidate summaries whenever the
+task carries canonical movie-summary enrichment, matching the original
+Agent4Rec item profile; profile generation remains summary-free. They fall
+back to `none` for an explicit canonical opt-out and for datasets without a
+configured summary source, including Steam. Treat direct comparisons against
+`llm_yes_no_*` as exploratory unless temperature, token budget, visible item
+fields, and history/profile representation are controlled.
 
 > [!NOTE]
 > LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; the default vLLM client is expected at `http://127.0.0.1:8000/v1`. VK AI proxy methods use `https://ai-proxy.vk.team/v1` and load `OPENAI_VK_PROXY_API_KEY` from the environment or `.env`. Some Agent4Rec Qwen methods intentionally target additional local vLLM ports `8001` and `8002`.
+
+Available preference-prediction LLM methods include Qwen3-8B and Qwen3.6-27B
+`_smoke` / `_full` variants. Their ML-1M `_summary_full` variants expose
+canonical movie summaries in both the history and candidate rows. The generic
+preference runner also accepts `summary_visibility=none|history|candidate|both`;
+movie-summary modes are not available for Steam. ML-1M Agent4Rec preference
+methods use candidate-only summaries under the same canonical-enrichment rule.
 
 Available regression-prediction methods:
 
@@ -318,6 +335,14 @@ outputs/in_distribution/regression_prediction/
   {timestamp}_{task}_{method}/
     manifest.json
     metrics.json
+    predictions.parquet
+    llm_errors.jsonl
+
+outputs/in_distribution/preference_prediction/
+  {timestamp}_{task}_{method}/
+    manifest.json
+    metrics.json
+    metrics_ranking.json
     predictions.parquet
     llm_errors.jsonl
 ```

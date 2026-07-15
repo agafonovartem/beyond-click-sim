@@ -41,6 +41,63 @@ class FakeClient:
         self.completions = completions
 
 
+def _ml1m_summary_task() -> Task:
+    enrichment = {
+        "movie_summaries": {
+            "enabled": True,
+            "canonical_column": "summary",
+            "task_column": "item_summary",
+            "source_sha256": "test-summary-source-sha256",
+        }
+    }
+    return Task(
+        name="ml-1m_summary_toy",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": ["h1", "h2"],
+                "item_title": ["Toy Story", "Heat"],
+                "item_genres": ["Animation|Comedy", "Crime"],
+                "item_rating_mean": [4.15, 3.60],
+                "item_summary": ["Toys plan a rescue.", "A crime thriller."],
+                "rating": [5, 2],
+                "target": [1, 1],
+            }
+        ),
+        val=pd.DataFrame(
+            columns=["user_id", "item_id", "item_summary", "target"]
+        ),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": ["i1", "i2"],
+                "candidate_group": ["g1", "g1"],
+                "item_title": ["Lion King", "Godfather"],
+                "item_genres": ["Animation", "Crime"],
+                "item_rating_mean": [4.153, 4.567],
+                "item_summary": [
+                    "A young lion reclaims his kingdom.",
+                    "A mafia family passes power to a son.",
+                ],
+                "sampled": [False, True],
+                "target": [1, 0],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            sampled_column="sampled",
+            feature_columns=("user_id", "item_id"),
+        ),
+        manifest={
+            "dataset": "ml-1m",
+            "dataset_version": "v1",
+            "splitter": {"seed": 0},
+            "item_enrichment": enrichment,
+        },
+    )
+
+
 def test_agent4rec_yes_no_runner_writes_profile_manifest(
     tmp_path: Path,
     monkeypatch,
@@ -97,6 +154,7 @@ def test_agent4rec_yes_no_runner_writes_profile_manifest(
         max_candidate_groups=None,
         max_llm_attempts=1,
         max_workers=1,
+        summary_usage="none",
     )
 
     assert result["scored_rows"] == 2
@@ -224,6 +282,7 @@ def test_agent4rec_yes_no_runner_writes_taste_manifest_and_cache(
         taste_client_name="openai",
         taste_model="gpt-4o-mini",
         taste_cache_path=cache_path,
+        summary_usage="none",
     )
 
     assert result["scored_rows"] == 2
@@ -253,6 +312,117 @@ def test_agent4rec_yes_no_runner_writes_taste_manifest_and_cache(
         "generated": 1,
         "max_workers": 1,
     }
+
+
+def test_agent4rec_yes_no_default_adds_summary_to_candidate_prompt(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client = FakeClient(
+        [
+            "ID: C1; MOVIE: Lion King; WATCH: yes; REASON: animated taste\n"
+            "ID: C2; MOVIE: Godfather; WATCH: no; REASON: not animated"
+        ]
+    )
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: client)
+
+    result = agent4rec_yes_no.run_method(
+        _ml1m_summary_task(),
+        tmp_path,
+        method_name="agent4rec_yes_no_candidate_summary_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+    )
+
+    assert result["scored_rows"] == 2
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "<- summary:A young lion reclaims his kingdom. ->" in prompt
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["summary_usage"] == "candidate"
+    assert manifest["scorer"]["candidate_description_columns"][-1] == (
+        "item_summary"
+    )
+    assert manifest["scorer"]["item_summaries"] == {
+        "uses_item_summaries": True,
+        "summary_column": "item_summary",
+        "history_item_summaries": False,
+        "profile_item_summaries": False,
+        "candidate_item_summaries": True,
+        "canonical_enrichment": _ml1m_summary_task().manifest["item_enrichment"],
+    }
+
+
+def test_agent4rec_yes_no_both_adds_summaries_to_taste_and_candidate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    scoring_client = FakeClient(
+        [
+            "ID: C1; MOVIE: Lion King; WATCH: yes; REASON: animated taste\n"
+            "ID: C2; MOVIE: Godfather; WATCH: no; REASON: not animated"
+        ]
+    )
+    taste_client = FakeClient(
+        [
+            "TASTE: I enjoy animated family movies.\n"
+            "REASON: I rated animated movies highly.\n"
+            "HIGH RATINGS: animated family movies\n"
+            "LOW RATINGS: crime movies"
+        ]
+    )
+
+    def fake_make_llm_client(client_name: str) -> FakeClient:
+        return taste_client if client_name == "openai" else scoring_client
+
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", fake_make_llm_client)
+    cache_path = tmp_path / "taste-summary-cache.jsonl"
+
+    result = agent4rec_yes_no.run_method(
+        _ml1m_summary_task(),
+        tmp_path,
+        method_name="agent4rec_yes_no_both_summary_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        profile_components=("traits", "taste"),
+        taste_client_name="openai",
+        taste_model="gpt-4o-mini",
+        taste_cache_path=cache_path,
+        summary_usage="both",
+    )
+
+    assert result["scored_rows"] == 2
+    taste_prompt = taste_client.completions.calls[0]["messages"][1]["content"]
+    assert "Toy Story (genres: Animation, Comedy; summary: Toys plan a rescue.)" in (
+        taste_prompt
+    )
+    scoring_prompt = scoring_client.completions.calls[0]["messages"][1]["content"]
+    assert "<- summary:A young lion reclaims his kingdom. ->" in scoring_prompt
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["summary_usage"] == "both"
+    assert manifest["scorer"]["profile_generator"]["summary_column"] == (
+        "item_summary"
+    )
+    assert manifest["scorer"]["item_summaries"]["profile_item_summaries"] is True
+    assert manifest["scorer"]["item_summaries"]["candidate_item_summaries"] is True
+
+
+def test_agent4rec_yes_no_profile_summaries_require_taste(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="requires 'taste'"):
+        agent4rec_yes_no.run_method(
+            _ml1m_summary_task(),
+            tmp_path,
+            method_name="agent4rec_yes_no_invalid_profile_summary_test",
+            client_name="fake",
+            model="fake-model",
+            max_candidate_groups=None,
+            summary_usage="profile",
+        )
 
 
 def test_agent4rec_yes_no_runner_requires_item_rating_mean(
@@ -303,6 +473,7 @@ def test_agent4rec_yes_no_runner_requires_item_rating_mean(
             max_candidate_groups=None,
             max_llm_attempts=1,
             max_workers=1,
+            summary_usage="none",
         )
 
 
@@ -376,6 +547,7 @@ def test_agent4rec_yes_no_runner_supports_steam_traits_only(
         max_candidate_groups=None,
         max_llm_attempts=1,
         max_workers=1,
+        summary_usage="none",
     )
 
     assert result["scored_rows"] == 2
@@ -484,6 +656,7 @@ def test_agent4rec_yes_no_runner_supports_steam_taste_profiles(
         taste_client_name="openai",
         taste_model="gpt-4o-mini",
         taste_cache_path=cache_path,
+        summary_usage="none",
     )
 
     assert result["scored_rows"] == 1
@@ -514,7 +687,7 @@ def test_agent4rec_qwen_port_wrappers_use_port_clients(
         return {}
 
     monkeypatch.setattr(agent4rec_yes_no, "run_method", fake_run_method)
-    task = SimpleNamespace()
+    task = SimpleNamespace(manifest=_ml1m_summary_task().manifest)
 
     agent4rec_yes_no.run_qwen36_27b_port8001_full(task, tmp_path)
     agent4rec_yes_no.run_qwen36_27b_port8002_full(task, tmp_path)
@@ -529,6 +702,7 @@ def test_agent4rec_qwen_port_wrappers_use_port_clients(
             "max_candidate_groups": None,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_port8002_full",
@@ -537,6 +711,7 @@ def test_agent4rec_qwen_port_wrappers_use_port_clients(
             "max_candidate_groups": None,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_port8001_smoke",
@@ -545,6 +720,7 @@ def test_agent4rec_qwen_port_wrappers_use_port_clients(
             "max_candidate_groups": 25,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_port8002_smoke",
@@ -553,6 +729,7 @@ def test_agent4rec_qwen_port_wrappers_use_port_clients(
             "max_candidate_groups": 25,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
         },
     ]
 
@@ -568,7 +745,7 @@ def test_agent4rec_qwen_traits_taste_wrappers_use_openai_taste(
         return {}
 
     monkeypatch.setattr(agent4rec_yes_no, "run_method", fake_run_method)
-    task = SimpleNamespace()
+    task = SimpleNamespace(manifest=_ml1m_summary_task().manifest)
 
     agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_smoke(task, tmp_path)
     agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_full(task, tmp_path)
@@ -586,6 +763,7 @@ def test_agent4rec_qwen_traits_taste_wrappers_use_openai_taste(
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,
+            "summary_usage": "candidate",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
@@ -599,5 +777,6 @@ def test_agent4rec_qwen_traits_taste_wrappers_use_openai_taste(
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,
+            "summary_usage": "candidate",
         },
     ]

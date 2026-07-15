@@ -135,6 +135,85 @@ def test_preference_llm_runner_records_target_and_scores_rows(
     }
 
 
+def test_preference_llm_runner_uses_canonical_summaries_in_both_prompts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client = _FakeClient("C1: yes\nC2: no")
+    monkeypatch.setattr(grouped_llm_yes_no, "make_llm_client", lambda _: client)
+    task = Task(
+        name="ml-1m_preference_summary_toy",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": ["h1", "h2"],
+                "item_title": ["Toy Story", "Heat"],
+                "item_genres": ["Animation", "Crime"],
+                "item_summary": ["Toys plan a rescue.", "A crime thriller."],
+                "rating": [5, 2],
+                "target": [1, 0],
+            }
+        ),
+        val=pd.DataFrame(
+            columns=["user_id", "item_id", "item_summary", "target"]
+        ),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": ["i1", "i2"],
+                "candidate_group": ["g1", "g1"],
+                "item_title": ["Aladdin", "Casino"],
+                "item_genres": ["Animation", "Crime"],
+                "item_summary": ["A magical lamp adventure.", "A casino drama."],
+                "target": [1, 0],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            feature_columns=("item_title", "item_genres", "item_summary"),
+            history_context_columns=("rating",),
+        ),
+        manifest={
+            "dataset": "ml-1m",
+            "dataset_version": "v1",
+            "target_source_column": "target_like_ge4",
+            "splitter": {"seed": 0},
+            "item_enrichment": {
+                "movie_summaries": {
+                    "enabled": True,
+                    "canonical_column": "summary",
+                    "task_column": "item_summary",
+                    "source_sha256": "fixture-summary-sha256",
+                }
+            },
+        },
+    )
+
+    preference_llm_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="preference-summary-test",
+        max_candidate_groups=None,
+        max_workers=1,
+        summary_visibility="both",
+    )
+
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "summary: Toys plan a rescue." in prompt
+    assert "summary: A magical lamp adventure." in prompt
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["summary_visibility"] == "both"
+    assert manifest["scorer"]["item_summaries"] == {
+        "uses_item_summaries": True,
+        "summary_column": "item_summary",
+        "history_item_summaries": True,
+        "profile_item_summaries": False,
+        "candidate_item_summaries": True,
+        "canonical_enrichment": task.manifest["item_enrichment"],
+    }
+
+
 def test_qwen36_27b_methods_are_registered() -> None:
     assert (
         PREFERENCE_METHOD_RUNNERS[
@@ -147,6 +226,18 @@ def test_qwen36_27b_methods_are_registered() -> None:
             "llm_preference_yes_no_litellm_qwen36_27b_full"
         ]
         is preference_llm_yes_no.run_qwen36_27b_full
+    )
+    assert (
+        PREFERENCE_METHOD_RUNNERS[
+            "llm_preference_yes_no_litellm_qwen3_8b_summary_full"
+        ]
+        is preference_llm_yes_no.run_qwen3_8b_summary_full
+    )
+    assert (
+        PREFERENCE_METHOD_RUNNERS[
+            "llm_preference_yes_no_litellm_qwen36_27b_summary_full"
+        ]
+        is preference_llm_yes_no.run_qwen36_27b_summary_full
     )
 
 

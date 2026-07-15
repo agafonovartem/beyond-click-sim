@@ -12,13 +12,25 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from runners.in_distribution.regression_prediction.item_summaries import (
+from runners.in_distribution.item_summaries import (
     ITEM_SUMMARY_COLUMN,
+    canonical_agent4rec_summary_usage,
     maybe_add_item_summary_prompt_columns,
     resolve_agent4rec_summary_usage,
     resolve_item_summary_visibility,
     task_item_summary_metadata,
 )
+
+
+def test_canonical_agent4rec_uses_candidate_summaries_when_enriched() -> None:
+    assert canonical_agent4rec_summary_usage(_summary_task()) == "candidate"
+
+
+def test_canonical_agent4rec_uses_none_without_enrichment() -> None:
+    task = _summary_task()
+    task.manifest["item_enrichment"] = {"movie_summaries": {"enabled": False}}
+
+    assert canonical_agent4rec_summary_usage(task) == "none"
 
 
 @pytest.mark.parametrize(

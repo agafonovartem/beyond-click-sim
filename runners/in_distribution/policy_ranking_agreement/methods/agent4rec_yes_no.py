@@ -16,6 +16,14 @@ from beyond_click_sim.scorers.agent4rec.prompts import (
 )
 from beyond_click_sim.tasks import Task
 
+from runners.in_distribution.item_summaries import (
+    Agent4RecSummaryUsage,
+    ITEM_SUMMARY_COLUMN,
+    ITEM_SUMMARY_COLUMN_LABEL,
+    canonical_agent4rec_summary_usage,
+    resolve_agent4rec_summary_usage,
+    task_item_summary_metadata,
+)
 from runners.in_distribution.policy_ranking_agreement.metrics import (
     MAIN_METRIC,
     METRICS_FILENAME,
@@ -109,6 +117,7 @@ def run_qwen36_27b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -122,6 +131,7 @@ def run_qwen36_27b_full(task: Task, output_dir: Path) -> dict[str, object]:
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -143,6 +153,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_smoke(
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -164,6 +175,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_full(
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -187,6 +199,7 @@ def run_method(
     max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
     extra_body: dict | None = None,
+    summary_usage: Agent4RecSummaryUsage = "candidate",
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based yes/no scorer for policy ranking agreement."""
 
@@ -197,6 +210,20 @@ def run_method(
             "Agent4Rec yes/no policy ranking has no dataset config for "
             f"dataset: {dataset_name!r}"
         )
+    resolved_summary_usage = resolve_agent4rec_summary_usage(summary_usage)
+    if resolved_summary_usage["profile"]:
+        raise ValueError(
+            "Agent4Rec policy ranking supports summaries only for candidates"
+        )
+    item_summary_metadata = task_item_summary_metadata(
+        task,
+        candidate=resolved_summary_usage["candidate"],
+    )
+    candidate_columns = DATASET_CANDIDATE_COLUMNS[dataset_name]
+    column_labels = dict(DATASET_COLUMN_LABELS[dataset_name])
+    if resolved_summary_usage["candidate"]:
+        candidate_columns = (*candidate_columns, ITEM_SUMMARY_COLUMN)
+        column_labels[ITEM_SUMMARY_COLUMN] = ITEM_SUMMARY_COLUMN_LABEL
 
     xy = task_xy(task)
     X_train, y_train = xy["train"]
@@ -262,8 +289,8 @@ def run_method(
         client=make_llm_client(client_name),
         model=model,
         profile_generator=profile_generator,
-        candidate_description_columns=DATASET_CANDIDATE_COLUMNS[dataset_name],
-        column_labels=DATASET_COLUMN_LABELS[dataset_name],
+        candidate_description_columns=candidate_columns,
+        column_labels=column_labels,
         candidate_group_column="_llm_group_",
         max_history_items=max_history_items,
         temperature=temperature,
@@ -336,16 +363,16 @@ def run_method(
             "client_name": client_name,
             "model": model,
             "candidate_group": "user_id::policy",
-            "candidate_description_columns": list(
-                DATASET_CANDIDATE_COLUMNS[dataset_name]
-            ),
-            "column_labels": DATASET_COLUMN_LABELS[dataset_name],
+            "candidate_description_columns": list(candidate_columns),
+            "column_labels": column_labels,
             "max_history_items": max_history_items,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "profile_generator": scorer.profile_generator.manifest(),
             "extra_body": extra_body,
             "prompt": DATASET_PROMPT_KWARGS[dataset_name],
+            "summary_usage": summary_usage,
+            "item_summaries": item_summary_metadata,
         },
         "utility_aggregation": UTILITY_AGGREGATION,
         "limits": {

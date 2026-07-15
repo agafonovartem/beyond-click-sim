@@ -40,7 +40,11 @@ def _make_interactions(
     return pd.DataFrame(rows)
 
 
-def _write_toy_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
+def _write_toy_canonical_dataset(
+    tmp_path: Path,
+    *,
+    with_item_summaries: bool = False,
+) -> CanonicalDataset:
     """Five users, each with 6 timestamped interactions on their own unique items."""
     root = tmp_path / "toy-cold-start"
     root.mkdir()
@@ -56,6 +60,8 @@ def _write_toy_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
             ],
         }
     )
+    if with_item_summaries:
+        items["summary"] = [f"Summary for item {i}." for i in range(len(items))]
     interactions = _make_interactions(n_users=5, interactions_per_user=6)
     interactions["rating"] = 4  # used in history_context_columns tests
 
@@ -67,7 +73,16 @@ def _write_toy_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
     users.to_parquet(users_path, index=False)
     items.to_parquet(items_path, index=False)
     interactions.to_parquet(interactions_path, index=False)
-    manifest_path.write_text(json.dumps({"dataset": "toy"}), encoding="utf-8")
+    manifest: dict[str, object] = {"dataset": "toy"}
+    if with_item_summaries:
+        manifest["item_enrichment"] = {
+            "movie_summaries": {
+                "enabled": True,
+                "column": "summary",
+                "source": {"sha256": "fixture-sha256"},
+            }
+        }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     return CanonicalDataset(
         name="toy",
@@ -375,6 +390,39 @@ def test_cold_start_task_builder_returns_cold_start_task(tmp_path: Path) -> None
     ).build(dataset)
     assert isinstance(task, ColdStartTask)
     assert task.k == 3
+
+
+def test_cold_start_task_builder_propagates_movie_summaries(tmp_path: Path) -> None:
+    dataset = _write_toy_canonical_dataset(
+        tmp_path,
+        with_item_summaries=True,
+    )
+    task = ColdStartTaskBuilder(
+        name="toy",
+        dataset_filter=MinUserInteractionsFilter(min_interactions=4),
+        splitter=ColdUserHoldoutSplitter(k=3, seed=0),
+        sampler=CappedUserInteractionCandidateSampler(
+            negative_ratio=1,
+            total_items=4,
+            seed=0,
+        ),
+    ).build(dataset)
+
+    for frame in (
+        task.train,
+        task.val,
+        task.test,
+        task.online_session_history,
+    ):
+        assert "item_summary" in frame.columns
+    assert task.manifest["item_enrichment"] == {
+        "movie_summaries": {
+            "enabled": True,
+            "canonical_column": "summary",
+            "task_column": "item_summary",
+            "source_sha256": "fixture-sha256",
+        }
+    }
 
 
 def test_cold_start_task_builder_cold_users_absent_from_train(tmp_path: Path) -> None:

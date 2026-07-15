@@ -18,7 +18,7 @@ from runners.in_distribution.regression_prediction.config import (
     DATASET_TARGET_REGRESSION_CONFIG,
     MAX_HISTORY_ITEMS,
 )
-from runners.in_distribution.regression_prediction.item_summaries import (
+from runners.in_distribution.item_summaries import (
     ITEM_SUMMARY_COLUMN,
     ITEM_SUMMARY_COLUMN_LABEL,
     SummaryVisibility,

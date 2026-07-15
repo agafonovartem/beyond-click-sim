@@ -3,13 +3,29 @@ from __future__ import annotations
 from typing import Literal
 
 from beyond_click_sim.tasks import Task
+from beyond_click_sim.tasks.item_enrichment import TASK_MOVIE_SUMMARY_COLUMN
 
 
-ITEM_SUMMARY_COLUMN = "item_summary"
+ITEM_SUMMARY_COLUMN = TASK_MOVIE_SUMMARY_COLUMN
 ITEM_SUMMARY_COLUMN_LABEL = "summary"
 
 SummaryVisibility = Literal["none", "history", "candidate", "both"]
 Agent4RecSummaryUsage = Literal["none", "profile", "candidate", "both"]
+
+
+def canonical_agent4rec_summary_usage(task: Task) -> Agent4RecSummaryUsage:
+    """Use candidate summaries when the canonical task carries them."""
+
+    manifest = getattr(task, "manifest", {})
+    item_enrichment = manifest.get("item_enrichment")
+    movie_summaries = (
+        item_enrichment.get("movie_summaries")
+        if isinstance(item_enrichment, dict)
+        else None
+    )
+    if isinstance(movie_summaries, dict) and movie_summaries.get("enabled") is True:
+        return "candidate"
+    return "none"
 
 
 def resolve_item_summary_visibility(

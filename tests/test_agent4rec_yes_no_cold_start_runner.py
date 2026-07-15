@@ -66,6 +66,7 @@ def _ml1m_cold_task(
             "item_id": "ih1",
             "item_title": "Toy Story",
             "item_genres": "Animation|Comedy",
+            "item_summary": "Toys come alive when people are absent.",
             "item_rating_mean": 4.15,
             "rating": 5,
             "target": 1,
@@ -75,6 +76,7 @@ def _ml1m_cold_task(
             "item_id": "ih2",
             "item_title": "Aladdin",
             "item_genres": "Animation",
+            "item_summary": "A street thief discovers a magical lamp.",
             "item_rating_mean": 3.95,
             "rating": 4,
             "target": 1,
@@ -84,6 +86,7 @@ def _ml1m_cold_task(
             "item_id": "ih3",
             "item_title": "Heat",
             "item_genres": "Crime",
+            "item_summary": "A detective pursues a disciplined thief.",
             "item_rating_mean": 3.60,
             "rating": 2,
             "target": 1,
@@ -100,6 +103,10 @@ def _ml1m_cold_task(
         "candidate_group": ["g1", "g1"],
         "item_title": ["Lion King", "Godfather"],
         "item_genres": ["Animation", "Crime"],
+        "item_summary": [
+            "A lion prince returns to reclaim his kingdom.",
+            "A crime family transfers power to a reluctant son.",
+        ],
         "sampled": [False, True],
         "target": [1, 0],
     }
@@ -118,6 +125,7 @@ def _ml1m_cold_task(
                 "item_id": "iw1",
                 "item_title": "Terminator",
                 "item_genres": "Action",
+                "item_summary": "A cyborg travels back in time to kill a woman.",
                 "item_rating_mean": 4.00,
                 "rating": 4,
                 "target": 1,
@@ -127,10 +135,15 @@ def _ml1m_cold_task(
         if not include_item_rating_mean:
             train_df = train_df.drop(columns=["item_rating_mean"])
 
+    if "item_summary" not in train_df.columns:
+        train_df["item_summary"] = "A placeholder movie summary."
+
     return ColdStartTask(
         name="test_task",
         train=train_df,
-        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        val=pd.DataFrame(
+            columns=["user_id", "item_id", "item_summary", "target"]
+        ),
         test=test_df,
         online_session_history=history_df,
         k=3,
@@ -144,6 +157,14 @@ def _ml1m_cold_task(
             "dataset": dataset,
             "dataset_version": "v1",
             "splitter": {"seed": 42},
+            "item_enrichment": {
+                "movie_summaries": {
+                    "enabled": True,
+                    "canonical_column": "summary",
+                    "task_column": "item_summary",
+                    "source_sha256": "fake-sha256",
+                }
+            },
         },
     )
 
@@ -286,7 +307,9 @@ def test_cold_start_agent4rec_runner_manifest_records_fit_on_history_and_k(
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
         "item_genres",
+        "item_summary",
     ]
+    assert manifest["scorer"]["summary_usage"] == "candidate"
 
 
 # ---------------------------------------------------------------------------
@@ -542,7 +565,7 @@ def test_cold_start_agent4rec_qwen_smoke_and_full_wrappers(
         return {}
 
     monkeypatch.setattr(agent4rec_yes_no, "run_method", _fake_run_method)
-    task = SimpleNamespace()
+    task = SimpleNamespace(manifest=_ml1m_cold_task().manifest)
 
     agent4rec_yes_no.run_qwen36_27b_smoke(task, tmp_path)
     agent4rec_yes_no.run_qwen36_27b_full(task, tmp_path)
@@ -555,6 +578,7 @@ def test_cold_start_agent4rec_qwen_smoke_and_full_wrappers(
             "max_candidate_groups": 25,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_full",
@@ -563,6 +587,7 @@ def test_cold_start_agent4rec_qwen_smoke_and_full_wrappers(
             "max_candidate_groups": None,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
         },
     ]
 
@@ -577,7 +602,7 @@ def test_cold_start_agent4rec_qwen_traits_taste_wrappers(
         return {}
 
     monkeypatch.setattr(agent4rec_yes_no, "run_method", _fake_run_method)
-    task = SimpleNamespace()
+    task = SimpleNamespace(manifest=_ml1m_cold_task().manifest)
 
     agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_smoke(task, tmp_path)
     agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_full(task, tmp_path)
@@ -593,6 +618,7 @@ def test_cold_start_agent4rec_qwen_traits_taste_wrappers(
             "profile_components": ("traits", "taste"),
             "taste_client_name": "openai",
             "taste_model": "gpt-4o-mini",
+            "summary_usage": "candidate",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
@@ -604,5 +630,6 @@ def test_cold_start_agent4rec_qwen_traits_taste_wrappers(
             "profile_components": ("traits", "taste"),
             "taste_client_name": "openai",
             "taste_model": "gpt-4o-mini",
+            "summary_usage": "candidate",
         },
     ]

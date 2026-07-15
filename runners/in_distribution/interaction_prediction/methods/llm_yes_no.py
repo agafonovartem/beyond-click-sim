@@ -14,6 +14,14 @@ from runners.in_distribution.llm_item_stats import (
     item_rating_column_labels,
     maybe_add_item_rating_prompt_columns,
 )
+from runners.in_distribution.item_summaries import (
+    ITEM_SUMMARY_COLUMN,
+    ITEM_SUMMARY_COLUMN_LABEL,
+    SummaryVisibility,
+    maybe_add_item_summary_prompt_columns,
+    resolve_item_summary_visibility,
+    task_item_summary_metadata,
+)
 from runners.in_distribution.interaction_prediction.methods.common import (
     candidate_group_summary,
     current_git_commit,
@@ -384,6 +392,7 @@ def run_method(
     max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
     use_item_stats: bool = False,
+    summary_visibility: SummaryVisibility = "none",
     extra_body: dict | None = None,
     scorer_class: type[LLMInteractionYesNoScorer] = LLMInteractionYesNoScorer,
     scorer_kwargs: dict[str, object] | None = None,
@@ -394,15 +403,27 @@ def run_method(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
+    resolved_summary_visibility = resolve_item_summary_visibility(summary_visibility)
     prompt_columns = maybe_add_item_rating_prompt_columns(
         dataset_name,
         DATASET_PROMPT_COLUMNS[dataset_name],
         use_item_stats=use_item_stats,
     )
+    prompt_columns = maybe_add_item_summary_prompt_columns(
+        dataset_name,
+        prompt_columns,
+        history_item_summaries=resolved_summary_visibility["history"],
+        candidate_item_summaries=resolved_summary_visibility["candidate"],
+    )
     column_labels = item_rating_column_labels(
         dataset_name,
         use_item_stats=use_item_stats,
     )
+    if resolved_summary_visibility["any"]:
+        column_labels = {
+            **column_labels,
+            ITEM_SUMMARY_COLUMN: ITEM_SUMMARY_COLUMN_LABEL,
+        }
     candidate_group_column = task.schema.candidate_group_column
     if candidate_group_column is None:
         raise ValueError("LLM yes/no method requires candidate_group_column")
@@ -415,6 +436,11 @@ def run_method(
         max_candidate_groups=max_candidate_groups,
     )
     history_user_ids = X_test["user_id"].drop_duplicates().tolist()
+    item_summary_metadata = task_item_summary_metadata(
+        task,
+        history=resolved_summary_visibility["history"],
+        candidate=resolved_summary_visibility["candidate"],
+    )
 
     scorer = scorer_class(
         client=make_llm_client(client_name),
@@ -507,6 +533,8 @@ def run_method(
             "column_labels": column_labels,
             "json_list_columns": list(DATASET_JSON_LIST_COLUMNS[dataset_name]),
             "uses_item_stats": use_item_stats,
+            "summary_visibility": summary_visibility,
+            "item_summaries": item_summary_metadata,
             "extra_body": extra_body,
             "scorer_kwargs": scorer_kwargs,
             "serving": serving_metadata,

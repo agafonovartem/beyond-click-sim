@@ -150,7 +150,7 @@ regression with item stats, compare against the matched train-only item baseline
 (`item_mean_regressor` / `item_mode_regressor`) before claiming user-conditioned reasoning beyond
 visible item-quality metadata.
 
-## 8. Agent4Rec yes/no scorer lacks Summary and has incomplete profile ablations
+## 8. Agent4Rec yes/no named ablations are incomplete
 
 The current `Agent4RecYesNoScorer` implementation supports deterministic Agent4Rec social traits
 (`activity`, `conformity`, `diversity`) from the train split and a cached LLM-generated `taste`
@@ -162,15 +162,18 @@ planned Agent4Rec profile ablations are still incomplete:
 - `traits + taste` — currently implemented for the Qwen + `gpt-4o-mini` taste runner.
 
 The released Agent4Rec alignment code shows title, `History ratings`, and `Summary` in
-`##recommended list##`. Its `movies_augmentation.csv` is now vendored with source commits,
-license, and SHA256 provenance, and MovieLens canonicalization can expose it as `item_summary`.
-Regression runners consume that canonical field, but `Agent4RecYesNoScorer` still omits it. The
-Steam prompt uses game title, genres, tags, and playtime-derived profiles rather than
+`##recommended list##`. Its `movies_augmentation.csv` is vendored with source commits, license,
+and SHA256 provenance, and MovieLens canonicalization exposes it as `item_summary`. The generic
+yes/no runner supports `none`, taste-`profile`, `candidate`, and `both` summary usage with strict
+task provenance checks. Canonical named ML-1M Agent4Rec methods now use candidate summaries when
+the task carries canonical enrichment; explicit canonical opt-out and Steam remain no-summary.
+Taste-only and the remaining summary placements are not yet uniformly available as named registry
+entries. The Steam prompt uses game title, genres, tags, and playtime-derived profiles rather than
 MovieLens-specific fields.
 
-**Fix:** propagate canonical `item_summary` into explicit ML-1M yes/no summary variants and expose
-a named `taste`-only ablation if needed. Any cross-dataset Agent4Rec-style reporting should state
-the dataset-specific visible item fields and profile prompt version explicitly.
+**Fix:** expose named ML-1M summary and `taste`-only methods if those ablations are selected for
+interaction experiments. Any cross-dataset Agent4Rec-style reporting should state the
+dataset-specific visible item fields and profile prompt version explicitly.
 
 ## 9. Agent4Rec vs history LLM comparison currently mixes multiple axes
 

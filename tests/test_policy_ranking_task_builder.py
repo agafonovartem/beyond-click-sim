@@ -17,10 +17,17 @@ from beyond_click_sim.tasks import (
 )
 
 
-def _write_toy_dataset(root: Path, *, history_context_column: str | None = None) -> CanonicalDataset:
+def _write_toy_dataset(
+    root: Path,
+    *,
+    history_context_column: str | None = None,
+    with_item_summaries: bool = False,
+) -> CanonicalDataset:
     root.mkdir(parents=True, exist_ok=True)
     users = pd.DataFrame({"user_id": [f"u{i}" for i in range(8)]})
     items = pd.DataFrame({"item_id": [f"i{i}" for i in range(12)]})
+    if with_item_summaries:
+        items["summary"] = [f"Summary for item {i}." for i in range(12)]
     rows = []
     for u in range(8):
         for offset in range(6):
@@ -40,7 +47,16 @@ def _write_toy_dataset(root: Path, *, history_context_column: str | None = None)
     users.to_parquet(users_path, index=False)
     items.to_parquet(items_path, index=False)
     interactions.to_parquet(interactions_path, index=False)
-    manifest_path.write_text(json.dumps({"dataset": "toy"}), encoding="utf-8")
+    manifest: dict[str, object] = {"dataset": "toy"}
+    if with_item_summaries:
+        manifest["item_enrichment"] = {
+            "movie_summaries": {
+                "enabled": True,
+                "column": "summary",
+                "source": {"sha256": "fixture-sha256"},
+            }
+        }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     return CanonicalDataset(
         name="toy",
         version="v1",
@@ -105,6 +121,26 @@ def test_manifest_protocol_is_policy_ranking(tmp_path):
     dataset = _write_toy_dataset(tmp_path / "ds")
     task = _make_builder().build(dataset)
     assert task.manifest["protocol"] == "policy_ranking"
+
+
+def test_policy_ranking_task_propagates_movie_summaries(tmp_path):
+    dataset = _write_toy_dataset(
+        tmp_path / "ds",
+        with_item_summaries=True,
+    )
+    task = _make_builder().build(dataset)
+
+    assert "item_summary" in task.train.columns
+    assert "item_summary" in task.val.columns
+    assert "item_summary" in task.test.columns
+    assert task.manifest["item_enrichment"] == {
+        "movie_summaries": {
+            "enabled": True,
+            "canonical_column": "summary",
+            "task_column": "item_summary",
+            "source_sha256": "fixture-sha256",
+        }
+    }
 
 
 def test_manifest_contains_two_policies(tmp_path):

@@ -16,8 +16,10 @@ from runners.in_distribution.interaction_prediction.methods.popularity import (
 )
 from runners.in_distribution.preference_prediction.methods.llm_yes_no import (
     run_qwen3_8b_full,
+    run_qwen3_8b_summary_full,
     run_qwen3_8b_smoke,
     run_qwen36_27b_full,
+    run_qwen36_27b_summary_full,
     run_qwen36_27b_smoke,
 )
 
@@ -41,6 +43,12 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     ),
     "llm_preference_yes_no_litellm_qwen3_8b_smoke": run_qwen3_8b_smoke,
     "llm_preference_yes_no_litellm_qwen3_8b_full": run_qwen3_8b_full,
+    "llm_preference_yes_no_litellm_qwen3_8b_summary_full": (
+        run_qwen3_8b_summary_full
+    ),
     "llm_preference_yes_no_litellm_qwen36_27b_smoke": run_qwen36_27b_smoke,
     "llm_preference_yes_no_litellm_qwen36_27b_full": run_qwen36_27b_full,
+    "llm_preference_yes_no_litellm_qwen36_27b_summary_full": (
+        run_qwen36_27b_summary_full
+    ),
 }

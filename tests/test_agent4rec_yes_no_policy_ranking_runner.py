@@ -81,6 +81,7 @@ def _ml1m_policy_task(
             "item_id": f"iw_{user}",
             "item_title": "Forrest Gump",
             "item_genres": "Drama",
+            "item_summary": "A kind man witnesses decades of American life.",
             "rating": 5,
             "target": 1,
         }
@@ -101,6 +102,11 @@ def _ml1m_policy_task(
                     "item_id": f"it_{policy}_{user}_{j}",
                     "item_title": title,
                     "item_genres": genres,
+                    "item_summary": (
+                        "A lion prince returns to reclaim his kingdom."
+                        if title == "Lion King"
+                        else "A crime family transfers power to a reluctant son."
+                    ),
                     "policy": policy,
                     "rank": rank,
                     "target": target,
@@ -112,7 +118,9 @@ def _ml1m_policy_task(
     return Task(
         name="test_policy_ranking_task",
         train=train_df,
-        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        val=pd.DataFrame(
+            columns=["user_id", "item_id", "item_summary", "target"]
+        ),
         test=test_df,
         schema=TaskSchema(
             target_column="target",
@@ -124,6 +132,14 @@ def _ml1m_policy_task(
             "dataset": dataset,
             "dataset_version": "v1",
             "splitter": {"seed": 0},
+            "item_enrichment": {
+                "movie_summaries": {
+                    "enabled": True,
+                    "canonical_column": "summary",
+                    "task_column": "item_summary",
+                    "source_sha256": "fake-sha256",
+                }
+            },
         },
     )
 
@@ -221,7 +237,13 @@ def test_policy_ranking_agent4rec_runner_manifest_structure(
     assert manifest["scorer"]["fit_on"] == "task.train"
     assert manifest["scorer"]["candidate_group"] == "user_id::policy"
     assert manifest["protocol"] == "policy_ranking"
-    assert manifest["scorer"]["candidate_description_columns"] == ["item_title", "item_genres"]
+    assert manifest["scorer"]["candidate_description_columns"] == [
+        "item_title",
+        "item_genres",
+        "item_summary",
+    ]
+    assert manifest["scorer"]["summary_usage"] == "candidate"
+    assert manifest["scorer"]["item_summaries"]["candidate_item_summaries"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +462,7 @@ def test_policy_ranking_agent4rec_qwen_smoke_and_full_wrappers(
         return {}
 
     monkeypatch.setattr(agent4rec_yes_no, "run_method", _fake_run_method)
-    task = SimpleNamespace()
+    task = SimpleNamespace(manifest=_ml1m_policy_task().manifest)
 
     agent4rec_yes_no.run_qwen36_27b_smoke(task, tmp_path)
     agent4rec_yes_no.run_qwen36_27b_full(task, tmp_path)
@@ -453,6 +475,7 @@ def test_policy_ranking_agent4rec_qwen_smoke_and_full_wrappers(
             "max_candidate_groups": 25,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_full",
@@ -461,6 +484,7 @@ def test_policy_ranking_agent4rec_qwen_smoke_and_full_wrappers(
             "max_candidate_groups": None,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
         },
     ]
 
@@ -475,7 +499,7 @@ def test_policy_ranking_agent4rec_qwen_traits_taste_wrappers(
         return {}
 
     monkeypatch.setattr(agent4rec_yes_no, "run_method", _fake_run_method)
-    task = SimpleNamespace()
+    task = SimpleNamespace(manifest=_ml1m_policy_task().manifest)
 
     agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_smoke(task, tmp_path)
     agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_full(task, tmp_path)
@@ -491,6 +515,7 @@ def test_policy_ranking_agent4rec_qwen_traits_taste_wrappers(
             "profile_components": ("traits", "taste"),
             "taste_client_name": "openai",
             "taste_model": "gpt-4o-mini",
+            "summary_usage": "candidate",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
@@ -502,5 +527,6 @@ def test_policy_ranking_agent4rec_qwen_traits_taste_wrappers(
             "profile_components": ("traits", "taste"),
             "taste_client_name": "openai",
             "taste_model": "gpt-4o-mini",
+            "summary_usage": "candidate",
         },
     ]

@@ -12,10 +12,11 @@ from runners.in_distribution.regression_prediction.config import (
     DATASET_TARGET_REGRESSION_CONFIG,
     MAX_HISTORY_ITEMS,
 )
-from runners.in_distribution.regression_prediction.item_summaries import (
+from runners.in_distribution.item_summaries import (
     Agent4RecSummaryUsage,
     ITEM_SUMMARY_COLUMN,
     ITEM_SUMMARY_COLUMN_LABEL,
+    canonical_agent4rec_summary_usage,
     resolve_agent4rec_summary_usage,
     task_item_summary_metadata,
 )
@@ -85,7 +86,7 @@ def run_llama33_70b_traits_full(
         max_rows=None,
         max_workers=VLLM_MAX_WORKERS,
         profile_components=("traits",),
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -123,7 +124,7 @@ def run_llama33_70b_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -165,7 +166,7 @@ def run_llama33_70b_traits_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -235,7 +236,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_smoke(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -259,7 +260,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -277,7 +278,7 @@ def run_qwen36_27b_traits_full(
         max_workers=QWEN36_27B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits",),
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -317,7 +318,7 @@ def run_qwen36_27b_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -405,7 +406,7 @@ def run_qwen3_8b_traits_smoke(
         max_workers=QWEN3_8B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits",),
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -423,7 +424,7 @@ def run_qwen3_8b_traits_full(
         max_workers=QWEN3_8B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits",),
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -463,7 +464,7 @@ def run_qwen3_8b_taste_gpt4o_mini_smoke(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -485,7 +486,7 @@ def run_qwen3_8b_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -573,7 +574,7 @@ def run_qwen3_8b_traits_taste_gpt4o_mini_smoke(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 
@@ -595,7 +596,7 @@ def run_qwen3_8b_traits_taste_gpt4o_mini_full(
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
-        summary_usage="none",
+        summary_usage=canonical_agent4rec_summary_usage(task),
     )
 
 

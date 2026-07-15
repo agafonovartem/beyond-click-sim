@@ -5,6 +5,7 @@ from pathlib import Path
 
 from beyond_click_sim.scorers import LLMPreferenceYesNoScorer
 from beyond_click_sim.tasks import Task
+from runners.in_distribution.item_summaries import SummaryVisibility
 from runners.in_distribution.interaction_prediction.methods.llm_yes_no import (
     run_method as run_grouped_yes_no_method,
 )
@@ -50,6 +51,18 @@ def run_qwen3_8b_full(task: Task, output_dir: Path) -> dict[str, object]:
     )
 
 
+def run_qwen3_8b_summary_full(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{QWEN3_8B_METHOD_NAME}_summary_full",
+        model=QWEN3_8B_MODEL,
+        max_candidate_groups=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        summary_visibility="both",
+    )
+
+
 def run_qwen36_27b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
     return run_method(
         task,
@@ -72,6 +85,18 @@ def run_qwen36_27b_full(task: Task, output_dir: Path) -> dict[str, object]:
     )
 
 
+def run_qwen36_27b_summary_full(task: Task, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{QWEN36_27B_METHOD_NAME}_summary_full",
+        model=QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=QWEN36_27B_MAX_WORKERS,
+        summary_visibility="both",
+    )
+
+
 def run_method(
     task: Task,
     output_dir: Path,
@@ -80,6 +105,7 @@ def run_method(
     model: str = QWEN3_8B_MODEL,
     max_candidate_groups: int | None,
     max_workers: int = QWEN3_8B_MAX_WORKERS,
+    summary_visibility: SummaryVisibility = "none",
 ) -> dict[str, object]:
     dataset_name = str(task.manifest["dataset"])
     try:
@@ -97,6 +123,7 @@ def run_method(
         model=model,
         max_candidate_groups=max_candidate_groups,
         max_workers=max_workers,
+        summary_visibility=summary_visibility,
         extra_body=QWEN_EXTRA_BODY,
         scorer_class=LLMPreferenceYesNoScorer,
         scorer_kwargs={"target_description": target_description},

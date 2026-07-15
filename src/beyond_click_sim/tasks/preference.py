@@ -14,6 +14,7 @@ from beyond_click_sim.tasks.base import (
     TaskBuilder,
     TaskSchema,
 )
+from beyond_click_sim.tasks.item_enrichment import item_enrichment_manifest
 
 
 class PreferencePredictionTaskBuilder(TaskBuilder):
@@ -72,9 +73,14 @@ class PreferencePredictionTaskBuilder(TaskBuilder):
             )
 
     def build(self, dataset: CanonicalDataset) -> Task:
+        canonical_manifest = dataset.load_manifest()
         users = dataset.load_users()
         items = dataset.load_items()
         interactions = dataset.load_interactions()
+        task_item_enrichment = item_enrichment_manifest(
+            canonical_manifest,
+            items,
+        )
 
         self._require_columns(interactions, [self.user_column, self.item_column])
         self._require_columns(
@@ -163,6 +169,7 @@ class PreferencePredictionTaskBuilder(TaskBuilder):
                 "target_column": self.target_column,
                 "feature_columns": list(feature_columns),
                 "history_context_columns": list(self.history_context_columns),
+                "item_enrichment": task_item_enrichment,
                 "item_feature_builder": item_feature_manifest,
                 "sampled_column": None,
                 "candidate_group_column": self.candidate_group_column,

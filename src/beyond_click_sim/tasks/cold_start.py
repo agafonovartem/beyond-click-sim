@@ -15,6 +15,7 @@ from beyond_click_sim.tasks.base import (
     TaskBuilder,
     TaskSchema,
 )
+from beyond_click_sim.tasks.item_enrichment import item_enrichment_manifest
 
 
 @dataclass(frozen=True)
@@ -215,9 +216,11 @@ class ColdStartTaskBuilder:
         self.item_feature_builder = item_feature_builder
 
     def build(self, dataset: CanonicalDataset) -> ColdStartTask:
+        canonical_manifest = dataset.load_manifest()
         users = dataset.load_users()
         items = dataset.load_items()
         interactions = dataset.load_interactions()
+        task_item_enrichment = item_enrichment_manifest(canonical_manifest, items)
 
         users, items, interactions = self.dataset_filter.filter(
             users=users, items=items, interactions=interactions
@@ -318,6 +321,7 @@ class ColdStartTaskBuilder:
                 "target_column": self.target_column,
                 "feature_columns": list(feature_columns),
                 "history_context_columns": list(self.history_context_columns),
+                "item_enrichment": task_item_enrichment,
                 "item_feature_builder": item_feature_manifest,
                 "sampled_column": self.sampled_column,
                 "candidate_group_column": self.candidate_group_column,

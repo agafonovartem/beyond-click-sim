@@ -12,6 +12,7 @@ from beyond_click_sim.tasks import (
     PreferencePredictionTaskBuilder,
     SplitFrames,
     Splitter,
+    Task,
 )
 
 
@@ -77,6 +78,50 @@ def test_preference_prediction_task_builder_creates_observed_candidate_sets(
     assert task.manifest["sampler"]["negative_ratio"] == 1
     assert task.manifest["sampler"]["total_items"] == 4
     assert task.manifest["rows"] == {"train": 4, "val": 2, "test": 4}
+
+
+def test_preference_task_propagates_canonical_item_summaries_only(
+    tmp_path: Path,
+) -> None:
+    plain_task = _build_toy_preference_task(
+        _write_toy_preference_dataset(
+            tmp_path,
+            root_name="plain-preference-canonical",
+        )
+    )
+    enriched_task = _build_toy_preference_task(
+        _write_toy_preference_dataset(
+            tmp_path,
+            root_name="enriched-preference-canonical",
+            include_summaries=True,
+        )
+    )
+
+    assert "item_summary" not in plain_task.schema.feature_columns
+    assert "item_summary" in enriched_task.schema.feature_columns
+    assert enriched_task.manifest["item_enrichment"] == {
+        "movie_summaries": {
+            "enabled": True,
+            "canonical_column": "summary",
+            "task_column": "item_summary",
+            "source_sha256": "fixture-summary-sha256",
+        }
+    }
+    for split_name in ("train", "val", "test"):
+        plain = getattr(plain_task, split_name)
+        enriched = getattr(enriched_task, split_name)
+        pd.testing.assert_frame_equal(
+            enriched.drop(columns=["item_summary"]),
+            plain,
+        )
+        expected = enriched["item_id"].map(
+            {f"i{idx}": f"Summary {idx}" for idx in range(1, 11)}
+        )
+        pd.testing.assert_series_equal(
+            enriched["item_summary"],
+            expected,
+            check_names=False,
+        )
 
 
 def test_capped_observed_preference_sampler_chunks_with_observed_negatives() -> None:
@@ -212,8 +257,35 @@ class _InteractionIdSplitter(Splitter):
         ].reset_index(drop=True)
 
 
-def _write_toy_preference_dataset(tmp_path: Path) -> CanonicalDataset:
-    root = tmp_path / "toy-preference-canonical"
+def _build_toy_preference_task(
+    dataset: CanonicalDataset,
+) -> Task:
+    return PreferencePredictionTaskBuilder(
+        name="toy-preference",
+        target_source_column="target_like_ge4",
+        dataset_filter=MinUserInteractionsFilter(min_interactions=1),
+        splitter=_InteractionIdSplitter(
+            train_ids=("r1", "r2", "r3", "r4"),
+            val_ids=("r5", "r6"),
+            test_ids=("r7", "r8", "r9", "r10"),
+        ),
+        sampler=CappedObservedPreferenceCandidateSampler(
+            negative_ratio=1,
+            total_items=4,
+            seed=0,
+            target_source_column="target_like_ge4",
+        ),
+        history_context_columns=("rating",),
+    ).build(dataset)
+
+
+def _write_toy_preference_dataset(
+    tmp_path: Path,
+    *,
+    root_name: str = "toy-preference-canonical",
+    include_summaries: bool = False,
+) -> CanonicalDataset:
+    root = tmp_path / root_name
     root.mkdir()
 
     users = pd.DataFrame(
@@ -230,6 +302,8 @@ def _write_toy_preference_dataset(tmp_path: Path) -> CanonicalDataset:
             "genre": ["g1", "g1", "g2", "g2", "g3", "g3", "g4", "g4", "g5", "g5"],
         }
     )
+    if include_summaries:
+        items["summary"] = [f"Summary {idx}" for idx in range(1, 11)]
     interactions = pd.DataFrame(
         {
             "interaction_id": [f"r{idx}" for idx in range(1, 11)],
@@ -249,7 +323,16 @@ def _write_toy_preference_dataset(tmp_path: Path) -> CanonicalDataset:
     users.to_parquet(users_path, index=False)
     items.to_parquet(items_path, index=False)
     interactions.to_parquet(interactions_path, index=False)
-    manifest_path.write_text(json.dumps({"dataset": "toy"}), encoding="utf-8")
+    manifest: dict[str, object] = {"dataset": "toy"}
+    if include_summaries:
+        manifest["item_enrichment"] = {
+            "movie_summaries": {
+                "enabled": True,
+                "column": "summary",
+                "source": {"sha256": "fixture-summary-sha256"},
+            }
+        }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     return CanonicalDataset(
         name="toy",

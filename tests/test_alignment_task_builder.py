@@ -135,6 +135,63 @@ def test_alignment_interaction_task_builder_keeps_history_context_train_only(
     assert task.manifest["history_context_columns"] == ["rating"]
 
 
+def test_alignment_task_propagates_canonical_item_summaries_only(
+    tmp_path: Path,
+) -> None:
+    def build(dataset: CanonicalDataset):
+        return AlignmentInteractionTaskBuilder(
+            name="toy-interaction-summary",
+            dataset_filter=MinUserInteractionsFilter(min_interactions=4),
+            splitter=RandomFractionSplitter(
+                train_fraction=0.75,
+                val_fraction=0.0,
+                test_fraction=0.25,
+                seed=0,
+            ),
+            sampler=NonInteractionCandidateSampler(negative_ratio=2, seed=0),
+        ).build(dataset)
+
+    plain_task = build(
+        _write_toy_canonical_dataset(
+            tmp_path,
+            root_name="plain-interaction-canonical",
+        )
+    )
+    enriched_task = build(
+        _write_toy_canonical_dataset(
+            tmp_path,
+            root_name="enriched-interaction-canonical",
+            include_summaries=True,
+        )
+    )
+
+    assert plain_task.manifest["item_enrichment"] is None
+    assert enriched_task.manifest["item_enrichment"] == {
+        "movie_summaries": {
+            "enabled": True,
+            "canonical_column": "summary",
+            "task_column": "item_summary",
+            "source_sha256": "fixture-summary-sha256",
+        }
+    }
+    for split_name in ("train", "val", "test"):
+        plain = getattr(plain_task, split_name)
+        enriched = getattr(enriched_task, split_name)
+        pd.testing.assert_frame_equal(
+            enriched.drop(columns=["item_summary"]),
+            plain,
+        )
+        expected = enriched["item_id"].map(
+            {f"i{idx}": f"Summary {idx}" for idx in range(1, 9)}
+        )
+        pd.testing.assert_series_equal(
+            enriched["item_summary"],
+            expected,
+            check_dtype=False,
+            check_names=False,
+        )
+
+
 def test_alignment_interaction_task_builder_serializes_sequential_filter(
     tmp_path: Path,
 ) -> None:
@@ -561,8 +618,13 @@ def _sampled_pairs(frame: pd.DataFrame) -> set[tuple[object, object]]:
     return set(zip(sampled["user_id"], sampled["item_id"], strict=True))
 
 
-def _write_toy_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
-    root = tmp_path / "toy-canonical"
+def _write_toy_canonical_dataset(
+    tmp_path: Path,
+    *,
+    root_name: str = "toy-canonical",
+    include_summaries: bool = False,
+) -> CanonicalDataset:
+    root = tmp_path / root_name
     root.mkdir()
 
     users = pd.DataFrame(
@@ -579,6 +641,16 @@ def _write_toy_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
             "genre": ["g1", "g1", "g2", "g2", "g3", "g3", "g4", "g4"],
         }
     )
+    manifest: dict[str, object] = {"dataset": "toy"}
+    if include_summaries:
+        items["summary"] = [f"Summary {idx}" for idx in range(1, 9)]
+        manifest["item_enrichment"] = {
+            "movie_summaries": {
+                "enabled": True,
+                "column": "summary",
+                "source": {"sha256": "fixture-summary-sha256"},
+            }
+        }
     interactions = pd.DataFrame(
         {
             "interaction_id": [f"r{idx}" for idx in range(1, 11)],
@@ -619,7 +691,7 @@ def _write_toy_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
     users.to_parquet(users_path, index=False)
     items.to_parquet(items_path, index=False)
     interactions.to_parquet(interactions_path, index=False)
-    manifest_path.write_text(json.dumps({"dataset": "toy"}), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     return CanonicalDataset(
         name="toy",

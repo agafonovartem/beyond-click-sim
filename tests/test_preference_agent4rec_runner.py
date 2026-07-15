@@ -58,11 +58,18 @@ def test_preference_agent4rec_runner_records_target_and_profile(
                 "item_id": ["h1", "h2", "h3"],
                 "item_title": ["Toy Story", "Heat", "Aladdin"],
                 "item_genres": ["Animation", "Crime", "Animation"],
+                "item_summary": [
+                    "Toys come alive when people are absent.",
+                    "A detective pursues a disciplined thief.",
+                    "A street thief discovers a magical lamp.",
+                ],
                 "rating": [5, 2, 4],
                 "target": [1, 0, 1],
             }
         ),
-        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        val=pd.DataFrame(
+            columns=["user_id", "item_id", "item_summary", "target"]
+        ),
         test=pd.DataFrame(
             {
                 "user_id": ["u1", "u1"],
@@ -70,6 +77,10 @@ def test_preference_agent4rec_runner_records_target_and_profile(
                 "candidate_group": ["g1", "g1"],
                 "item_title": ["Aladdin", "Casino"],
                 "item_genres": ["Animation", "Crime"],
+                "item_summary": [
+                    "A street thief discovers a magical lamp.",
+                    "A mob-connected casino manager loses control.",
+                ],
                 "target": [1, 0],
             }
         ),
@@ -84,6 +95,14 @@ def test_preference_agent4rec_runner_records_target_and_profile(
             "dataset_version": "v1",
             "target_source_column": "target_like_ge4",
             "splitter": {"seed": 0},
+            "item_enrichment": {
+                "movie_summaries": {
+                    "enabled": True,
+                    "canonical_column": "summary",
+                    "task_column": "item_summary",
+                    "source_sha256": "fake-sha256",
+                }
+            },
         },
     )
 
@@ -103,6 +122,7 @@ def test_preference_agent4rec_runner_records_target_and_profile(
     assert "PREFERENCE: [yes or no]" in prompt
     assert "WATCH:" not in prompt
     assert "Toy Story" not in prompt
+    assert "A street thief discovers a magical lamp." in prompt
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["scorer"]["class"] == "Agent4RecPreferenceYesNoScorer"
@@ -112,7 +132,9 @@ def test_preference_agent4rec_runner_records_target_and_profile(
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
         "item_genres",
+        "item_summary",
     ]
+    assert manifest["scorer"]["summary_usage"] == "candidate"
     assert manifest["scorer"]["scorer_kwargs"] == {
         "target_description": (
             "The user would rate the candidate movie at least 4 out of 5."

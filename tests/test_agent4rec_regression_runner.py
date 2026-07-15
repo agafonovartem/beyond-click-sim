@@ -17,6 +17,16 @@ if str(REPO_ROOT) not in sys.path:
 from runners.in_distribution.regression_prediction.methods import agent4rec_regressor  # noqa: E402
 
 
+def _enriched_task_stub() -> SimpleNamespace:
+    return SimpleNamespace(
+        manifest={
+            "item_enrichment": {
+                "movie_summaries": {"enabled": True},
+            }
+        }
+    )
+
+
 class FakeChatCompletions:
     def __init__(self, responses: list[str]) -> None:
         self.responses = responses
@@ -259,7 +269,7 @@ def test_agent4rec_regression_qwen_traits_taste_wrappers_use_openai_taste(
         return {}
 
     monkeypatch.setattr(agent4rec_regressor, "run_method", fake_run_method)
-    task = SimpleNamespace()
+    task = _enriched_task_stub()
 
     agent4rec_regressor.run_qwen36_27b_traits_taste_gpt4o_mini_smoke(task, tmp_path)
     agent4rec_regressor.run_qwen36_27b_traits_taste_gpt4o_mini_full(task, tmp_path)
@@ -277,7 +287,7 @@ def test_agent4rec_regression_qwen_traits_taste_wrappers_use_openai_taste(
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,
-            "summary_usage": "none",
+            "summary_usage": "candidate",
         },
         {
             "method_name": "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
@@ -291,7 +301,7 @@ def test_agent4rec_regression_qwen_traits_taste_wrappers_use_openai_taste(
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,
-            "summary_usage": "none",
+            "summary_usage": "candidate",
         },
     ]
 
@@ -307,7 +317,7 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
         return {}
 
     monkeypatch.setattr(agent4rec_regressor, "run_method", fake_run_method)
-    task = SimpleNamespace()
+    task = _enriched_task_stub()
 
     agent4rec_regressor.run_qwen36_27b_traits_full(task, tmp_path)
     agent4rec_regressor.run_qwen36_27b_traits_summary_full(task, tmp_path)
@@ -342,7 +352,7 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
         {
             "method_name": "agent4rec_regressor_vllm_qwen36_27b_traits_full",
             "profile_components": ("traits",),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
         },
         {
@@ -356,7 +366,7 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
                 "agent4rec_regressor_vllm_qwen36_27b_taste_gpt4o_mini_full"
             ),
             "profile_components": ("taste",),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
             **taste,
         },
@@ -374,7 +384,7 @@ def test_agent4rec_regression_qwen36_27b_summary_wrappers(
                 "agent4rec_regressor_vllm_qwen36_27b_traits_taste_gpt4o_mini_full"
             ),
             "profile_components": ("traits", "taste"),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
             **taste,
         },
@@ -401,7 +411,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
         return {}
 
     monkeypatch.setattr(agent4rec_regressor, "run_method", fake_run_method)
-    task = SimpleNamespace()
+    task = _enriched_task_stub()
 
     agent4rec_regressor.run_llama33_70b_traits_full(task, tmp_path)
     agent4rec_regressor.run_llama33_70b_traits_summary_full(task, tmp_path)
@@ -435,7 +445,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
         {
             "method_name": "agent4rec_regressor_vllm_llama33_70b_traits_full",
             "profile_components": ("traits",),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
         },
         {
@@ -451,7 +461,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
                 "agent4rec_regressor_vllm_llama33_70b_taste_gpt4o_mini_full"
             ),
             "profile_components": ("taste",),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
             **taste,
         },
@@ -469,7 +479,7 @@ def test_agent4rec_regression_llama33_70b_summary_wrappers(
                 "agent4rec_regressor_vllm_llama33_70b_traits_taste_gpt4o_mini_full"
             ),
             "profile_components": ("traits", "taste"),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
             **taste,
         },
@@ -496,7 +506,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
         return {}
 
     monkeypatch.setattr(agent4rec_regressor, "run_method", fake_run_method)
-    task = SimpleNamespace()
+    task = _enriched_task_stub()
 
     agent4rec_regressor.run_qwen3_8b_traits_full(task, tmp_path)
     agent4rec_regressor.run_qwen3_8b_traits_summary_full(task, tmp_path)
@@ -542,7 +552,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             "method_name": "agent4rec_regressor_vllm_qwen3_8b_traits_full",
             "max_rows": None,
             "profile_components": ("traits",),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
         },
         {
@@ -556,7 +566,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             "method_name": "agent4rec_regressor_vllm_qwen3_8b_taste_gpt4o_mini_full",
             "max_rows": None,
             "profile_components": ("taste",),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
             **taste,
         },
@@ -596,7 +606,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             ),
             "max_rows": None,
             "profile_components": ("traits", "taste"),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
             **taste,
         },
@@ -634,7 +644,7 @@ def test_agent4rec_regression_qwen3_8b_wrappers_use_expected_profiles(
             "method_name": "agent4rec_regressor_vllm_qwen3_8b_traits_smoke",
             "max_rows": agent4rec_regressor.SMOKE_ROWS,
             "profile_components": ("traits",),
-            "summary_usage": "none",
+            "summary_usage": "candidate",
             **common,
         },
     ]
