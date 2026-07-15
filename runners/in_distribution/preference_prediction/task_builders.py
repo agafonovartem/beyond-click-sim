@@ -99,7 +99,9 @@ def load_canonical_dataset(dataset_name: str) -> CanonicalDataset:
 
 def repo_root() -> Path:
     for path in [Path(__file__).resolve(), *Path(__file__).resolve().parents]:
-        if path.name == "beyond-click-sim" and (path / "pyproject.toml").exists():
+        if (path / "pyproject.toml").exists() and (
+            path / "src" / "beyond_click_sim"
+        ).is_dir():
             return path
     raise RuntimeError("Could not find beyond-click-sim repo root")
 

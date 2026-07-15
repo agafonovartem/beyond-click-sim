@@ -80,6 +80,10 @@ DATASET_PROMPT_COLUMNS = {
         ),
     },
 }
+DATASET_JSON_LIST_COLUMNS = {
+    "ml-1m": (),
+    "steam": ("item_genres_json", "item_tags_json"),
+}
 
 
 def run_llama31_8b_smoke(task: Task, output_dir: Path) -> dict[str, object]:
@@ -418,6 +422,7 @@ def run_method(
         history_description_columns=prompt_columns["history_description_columns"],
         candidate_description_columns=prompt_columns["candidate_description_columns"],
         column_labels=column_labels,
+        json_list_columns=DATASET_JSON_LIST_COLUMNS[dataset_name],
         max_history_items=max_history_items,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -500,6 +505,7 @@ def run_method(
             "max_tokens": max_tokens,
             "prompt_columns": prompt_columns,
             "column_labels": column_labels,
+            "json_list_columns": list(DATASET_JSON_LIST_COLUMNS[dataset_name]),
             "uses_item_stats": use_item_stats,
             "extra_body": extra_body,
             "scorer_kwargs": scorer_kwargs,

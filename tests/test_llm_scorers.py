@@ -368,6 +368,54 @@ def test_llm_interaction_scorer_formats_labels_and_numeric_values() -> None:
     assert "missing_stat" not in user_prompt
 
 
+def test_llm_interaction_scorer_formats_json_list_columns() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_title": ["Portal"],
+            "item_genres_json": ['["Action", "Adventure"]'],
+            "item_tags_json": ['["Puzzle", "Co-op"]'],
+            "playtime_forever": [45],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "item_title": ["Unknown Game"],
+            "item_genres_json": [None],
+            "item_tags_json": [""],
+        }
+    )
+    client = FakeClient(["C1: no"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        history_description_columns=(
+            "item_title",
+            "item_genres_json",
+            "item_tags_json",
+            "playtime_forever",
+        ),
+        candidate_description_columns=(
+            "item_title",
+            "item_genres_json",
+            "item_tags_json",
+        ),
+        json_list_columns=("item_genres_json", "item_tags_json"),
+    ).fit(X_train, pd.Series([1]))
+
+    assert scorer.score(X_test).tolist() == [0.0]
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert (
+        "H1. item_title: Portal; item_genres_json: Action, Adventure; "
+        "item_tags_json: Puzzle, Co-op; playtime_forever: 45"
+    ) in user_prompt
+    assert "C1. item_title: Unknown Game" in user_prompt
+    assert '["Action", "Adventure"]' not in user_prompt
+
+
 def test_llm_interaction_scorer_requires_fit_before_score() -> None:
     scorer = LLMInteractionYesNoScorer(
         client=FakeClient(["C1: yes"]),

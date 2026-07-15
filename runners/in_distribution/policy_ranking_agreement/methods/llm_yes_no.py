@@ -78,6 +78,10 @@ DATASET_PROMPT_COLUMNS: dict[str, dict[str, tuple[str, ...]]] = {
         ),
     },
 }
+DATASET_JSON_LIST_COLUMNS = {
+    "ml-1m": (),
+    "steam": ("item_genres_json", "item_tags_json"),
+}
 
 # ---------------------------------------------------------------------------
 # Tie-break defaults
@@ -524,6 +528,7 @@ def _run(
         candidate_description_columns=prompt_columns["candidate_description_columns"],
         candidate_group_column="_llm_group_",
         column_labels=column_labels,
+        json_list_columns=DATASET_JSON_LIST_COLUMNS[dataset_name],
         max_history_items=MAX_HISTORY_ITEMS,
         temperature=TEMPERATURE,
         max_tokens=MAX_TOKENS,
@@ -663,6 +668,7 @@ def _run(
             "max_tokens": MAX_TOKENS,
             "prompt_columns": {k: list(v) for k, v in prompt_columns.items()},
             "column_labels": column_labels,
+            "json_list_columns": list(DATASET_JSON_LIST_COLUMNS[dataset_name]),
             "uses_item_stats": use_item_stats,
             "extra_body": extra_body,
             "scoring": scoring,

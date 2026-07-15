@@ -387,12 +387,24 @@ def test_agent4rec_yes_no_runner_supports_steam_traits_only(
     assert profile_manifest["include_conformity"] is False
     assert "conformity" not in profile_manifest["trait_thresholds"]
     assert manifest["scorer"]["prompt"]["entity_field"] == "GAME"
+    assert manifest["scorer"]["json_list_columns"] == [
+        "item_genres_json",
+        "item_tags_json",
+    ]
 
     system_prompt = client.completions.calls[0]["messages"][0]["content"]
     user_prompt = client.completions.calls[0]["messages"][1]["content"]
     assert "game recommendation system" in system_prompt
     assert "Your conformity trait is described as:" not in system_prompt
-    assert "C1. <- Portal 2 -> <- genres:" in user_prompt
+    assert (
+        "C1. <- Portal 2 -> <- genres:Action, Adventure -> "
+        "<- tags:Puzzle, Co-op ->"
+    ) in user_prompt
+    assert (
+        "C2. <- Dota 2 -> <- genres:Action, Free to Play -> "
+        "<- tags:MOBA, Multiplayer ->"
+    ) in user_prompt
+    assert '["Action", "Adventure"]' not in user_prompt
     assert "Use this format: ID: [candidate id]; GAME: [game name]; WATCH:" in user_prompt
     assert "Judge each game using your available profile" in user_prompt
     assert "Judge each movie using your available profile" not in user_prompt
@@ -479,6 +491,8 @@ def test_agent4rec_yes_no_runner_supports_steam_taste_profiles(
     assert "game playtime history" in taste_prompt
     assert "Portal (genres: Action; tags: Puzzle)" in taste_prompt
     scoring_prompt = scoring_client.completions.calls[0]["messages"][1]["content"]
+    assert "C1. <- Portal 2 -> <- genres:Action -> <- tags:Puzzle ->" in scoring_prompt
+    assert '["Action"]' not in scoring_prompt
     assert "You only choose games which align with your taste" in scoring_prompt
     assert "You only watch movies which align with your taste" not in scoring_prompt
     assert "If you don't want to choose a game" in scoring_prompt

@@ -87,6 +87,10 @@ DATASET_COLUMN_LABELS = {
         "item_tags_json": "tags",
     },
 }
+DATASET_JSON_LIST_COLUMNS = {
+    "ml-1m": (),
+    "steam": ("item_genres_json", "item_tags_json"),
+}
 DATASET_PROFILE_GENERATOR_KWARGS = {
     "ml-1m": {},
     "steam": {
@@ -379,6 +383,7 @@ def run_method(
         profile_generator=profile_generator,
         candidate_description_columns=candidate_description_columns,
         column_labels=column_labels,
+        json_list_columns=DATASET_JSON_LIST_COLUMNS[dataset_name],
         max_history_items=max_history_items,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -466,6 +471,7 @@ def run_method(
                 candidate_description_columns
             ),
             "column_labels": column_labels,
+            "json_list_columns": list(DATASET_JSON_LIST_COLUMNS[dataset_name]),
             "profile_generator": scorer.profile_generator.manifest(),
             "extra_body": extra_body,
             "prompt": DATASET_PROMPT_KWARGS[dataset_name],

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from numbers import Integral, Real
 import re
@@ -42,6 +43,7 @@ class Agent4RecYesNoScorer(Scorer):
         temperature: float = 0.2,
         max_tokens: int = 1000,
         column_labels: dict[str, str] | None = None,
+        json_list_columns: tuple[str, ...] = (),
         extra_body: dict | None = None,
         domain_name: str = "movie",
         taste_label: str = "movie tastes",
@@ -71,6 +73,7 @@ class Agent4RecYesNoScorer(Scorer):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.column_labels = {} if column_labels is None else dict(column_labels)
+        self.json_list_columns = tuple(json_list_columns)
         self.extra_body = extra_body
         self.domain_name = domain_name
         self.taste_label = taste_label
@@ -283,7 +286,10 @@ class Agent4RecYesNoScorer(Scorer):
             if pd.isna(value) or value == "":
                 continue
             column_label = self.column_labels.get(column, column)
-            formatted_value = _format_prompt_value(value)
+            formatted_value = _format_prompt_value(
+                value,
+                parse_json_list=column in self.json_list_columns,
+            )
             if not parts:
                 parts.append(f"<- {formatted_value} ->")
             else:
@@ -464,9 +470,16 @@ def _format_agent4rec_taste(taste: str | None) -> str:
     return "; ".join(taste_parts).replace("I ", "")
 
 
-def _format_prompt_value(value: Any) -> str:
+def _format_prompt_value(value: Any, *, parse_json_list: bool = False) -> str:
     """Return compact text for scalar values shown in LLM prompts."""
 
+    if parse_json_list and isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return value
+        if isinstance(parsed, list):
+            return ", ".join(str(item) for item in parsed) if parsed else "none"
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, Integral):

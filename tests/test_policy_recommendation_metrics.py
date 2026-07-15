@@ -41,4 +41,3 @@ def test_evaluate_policy_recommendations_computes_expected_metrics() -> None:
     assert macro_by_user["hit_rate@1"] == pytest.approx(0.5)
     expected_ndcg_at_3 = (1.0 + (1.0 / math.log2(3))) / 2.0
     assert macro_by_user["ndcg@3"] == pytest.approx(expected_ndcg_at_3)
-
