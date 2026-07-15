@@ -1,0 +1,140 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 5000,
+      "positives_max": 1,
+      "positives_mean": 1.0,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 20.0,
+      "rows_min": 20,
+      "sampled_max": 19,
+      "sampled_mean": 19.0,
+      "sampled_min": 19
+    },
+    "val": {
+      "groups": 3020,
+      "positives_max": 1,
+      "positives_mean": 1.0,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 20.0,
+      "rows_min": 20,
+      "sampled_max": 19,
+      "sampled_mean": 19.0,
+      "sampled_min": 19
+    }
+  },
+  "main_metric": "test.macro_by_user_group_mean.ndcg@5",
+  "method": "popularity_ranking",
+  "protocol": "ranking",
+  "ranking_evaluation": {
+    "ks": [
+      1,
+      3,
+      5,
+      10
+    ],
+    "tie_policy": "average"
+  },
+  "stage_times_seconds": {
+    "candidate_group_summary": 0.031,
+    "compute_ranking_metrics": 2.856,
+    "fit": 0.09,
+    "prepare_xy": 0.019,
+    "score_test": 0.016,
+    "score_val": 0.011,
+    "write_predictions": 0.099
+  },
+  "task": "ml-1m_cold_start_k3_cap20_eval_users1000_cg5_m19_seed2",
+  "test": {
+    "macro_by_group": {
+      "groups_with_score_ties": 3487,
+      "groups_with_score_ties_fraction": 0.6974,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.4373,
+      "hit_rate@10": 0.9487333333333334,
+      "hit_rate@3": 0.6943,
+      "hit_rate@5": 0.8192666666666666,
+      "n": 100000,
+      "n_groups": 5000,
+      "n_positive": 5000,
+      "ndcg@1": 0.4373,
+      "ndcg@10": 0.6813365626593788,
+      "ndcg@3": 0.5877307337232193,
+      "ndcg@5": 0.6391158078421787,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 3487,
+      "groups_with_score_ties_fraction": 0.6974,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.4373,
+      "hit_rate@10": 0.9487333333333333,
+      "hit_rate@3": 0.6942999999999999,
+      "hit_rate@5": 0.8192666666666667,
+      "n": 100000,
+      "n_groups": 5000,
+      "n_positive": 5000,
+      "n_users": 1000,
+      "ndcg@1": 0.4373,
+      "ndcg@10": 0.6813365626593788,
+      "ndcg@3": 0.5877307337232192,
+      "ndcg@5": 0.6391158078421787,
+      "tie_policy": "average"
+    }
+  },
+  "val": {
+    "macro_by_group": {
+      "groups_with_score_ties": 2127,
+      "groups_with_score_ties_fraction": 0.7043046357615894,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.43211920529801323,
+      "hit_rate@10": 0.9543046357615894,
+      "hit_rate@3": 0.7087748344370861,
+      "hit_rate@5": 0.8288079470198676,
+      "n": 60400,
+      "n_groups": 3020,
+      "n_positive": 3020,
+      "ndcg@1": 0.43211920529801323,
+      "ndcg@10": 0.683888482784839,
+      "ndcg@3": 0.5931212785158517,
+      "ndcg@5": 0.6426400499316721,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 2127,
+      "groups_with_score_ties_fraction": 0.7043046357615894,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.43211920529801323,
+      "hit_rate@10": 0.9543046357615894,
+      "hit_rate@3": 0.708774834437086,
+      "hit_rate@5": 0.8288079470198675,
+      "n": 60400,
+      "n_groups": 3020,
+      "n_positive": 3020,
+      "n_users": 604,
+      "ndcg@1": 0.43211920529801323,
+      "ndcg@10": 0.683888482784839,
+      "ndcg@3": 0.5931212785158518,
+      "ndcg@5": 0.6426400499316721,
+      "tie_policy": "average"
+    }
+  }
+}

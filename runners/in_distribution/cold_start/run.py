@@ -30,6 +30,15 @@ def run_one(task_name: str, method_name: str, output_root: Path = DEFAULT_OUTPUT
     return result
 
 
+def is_completed(output_root: Path, task_name: str, method_name: str) -> bool:
+    for d in output_root.glob(f"*_{task_name}_{method_name}"):
+        if not d.is_dir():
+            continue
+        if (d / "metrics.json").exists() or (d / "metrics_ranking.json").exists():
+            return True
+    return False
+
+
 def main() -> None:
     args = parse_args()
     tasks = parse_names(args.tasks, default=DEFAULT_TASK_NAMES, choices=TASK_BUILDERS)
@@ -40,11 +49,16 @@ def main() -> None:
 
     for task_name in tasks:
         task_start = perf_counter()
-        print(f"Building task: {task_name}", flush=True)
-        task = TASK_BUILDERS[task_name]()
-        print(f"Built task: {task_name} in {_elapsed(task_start)}s", flush=True)
+        task = None
         for method_name in methods:
             run_index += 1
+            if args.resume and is_completed(output_root, task_name, method_name):
+                print(f"Skipping (already done) {run_index}/{total_runs}: task={task_name}, method={method_name}", flush=True)
+                continue
+            if task is None:
+                print(f"Building task: {task_name}", flush=True)
+                task = TASK_BUILDERS[task_name]()
+                print(f"Built task: {task_name} in {_elapsed(task_start)}s", flush=True)
             print(f"Run {run_index}/{total_runs}: task={task_name}, method={method_name}", flush=True)
             output_dir = make_output_dir(
                 output_root,
@@ -74,6 +88,11 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         default=str(DEFAULT_OUTPUT_DIR),
         help="Directory for run artifacts.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip task-method pairs that already have output in --output-dir.",
     )
     return parser.parse_args()
 

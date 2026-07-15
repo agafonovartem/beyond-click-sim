@@ -57,17 +57,22 @@ def _make_task() -> Task:
             "protocol": "policy_ranking",
             "dataset": "toy",
             "target_source_column": "target_interact",
+            "policy_recommendation_metrics": {
+                "protocol": "held_out_recommendation_eval",
+                "policies": [{"policy": "RandomPolicy", "mean_hit_rate": 0.5}],
+            },
         },
     )
 
 
 def test_popularity_runner_writes_all_artifacts(tmp_path: Path) -> None:
     task = _make_task()
-    metrics = run(task, tmp_path)
+    run(task, tmp_path)
 
     assert (tmp_path / "manifest.json").exists()
     assert (tmp_path / METRICS_FILENAME).exists()
     assert (tmp_path / "predictions.parquet").exists()
+    assert (tmp_path / "policy_metrics.json").exists()
 
 
 def test_popularity_runner_metrics_structure(tmp_path: Path) -> None:

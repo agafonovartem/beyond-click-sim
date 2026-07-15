@@ -31,6 +31,12 @@ from runners.in_distribution.policy_ranking_agreement.methods.llm_yes_no import 
     run_qwen36_35b_a3b_itemwise_full,
     run_qwen36_35b_a3b_itemwise_smoke,
 )
+from runners.in_distribution.policy_ranking_agreement.methods.agent4rec_yes_no import (
+    run_qwen36_27b_full as run_agent4rec_qwen36_27b_full,
+    run_qwen36_27b_smoke as run_agent4rec_qwen36_27b_smoke,
+    run_qwen36_27b_traits_taste_gpt4o_mini_full as run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_full,
+    run_qwen36_27b_traits_taste_gpt4o_mini_smoke as run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_smoke,
+)
 from runners.in_distribution.policy_ranking_agreement.methods.popularity import (
     run as run_popularity,
 )
@@ -40,6 +46,11 @@ MethodRunner = Callable[[Task, Path], dict[str, object]]
 
 METHOD_RUNNERS: dict[str, MethodRunner] = {
     "popularity_scorer": run_popularity,
+    # Agent4Rec profile-based yes/no scoring (one LLM call per user×policy)
+    "agent4rec_yes_no_vllm_qwen36_27b_smoke": run_agent4rec_qwen36_27b_smoke,
+    "agent4rec_yes_no_vllm_qwen36_27b_full": run_agent4rec_qwen36_27b_full,
+    "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_smoke": run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_smoke,
+    "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full": run_agent4rec_qwen36_27b_traits_taste_gpt4o_mini_full,
     # batch scoring (all k items per user×policy in one prompt)
     "llm_yes_no_ollama_llama31_8b_smoke": run_llama31_8b_smoke,
     "llm_yes_no_ollama_llama31_8b_full": run_llama31_8b_full,

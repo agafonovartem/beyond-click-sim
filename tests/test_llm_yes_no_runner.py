@@ -266,17 +266,28 @@ def test_llm_yes_no_runner_supports_steam_item_stats(
 
     assert result["llm_errors"] == 0
     user_prompt = client.completions.calls[0]["messages"][1]["content"]
-    assert "user playtime minutes: 45" in user_prompt
-    assert "average prior playtime minutes: 12.35" in user_prompt
-    assert "number of prior interactions: 7" in user_prompt
-    assert "C1. item_title: Half-Life" in user_prompt
-    assert "average prior playtime minutes: 67.89" in user_prompt
+    assert (
+        "H1. item_title: Portal; item_genres_json: Action; "
+        "item_tags_json: Puzzle; user playtime minutes: 45; "
+        "average prior playtime minutes: 12.35; "
+        "number of prior interactions: 7"
+    ) in user_prompt
+    assert (
+        "C1. item_title: Half-Life; item_genres_json: Action; "
+        "item_tags_json: FPS; average prior playtime minutes: 67.89; "
+        "number of prior interactions: 123"
+    ) in user_prompt
+    assert '["Action"]' not in user_prompt
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["scorer"]["uses_item_stats"] is True
     assert manifest["scorer"]["column_labels"]["playtime_forever"] == (
         "user playtime minutes"
     )
+    assert manifest["scorer"]["json_list_columns"] == [
+        "item_genres_json",
+        "item_tags_json",
+    ]
 
 
 def test_llm_yes_no_qwen_wrappers_disable_thinking(

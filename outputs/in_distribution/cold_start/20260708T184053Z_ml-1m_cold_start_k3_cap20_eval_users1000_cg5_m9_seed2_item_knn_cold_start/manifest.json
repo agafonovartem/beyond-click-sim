@@ -1,0 +1,130 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 4416,
+      "positives_max": 2,
+      "positives_mean": 1.9873188405797102,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.8731884057971,
+      "rows_min": 10,
+      "sampled_max": 18,
+      "sampled_mean": 17.88586956521739,
+      "sampled_min": 9
+    },
+    "val": {
+      "groups": 2748,
+      "positives_max": 2,
+      "positives_mean": 1.9909024745269286,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.909024745269285,
+      "rows_min": 10,
+      "sampled_max": 18,
+      "sampled_mean": 17.91812227074236,
+      "sampled_min": 9
+    }
+  },
+  "decision_rule": {
+    "kind": "threshold_on_validation",
+    "metric": "macro_by_user_group_mean_f1",
+    "metric_value": 0.18181818181818188,
+    "selection_metric": "macro_by_user_group_mean_f1",
+    "threshold": 0.0
+  },
+  "git_commit": "85e53dfe8de5680bdb47ad2b02232bf0f0c546d5",
+  "limits": {
+    "max_candidate_groups": null
+  },
+  "method": "item_knn_cold_start",
+  "scorer": {
+    "aggregation": "mean",
+    "class": "ColdItemKNNScorer",
+    "fit_on": "online_session_history",
+    "item_column": "item_id",
+    "k": 3,
+    "n_neighbors": 20,
+    "user_column": "user_id"
+  },
+  "stage_times_seconds": {
+    "apply_threshold": 0.0,
+    "candidate_group_summary": 0.028,
+    "compute_metrics": 0.24,
+    "fit": 0.606,
+    "prepare_xy": 0.017,
+    "score_test": 0.354,
+    "score_val": 0.187,
+    "select_threshold": 0.07,
+    "write_predictions": 0.088
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_feature_builder": null,
+      "items": 3883,
+      "k": 3,
+      "rows": {
+        "online_session_history": 5436,
+        "test": 87760,
+        "train": 698395,
+        "val": 54710
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "TemporalColdStartCandidateSampler",
+        "group_offset": 10,
+        "item_column": "item_id",
+        "max_candidate_groups_per_user": 5,
+        "max_eval_users": 1000,
+        "negative_ratio": 9,
+        "sampled_column": "sampled",
+        "seed": 2,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "ColdUserHoldoutSplitter",
+        "item_column": "item_id",
+        "k": 3,
+        "seed": 2,
+        "test_fraction": 0.2,
+        "timestamp_column": "timestamp",
+        "train_fraction": 0.7,
+        "user_column": "user_id",
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": {
+        "dropped_test_cold": 0,
+        "dropped_val_cold": 0,
+        "test_cold": 1208,
+        "val_cold": 604,
+        "warm": 4228
+      }
+    },
+    "name": "ml-1m_cold_start_k3_cap20_eval_users1000_cg5_m9_seed2"
+  }
+}

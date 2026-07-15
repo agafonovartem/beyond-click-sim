@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from numbers import Integral, Real
 import re
@@ -71,6 +72,7 @@ class LLMInteractionYesNoScorer(Scorer):
         temperature: float = 0.0,
         max_tokens: int = 512,
         column_labels: dict[str, str] | None = None,
+        json_list_columns: tuple[str, ...] = (),
         extra_body: dict | None = None,
         prompt_style: str = "batch",
     ) -> None:
@@ -100,6 +102,7 @@ class LLMInteractionYesNoScorer(Scorer):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.column_labels = {} if column_labels is None else dict(column_labels)
+        self.json_list_columns = tuple(json_list_columns)
         self.extra_body = extra_body
         self.prompt_style = prompt_style
         self.history_by_user_: dict[Any, list[str]] | None = None
@@ -273,7 +276,11 @@ class LLMInteractionYesNoScorer(Scorer):
             if pd.isna(value) or value == "":
                 continue
             column_label = self.column_labels.get(column, column)
-            parts.append(f"{column_label}: {_format_prompt_value(value)}")
+            formatted_value = _format_prompt_value(
+                value,
+                parse_json_list=column in self.json_list_columns,
+            )
+            parts.append(f"{column_label}: {formatted_value}")
         description = "; ".join(parts) if parts else "no item description"
         return f"{label}. {description}"
 
@@ -290,7 +297,11 @@ class LLMInteractionYesNoScorer(Scorer):
             if pd.isna(value) or value == "":
                 continue
             column_label = self.column_labels.get(column, column)
-            parts.append(f"{column_label}: {_format_prompt_value(value)}")
+            formatted_value = _format_prompt_value(
+                value,
+                parse_json_list=column in self.json_list_columns,
+            )
+            parts.append(f"{column_label}: {formatted_value}")
         return "; ".join(parts) if parts else "no item description"
 
     @staticmethod
@@ -401,9 +412,16 @@ def _chat_completion_text(response: Any) -> str:
     return str(content)
 
 
-def _format_prompt_value(value: Any) -> str:
+def _format_prompt_value(value: Any, *, parse_json_list: bool = False) -> str:
     """Return compact text for scalar values shown in LLM prompts."""
 
+    if parse_json_list and isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return value
+        if isinstance(parsed, list):
+            return ", ".join(str(item) for item in parsed) if parsed else "none"
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, Integral):
