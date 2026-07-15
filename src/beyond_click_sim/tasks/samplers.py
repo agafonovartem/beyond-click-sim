@@ -391,6 +391,159 @@ class CappedUserInteractionCandidateSampler(CandidateSampler):
         return f"candidate:user:{user_id}:chunk:{chunk_position}"
 
 
+class TemporalColdStartCandidateSampler(CappedUserInteractionCandidateSampler):
+    """Build capped groups from consecutive post-profile interactions.
+
+    Unlike :class:`CappedUserInteractionCandidateSampler`, this sampler keeps
+    each user's input interaction order. ``group_offset`` selects a later,
+    non-overlapping window of positive chunks while preserving global chunk
+    indices in candidate-group ids. This lets different experiment seeds
+    evaluate different temporal windows instead of reshuffling the same rows.
+    """
+
+    def __init__(
+        self,
+        negative_ratio: int,
+        total_items: int = 20,
+        max_eval_users: int | None = None,
+        max_candidate_groups_per_user: int | None = None,
+        group_offset: int = 0,
+        seed: int = 0,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+        target_column: str = "target",
+        sampled_column: str = "sampled",
+        candidate_group_column: str = "candidate_group",
+    ) -> None:
+        super().__init__(
+            negative_ratio=negative_ratio,
+            total_items=total_items,
+            max_eval_users=max_eval_users,
+            max_candidate_groups_per_user=max_candidate_groups_per_user,
+            seed=seed,
+            user_column=user_column,
+            item_column=item_column,
+            target_column=target_column,
+            sampled_column=sampled_column,
+            candidate_group_column=candidate_group_column,
+        )
+        if group_offset < 0:
+            raise ValueError("group_offset must be non-negative.")
+        self.group_offset = group_offset
+
+    def sample(
+        self,
+        positives: pd.DataFrame,
+        *,
+        interactions: pd.DataFrame,
+        items: pd.DataFrame,
+        excluded_pairs: set[tuple[Any, Any]] | None = None,
+    ) -> pd.DataFrame:
+        """Return capped groups from one ordered temporal window per user."""
+
+        if self.negative_ratio < 1:
+            raise ValueError("negative_ratio must be positive.")
+        if self.total_items < self.negative_ratio + 1:
+            raise ValueError("total_items must fit at least one positive group.")
+        if self.max_eval_users is not None and self.max_eval_users < 1:
+            raise ValueError("max_eval_users must be positive when provided.")
+        if (
+            self.max_candidate_groups_per_user is not None
+            and self.max_candidate_groups_per_user < 1
+        ):
+            raise ValueError(
+                "max_candidate_groups_per_user must be positive when provided."
+            )
+
+        output_columns = [
+            self.user_column,
+            self.item_column,
+            self.target_column,
+            self.sampled_column,
+            self.candidate_group_column,
+        ]
+        if positives.empty:
+            return pd.DataFrame(columns=output_columns)
+
+        all_items = items[self.item_column].drop_duplicates().tolist()
+        observed_by_user = (
+            interactions.groupby(self.user_column, sort=False)[self.item_column]
+            .agg(lambda values: set(values))
+            .to_dict()
+        )
+        positives_by_user = positives.groupby(self.user_column, sort=False)[
+            self.item_column
+        ].agg(lambda values: list(dict.fromkeys(values)))
+        if self.max_eval_users is not None:
+            selected_users = stable_sample_values(
+                positives_by_user.index,
+                n=self.max_eval_users,
+                seed=self.seed,
+            )
+            positives_by_user = positives_by_user.loc[selected_users]
+
+        row_values: dict[str, list[Any]] = {column: [] for column in output_columns}
+        max_positive_items = self.total_items // (self.negative_ratio + 1)
+        for user_id, positive_items in positives_by_user.items():
+            positive_chunks = _chunks(positive_items, max_positive_items)
+            selected_chunks = positive_chunks[self.group_offset :]
+            if self.max_candidate_groups_per_user is not None:
+                selected_chunks = selected_chunks[
+                    : self.max_candidate_groups_per_user
+                ]
+
+            for local_position, selected_positives in enumerate(selected_chunks):
+                chunk_position = self.group_offset + local_position
+                group_id = self._candidate_group_id(
+                    user_id=user_id,
+                    chunk_position=chunk_position,
+                )
+                negative_count = len(selected_positives) * self.negative_ratio
+                observed_items = observed_by_user.get(user_id, set())
+                if len(all_items) - len(observed_items) < negative_count:
+                    raise ValueError(
+                        f"User {user_id!r} has only "
+                        f"{len(all_items) - len(observed_items)} available negative "
+                        f"items, need {negative_count}."
+                    )
+
+                group_rows: list[dict[str, Any]] = []
+                self._append_rows(
+                    group_rows,
+                    user_id=user_id,
+                    item_ids=selected_positives,
+                    target=1,
+                    sampled=False,
+                    group_id=group_id,
+                )
+                group_rng = random.Random(f"{self.seed}:{group_id}")
+                negative_items = self._sample_negative_items(
+                    rng=group_rng,
+                    user_id=user_id,
+                    all_items=all_items,
+                    observed_items=observed_items,
+                    excluded_pairs=excluded_pairs,
+                    negative_count=negative_count,
+                )
+                self._append_rows(
+                    group_rows,
+                    user_id=user_id,
+                    item_ids=negative_items,
+                    target=0,
+                    sampled=True,
+                    group_id=group_id,
+                )
+                for row in _shuffled_group_rows(
+                    group_rows,
+                    seed=self.seed,
+                    group_id=group_id,
+                ):
+                    for column in output_columns:
+                        row_values[column].append(row[column])
+
+        return pd.DataFrame(row_values, columns=output_columns)
+
+
 class CappedObservedPreferenceCandidateSampler(CandidateSampler):
     """Build capped candidate lists from held-out observed preference labels.
 
