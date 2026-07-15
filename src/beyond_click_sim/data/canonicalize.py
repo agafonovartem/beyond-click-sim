@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from beyond_click_sim.data.adapters import MovieLens1MAdapter, SteamAdapter
+from beyond_click_sim.data.adapters.movielens import default_movies_augmentation_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -13,6 +14,17 @@ def parse_args() -> argparse.Namespace:
     movielens = subparsers.add_parser("movielens", help="Canonicalize MovieLens-1M.")
     movielens.add_argument("--raw-dir", type=Path, required=True)
     movielens.add_argument("--out-dir", type=Path, required=True)
+    movielens.add_argument(
+        "--movies-augmentation",
+        type=Path,
+        default=default_movies_augmentation_path(),
+        help="Movie summary CSV. Defaults to the vendored Agent4Rec file.",
+    )
+    movielens.add_argument(
+        "--without-movie-summaries",
+        action="store_true",
+        help="Build canonical MovieLens tables without the optional summary column.",
+    )
 
     steam = subparsers.add_parser("steam", help="Canonicalize Steam user-library snapshots.")
     steam.add_argument("--raw-dir", type=Path, required=True)
@@ -24,7 +36,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     if args.dataset == "movielens":
-        dataset = MovieLens1MAdapter().materialize(args.raw_dir, args.out_dir)
+        movies_augmentation_path = (
+            None if args.without_movie_summaries else args.movies_augmentation
+        )
+        dataset = MovieLens1MAdapter().materialize(
+            args.raw_dir,
+            args.out_dir,
+            movies_augmentation_path=movies_augmentation_path,
+        )
     elif args.dataset == "steam":
         dataset = SteamAdapter().materialize(args.raw_dir, args.out_dir)
     else:

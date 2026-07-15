@@ -58,9 +58,14 @@ class RegressionPredictionTaskBuilder(TaskBuilder):
             raise ValueError("RegressionPredictionTaskBuilder requires splitter.")
 
     def build(self, dataset: CanonicalDataset) -> Task:
+        canonical_manifest = dataset.load_manifest()
         users = dataset.load_users()
         items = dataset.load_items()
         interactions = dataset.load_interactions()
+        item_enrichment_manifest = self._item_enrichment_manifest(
+            canonical_manifest,
+            items,
+        )
 
         self._require_columns(interactions, [self.user_column, self.item_column])
         self._require_columns(
@@ -152,6 +157,7 @@ class RegressionPredictionTaskBuilder(TaskBuilder):
                 "target_column": self.target_column,
                 "feature_columns": list(feature_columns),
                 "history_context_columns": list(self.history_context_columns),
+                "item_enrichment": item_enrichment_manifest,
                 "item_feature_builder": item_feature_manifest,
                 "sampled_column": None,
                 "candidate_group_column": None,
@@ -183,6 +189,42 @@ class RegressionPredictionTaskBuilder(TaskBuilder):
                 "target_rows_dropped": int(rows_before_target_filter - len(interactions)),
             },
         )
+
+    @staticmethod
+    def _item_enrichment_manifest(
+        canonical_manifest: dict[str, object],
+        items: pd.DataFrame,
+    ) -> dict[str, object] | None:
+        item_enrichment = canonical_manifest.get("item_enrichment")
+        if not isinstance(item_enrichment, dict):
+            return None
+        movie_summaries = item_enrichment.get("movie_summaries")
+        if not isinstance(movie_summaries, dict):
+            return None
+        if not bool(movie_summaries.get("enabled", False)):
+            return {"movie_summaries": {"enabled": False}}
+
+        canonical_column = str(movie_summaries.get("column", ""))
+        if not canonical_column or canonical_column not in items.columns:
+            raise ValueError(
+                "Canonical manifest enables movie summaries but items.parquet "
+                f"does not contain column {canonical_column!r}"
+            )
+        source = movie_summaries.get("source")
+        source_sha256 = source.get("sha256") if isinstance(source, dict) else None
+        if not isinstance(source_sha256, str) or not source_sha256:
+            raise ValueError(
+                "Canonical manifest enables movie summaries but does not record "
+                "the source SHA256"
+            )
+        return {
+            "movie_summaries": {
+                "enabled": True,
+                "canonical_column": canonical_column,
+                "task_column": f"item_{canonical_column}",
+                "source_sha256": source_sha256,
+            }
+        }
 
     def _target_rows(self, interactions: pd.DataFrame) -> pd.DataFrame:
         rows = interactions[

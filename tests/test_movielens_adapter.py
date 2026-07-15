@@ -4,8 +4,14 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
-from beyond_click_sim.data.adapters.movielens import MovieLens1MAdapter
+from beyond_click_sim.data.adapters.movielens import (
+    AGENT4REC_MOVIE_SUMMARY_FILE_COMMIT,
+    AGENT4REC_REPOSITORY,
+    AGENT4REC_REPOSITORY_COMMIT,
+    MovieLens1MAdapter,
+)
 
 
 def write_fixture(raw_dir: Path) -> None:
@@ -48,7 +54,11 @@ def test_movielens_adapter_materializes_canonical_tables(tmp_path: Path) -> None
     out_dir = tmp_path / "canonical" / "ml-1m" / "v1"
     write_fixture(raw_dir)
 
-    dataset = MovieLens1MAdapter().materialize(raw_dir, out_dir)
+    dataset = MovieLens1MAdapter().materialize(
+        raw_dir,
+        out_dir,
+        movies_augmentation_path=None,
+    )
 
     assert dataset.users_path.exists()
     assert dataset.items_path.exists()
@@ -107,3 +117,98 @@ def test_movielens_adapter_materializes_canonical_tables(tmp_path: Path) -> None
         "target_rating": "Raw MovieLens rating on the 1-5 scale.",
     }
     assert len(manifest["raw_sources"]) == 3
+    assert manifest["item_enrichment"] == {
+        "movie_summaries": {
+            "column": None,
+            "enabled": False,
+            "source": None,
+        }
+    }
+
+
+def test_movielens_adapter_adds_strict_movie_summary_enrichment(
+    tmp_path: Path,
+) -> None:
+    raw_dir = tmp_path / "raw" / "ml-1m"
+    out_dir = tmp_path / "canonical" / "ml-1m" / "v1"
+    summary_path = tmp_path / "movies_augmentation.csv"
+    write_fixture(raw_dir)
+    summary_path.write_text(
+        "movie_id,title,genres,rating,summary\n"
+        "1,Wrong title,Wrong genre,1.0,Toys plan a rescue.\n"
+        "2,Also wrong,Wrong genre,2.0,A magical board game.\n",
+        encoding="utf-8",
+    )
+
+    dataset = MovieLens1MAdapter().materialize(
+        raw_dir,
+        out_dir,
+        movies_augmentation_path=summary_path,
+    )
+
+    items = pd.read_parquet(dataset.items_path)
+    assert list(items.columns) == [
+        "item_id",
+        "raw_item_id",
+        "title",
+        "genres",
+        "summary",
+    ]
+    assert items["title"].tolist() == ["Toy Story (1995)", "Jumanji (1995)"]
+    assert items["summary"].tolist() == [
+        "Toys plan a rescue.",
+        "A magical board game.",
+    ]
+
+    manifest = dataset.load_manifest()
+    enrichment = manifest["item_enrichment"]["movie_summaries"]
+    assert enrichment["enabled"] is True
+    assert enrichment["column"] == "summary"
+    assert enrichment["join_key"] == "item_id == movie_id"
+    assert enrichment["validation"] == "strict_exact_id_match"
+    assert enrichment["coverage"] == {
+        "canonical_items": 2,
+        "summary_rows": 2,
+        "matched_items": 2,
+    }
+    assert enrichment["source"]["repository"] == AGENT4REC_REPOSITORY
+    assert enrichment["source"]["repository_commit"] == AGENT4REC_REPOSITORY_COMMIT
+    assert (
+        enrichment["source"]["source_file_commit"]
+        == AGENT4REC_MOVIE_SUMMARY_FILE_COMMIT
+    )
+    assert enrichment["source"]["consumed_columns"] == ["movie_id", "summary"]
+
+
+@pytest.mark.parametrize(
+    ("rows", "message"),
+    [
+        (
+            "1,First summary\n1,Duplicate summary\n2,Second summary\n",
+            "duplicate movie_id",
+        ),
+        ("1,First summary\n", "must exactly match"),
+        ("1,First summary\n2,\n", "blank summaries"),
+        (
+            "1,First summary\n2,Second summary\n3,Extra summary\n",
+            "must exactly match",
+        ),
+    ],
+)
+def test_movielens_adapter_rejects_invalid_movie_summary_coverage(
+    tmp_path: Path,
+    rows: str,
+    message: str,
+) -> None:
+    raw_dir = tmp_path / "raw" / "ml-1m"
+    out_dir = tmp_path / "canonical" / "ml-1m" / "v1"
+    summary_path = tmp_path / "movies_augmentation.csv"
+    write_fixture(raw_dir)
+    summary_path.write_text("movie_id,summary\n" + rows, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        MovieLens1MAdapter().materialize(
+            raw_dir,
+            out_dir,
+            movies_augmentation_path=summary_path,
+        )

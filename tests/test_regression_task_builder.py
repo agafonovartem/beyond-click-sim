@@ -121,6 +121,64 @@ def test_regression_task_builder_adds_train_only_item_rating_statistics(
     assert test_by_item.loc["i3", "item_rating_count"] == 0
 
 
+def test_regression_task_builder_propagates_canonical_item_summaries_only(
+    tmp_path: Path,
+) -> None:
+    plain_dataset = _write_regression_canonical_dataset(
+        tmp_path,
+        root_name="plain-regression-canonical",
+    )
+    enriched_dataset = _write_regression_canonical_dataset(
+        tmp_path,
+        root_name="enriched-regression-canonical",
+        include_summaries=True,
+    )
+
+    def build(dataset: CanonicalDataset):
+        return RegressionPredictionTaskBuilder(
+            name="toy_rating_seed0",
+            dataset_filter=MinUserInteractionsFilter(min_interactions=10),
+            splitter=RandomFractionSplitter(
+                train_fraction=0.7,
+                val_fraction=0.1,
+                test_fraction=0.2,
+                seed=0,
+            ),
+            target_source_column="target_rating",
+            history_context_columns=("rating",),
+        ).build(dataset)
+
+    plain_task = build(plain_dataset)
+    enriched_task = build(enriched_dataset)
+
+    assert "item_summary" not in plain_task.schema.feature_columns
+    assert "item_summary" in enriched_task.schema.feature_columns
+    assert enriched_task.manifest["item_enrichment"] == {
+        "movie_summaries": {
+            "enabled": True,
+            "canonical_column": "summary",
+            "task_column": "item_summary",
+            "source_sha256": "fixture-summary-sha256",
+        }
+    }
+
+    for split_name in ("train", "val", "test"):
+        plain = getattr(plain_task, split_name)
+        enriched = getattr(enriched_task, split_name)
+        pd.testing.assert_frame_equal(
+            enriched.drop(columns=["item_summary"]),
+            plain,
+        )
+        expected_summaries = enriched["item_id"].map(
+            {f"i{idx}": f"Summary {idx}" for idx in range(1, 11)}
+        )
+        pd.testing.assert_series_equal(
+            enriched["item_summary"],
+            expected_summaries,
+            check_names=False,
+        )
+
+
 class _InteractionIdSplitter(Splitter):
     def __init__(
         self,
@@ -146,8 +204,13 @@ def _rows_with_ids(interactions: pd.DataFrame, ids: tuple[str, ...]) -> pd.DataF
     return interactions[interactions["interaction_id"].isin(ids)].copy()
 
 
-def _write_regression_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
-    root = tmp_path / "toy-regression-canonical"
+def _write_regression_canonical_dataset(
+    tmp_path: Path,
+    *,
+    root_name: str = "toy-regression-canonical",
+    include_summaries: bool = False,
+) -> CanonicalDataset:
+    root = tmp_path / root_name
     root.mkdir()
 
     users = pd.DataFrame(
@@ -162,6 +225,8 @@ def _write_regression_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
             "title": [f"Item {idx}" for idx in range(1, 11)],
         }
     )
+    if include_summaries:
+        items["summary"] = [f"Summary {idx}" for idx in range(1, 11)]
     interactions = pd.DataFrame(
         [
             {
@@ -184,7 +249,16 @@ def _write_regression_canonical_dataset(tmp_path: Path) -> CanonicalDataset:
     users.to_parquet(users_path, index=False)
     items.to_parquet(items_path, index=False)
     interactions.to_parquet(interactions_path, index=False)
-    manifest_path.write_text(json.dumps({"dataset": "toy"}), encoding="utf-8")
+    manifest = {"dataset": "toy"}
+    if include_summaries:
+        manifest["item_enrichment"] = {
+            "movie_summaries": {
+                "enabled": True,
+                "column": "summary",
+                "source": {"sha256": "fixture-summary-sha256"},
+            }
+        }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     return CanonicalDataset(
         name="toy",

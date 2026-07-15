@@ -127,6 +127,12 @@ uv run python -m beyond_click_sim.data.canonicalize movielens \
   --out-dir data/canonical/ml-1m/v1
 ```
 
+By default, MovieLens canonicalization adds the vendored Agent4Rec movie
+summaries to `items.parquet` as the optional `summary` column. Override the
+source with `--movies-augmentation PATH`, or use `--without-movie-summaries`
+to build the original canonical tables without this enrichment. The join is
+strict: summary IDs must match the canonical MovieLens item IDs exactly.
+
 Materialize Steam:
 
 ```bash
