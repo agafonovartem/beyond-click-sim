@@ -5,7 +5,11 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from beyond_click_sim.scorers import Agent4RecProfileGenerator, Agent4RecYesNoScorer
+from beyond_click_sim.scorers import (
+    Agent4RecPreferenceYesNoScorer,
+    Agent4RecProfileGenerator,
+    Agent4RecYesNoScorer,
+)
 from beyond_click_sim.scorers.agent4rec.prompts import (
     AGENT4REC_FORCED_ITEMS_SYSTEM_PROMPT_TEMPLATE,
     AGENT4REC_SOCIAL_TRAITS_SYSTEM_PROMPT_TEMPLATE,
@@ -13,6 +17,9 @@ from beyond_click_sim.scorers.agent4rec.prompts import (
     agent4rec_user_prompt,
 )
 from beyond_click_sim.scorers.agent4rec.yes_no import parse_agent4rec_watch_response
+from beyond_click_sim.scorers.agent4rec.yes_no import (
+    parse_agent4rec_preference_response,
+)
 
 
 class FakeChatCompletions:
@@ -63,6 +70,16 @@ def test_parse_agent4rec_watch_response_accepts_game_field() -> None:
     parsed = parse_agent4rec_watch_response(
         "ID: C1; GAME: Portal; WATCH: yes; REASON: puzzle game\n"
         "ID: C2; GAME: Dota 2; WATCH: no; REASON: not preferred",
+        labels=["C1", "C2"],
+    )
+
+    assert parsed == {"C1": 1.0, "C2": 0.0}
+
+
+def test_parse_agent4rec_preference_response_maps_decisions_by_label() -> None:
+    parsed = parse_agent4rec_preference_response(
+        "ID: C2; MOVIE: Heat; PREFERENCE: no; REASON: below target\n"
+        "ID: C1; MOVIE: Aladdin; PREFERENCE: yes; REASON: meets target",
         labels=["C1", "C2"],
     )
 
@@ -235,6 +252,58 @@ def test_agent4rec_yes_no_scorer_uses_profile_prompt() -> None:
     assert "Judge each movie using your available profile" in user_prompt
     assert "You only watch movies which align with your taste" not in user_prompt
     assert "rating from 1 to 5" not in user_prompt
+    assert "Toy Story" not in user_prompt
+
+
+def test_agent4rec_preference_scorer_uses_target_aware_profile_prompt() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1"],
+            "item_id": ["i1", "i2", "i3"],
+            "item_title": ["Toy Story", "Aladdin", "Heat"],
+            "item_genres": ["Animation|Comedy", "Animation", "Crime"],
+            "rating": [5, 4, 2],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "candidate_group": ["g1", "g1"],
+            "item_title": ["Lion King", "Godfather"],
+            "item_genres": ["Animation", "Crime"],
+        },
+        index=["a", "b"],
+    )
+    client = FakeClient(
+        [
+            "ID: C1; MOVIE: Lion King; PREFERENCE: yes; REASON: likely high rating\n"
+            "ID: C2; MOVIE: Godfather; PREFERENCE: no; REASON: likely low rating"
+        ]
+    )
+
+    scorer = Agent4RecPreferenceYesNoScorer(
+        client=client,
+        model="fake-model",
+        target_description=(
+            "The user would rate the candidate movie at least 4 out of 5."
+        ),
+        candidate_description_columns=("item_title", "item_genres"),
+        column_labels={
+            "item_title": "movie title",
+            "item_genres": "genres",
+        },
+    ).fit(X_train, pd.Series([1, 1, 0], name="target"))
+
+    scores = scorer.score(X_test)
+
+    assert scores.to_dict() == {"a": 1.0, "b": 0.0}
+    system_prompt = client.completions.calls[0]["messages"][0]["content"]
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "Your activity trait is described as:" in system_prompt
+    assert "Positive-preference target:" in user_prompt
+    assert "rate the candidate movie at least 4 out of 5" in user_prompt
+    assert "PREFERENCE: [yes or no]" in user_prompt
+    assert "WATCH:" not in user_prompt
     assert "Toy Story" not in user_prompt
 
 

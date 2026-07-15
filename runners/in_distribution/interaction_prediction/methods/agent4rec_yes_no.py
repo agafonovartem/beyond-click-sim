@@ -300,6 +300,13 @@ def run_method(
     taste_max_attempts: int = MAX_LLM_ATTEMPTS,
     taste_prompt_version: str | None = None,
     taste_cache_path: Path | None = None,
+    scorer_class: type[Agent4RecYesNoScorer] = Agent4RecYesNoScorer,
+    scorer_kwargs: dict[str, object] | None = None,
+    candidate_description_columns: tuple[str, ...] | None = None,
+    column_labels: dict[str, str] | None = None,
+    parser_contract: str = "agent4rec_labeled_id_movie_watch_reason",
+    serving_metadata: dict[str, object] | None = None,
+    source_metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based yes/no scorer."""
 
@@ -310,6 +317,10 @@ def run_method(
             "Agent4Rec yes/no v1 has no dataset prompt config for "
             f"dataset: {dataset_name!r}"
         )
+    if candidate_description_columns is None:
+        candidate_description_columns = DATASET_CANDIDATE_COLUMNS[dataset_name]
+    if column_labels is None:
+        column_labels = DATASET_COLUMN_LABELS[dataset_name]
     candidate_group_column = task.schema.candidate_group_column
     if candidate_group_column is None:
         raise ValueError("Agent4Rec yes/no method requires candidate_group_column")
@@ -322,7 +333,7 @@ def run_method(
         max_candidate_groups=max_candidate_groups,
     )
     profile_user_ids = X_test["user_id"].drop_duplicates().tolist()
-    _require_columns(X_test, list(DATASET_CANDIDATE_COLUMNS[dataset_name]))
+    _require_columns(X_test, list(candidate_description_columns))
 
     uses_taste = "taste" in profile_components
     if uses_taste and not DATASET_SUPPORTS_TASTE[dataset_name]:
@@ -362,16 +373,17 @@ def run_method(
         taste_max_attempts=taste_max_attempts,
         **DATASET_PROFILE_GENERATOR_KWARGS[dataset_name],
     )
-    scorer = Agent4RecYesNoScorer(
+    scorer = scorer_class(
         client=make_llm_client(client_name),
         model=model,
         profile_generator=profile_generator,
-        candidate_description_columns=DATASET_CANDIDATE_COLUMNS[dataset_name],
-        column_labels=DATASET_COLUMN_LABELS[dataset_name],
+        candidate_description_columns=candidate_description_columns,
+        column_labels=column_labels,
         max_history_items=max_history_items,
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
+        **({} if scorer_kwargs is None else scorer_kwargs),
         **DATASET_PROMPT_KWARGS[dataset_name],
     ).fit(X_train, y_train, profile_user_ids=profile_user_ids)
     if uses_taste:
@@ -444,23 +456,25 @@ def run_method(
     manifest = {
         "method": method_name,
         "scorer": {
-            "class": "Agent4RecYesNoScorer",
+            "class": scorer.__class__.__name__,
             "client_name": client_name,
             "model": model,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "max_history_items": max_history_items,
             "candidate_description_columns": list(
-                DATASET_CANDIDATE_COLUMNS[dataset_name]
+                candidate_description_columns
             ),
-            "column_labels": DATASET_COLUMN_LABELS[dataset_name],
+            "column_labels": column_labels,
             "profile_generator": scorer.profile_generator.manifest(),
             "extra_body": extra_body,
             "prompt": DATASET_PROMPT_KWARGS[dataset_name],
+            "scorer_kwargs": scorer_kwargs,
+            "serving": serving_metadata,
         },
         "decision_rule": {
             "kind": "hard_binary_yes_no_parser",
-            "parser_contract": "agent4rec_labeled_id_movie_watch_reason",
+            "parser_contract": parser_contract,
             "threshold": None,
         },
         "limits": {
@@ -479,6 +493,8 @@ def run_method(
         },
         "git_commit": current_git_commit(root),
     }
+    if source_metadata is not None:
+        manifest["source"] = source_metadata
     result = {
         "method": method_name,
         "task": task.name,

@@ -166,6 +166,38 @@ def agent4rec_user_prompt(
     )
 
 
+AGENT4REC_PREFERENCE_USER_PROMPT_TEMPLATE = """##recommended list##
+{candidates}
+Positive-preference target:
+{target_description}
+For every {entity_name} in the ##recommended list##, judge whether your response would meet the positive-preference target.
+Use your available profile and the candidate information.
+Use this format: ID: [candidate id]; {entity_field}: [{entity_name} name]; PREFERENCE: [yes or no]; REASON: [brief reason]
+You must judge all the {entity_plural}. If your response would not meet the target, use PREFERENCE: no; REASON: [brief reason]
+Each response should be on one line. Do not include any additional information or explanations and stay grounded in reality."""
+
+
+def agent4rec_preference_user_prompt(
+    *,
+    candidates: str,
+    target_description: str,
+    entity_field: str = "MOVIE",
+    entity_name: str = "movie",
+    entity_plural: str = "movies",
+) -> str:
+    """Build a target-aware Agent4Rec profile-module preference prompt."""
+
+    if not target_description.strip():
+        raise ValueError("target_description must be non-empty")
+    return AGENT4REC_PREFERENCE_USER_PROMPT_TEMPLATE.format(
+        candidates=candidates,
+        target_description=target_description,
+        entity_field=entity_field,
+        entity_name=entity_name,
+        entity_plural=entity_plural,
+    )
+
+
 AGENT4REC_RATING_USER_PROMPT_TEMPLATE = """##movie##
 {candidate}
 {target_description}

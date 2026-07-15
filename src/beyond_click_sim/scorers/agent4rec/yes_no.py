@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from beyond_click_sim.scorers.agent4rec.prompts import (
+    agent4rec_preference_user_prompt,
     agent4rec_system_prompt,
     agent4rec_user_prompt,
 )
@@ -179,7 +180,7 @@ class Agent4RecYesNoScorer(Scorer):
                 max_tokens=self.max_tokens,
                 **({"extra_body": self.extra_body} if self.extra_body else {}),
             )
-            parsed = parse_agent4rec_watch_response(
+            parsed = self._parse_response(
                 _chat_completion_text(response),
                 labels=candidate_labels,
             )
@@ -222,17 +223,36 @@ class Agent4RecYesNoScorer(Scorer):
                 strict=True,
             )
         ]
-        user_prompt = agent4rec_user_prompt(
+        user_prompt = self._build_user_prompt(
             candidates="\n".join(candidate_lines),
             taste=formatted_taste,
-            entity_field=self.entity_field,
-            entity_name=self.entity_name,
-            entity_plural=self.entity_plural,
         )
         return [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
+
+    def _build_user_prompt(
+        self,
+        *,
+        candidates: str,
+        taste: str | None,
+    ) -> str:
+        return agent4rec_user_prompt(
+            candidates=candidates,
+            taste=taste,
+            entity_field=self.entity_field,
+            entity_name=self.entity_name,
+            entity_plural=self.entity_plural,
+        )
+
+    def _parse_response(
+        self,
+        text: str,
+        *,
+        labels: Sequence[str],
+    ) -> dict[str, float]:
+        return parse_agent4rec_watch_response(text, labels=labels)
 
     def _format_system_prompt(
         self,
@@ -293,6 +313,41 @@ class Agent4RecYesNoScorer(Scorer):
             raise ValueError(f"Missing required columns: {missing}")
 
 
+class Agent4RecPreferenceYesNoScorer(Agent4RecYesNoScorer):
+    """Agent4Rec profile-module adaptation for a binary preference target."""
+
+    name = "agent4rec_preference_yes_no"
+
+    def __init__(self, *, target_description: str, **kwargs: Any) -> None:
+        if not target_description.strip():
+            raise ValueError("target_description must be non-empty")
+        super().__init__(**kwargs)
+        self.target_description = target_description
+
+    def _build_user_prompt(
+        self,
+        *,
+        candidates: str,
+        taste: str | None,
+    ) -> str:
+        del taste
+        return agent4rec_preference_user_prompt(
+            candidates=candidates,
+            target_description=self.target_description,
+            entity_field=self.entity_field,
+            entity_name=self.entity_name,
+            entity_plural=self.entity_plural,
+        )
+
+    def _parse_response(
+        self,
+        text: str,
+        *,
+        labels: Sequence[str],
+    ) -> dict[str, float]:
+        return parse_agent4rec_preference_response(text, labels=labels)
+
+
 def _chat_completion_text(response: Any) -> str:
     choice = response.choices[0]
     content = choice.message.content
@@ -308,12 +363,46 @@ def parse_agent4rec_watch_response(
 ) -> dict[str, float]:
     """Parse Agent4Rec `ID/{MOVIE|GAME|ITEM}/WATCH/REASON` responses by label."""
 
+    return _parse_agent4rec_binary_response(
+        text,
+        labels=labels,
+        decision_field="WATCH",
+        decision_name="watch",
+    )
+
+
+def parse_agent4rec_preference_response(
+    text: str,
+    *,
+    labels: Sequence[str],
+) -> dict[str, float]:
+    """Parse target-aware Agent4Rec `PREFERENCE: yes/no` responses by label."""
+
+    return _parse_agent4rec_binary_response(
+        text,
+        labels=labels,
+        decision_field="PREFERENCE",
+        decision_name="preference",
+    )
+
+
+def _parse_agent4rec_binary_response(
+    text: str,
+    *,
+    labels: Sequence[str],
+    decision_field: str,
+    decision_name: str,
+) -> dict[str, float]:
+    """Parse one strict labeled Agent4Rec binary-decision response."""
+
     if not labels:
         raise ValueError("labels must be non-empty")
     pattern = re.compile(
         r"(?:^|\n)\s*(?:(?:ID|LABEL):\s*)?(C\d+)\s*(?::|;)\s*"
         r"(?:\[[^\]]+\]\s*;?\s*)?"
-        r"(?:MOVIE|GAME|ITEM):\s*(.*?)\s*;?\s*WATCH:\s*(.*?)\s*;?\s*"
+        r"(?:MOVIE|GAME|ITEM):\s*(.*?)\s*;?\s*"
+        + re.escape(decision_field)
+        + r":\s*(.*?)\s*;?\s*"
         r"REASON:\s*(.*?)(?=\n\s*(?:(?:ID|LABEL):\s*)?C\d+\s*(?::|;)|\Z)",
         flags=re.IGNORECASE | re.DOTALL,
     )
@@ -323,7 +412,7 @@ def parse_agent4rec_watch_response(
     duplicate_labels: list[str] = []
     unknown_labels: list[str] = []
 
-    for raw_label, _, raw_watch, _ in matches:
+    for raw_label, _, raw_decision, _ in matches:
         label = raw_label.strip().upper()
         if label not in expected_labels:
             unknown_labels.append(label)
@@ -332,13 +421,15 @@ def parse_agent4rec_watch_response(
             duplicate_labels.append(label)
             continue
 
-        watch = raw_watch.strip().strip(";").lower()
-        if watch == "yes":
+        decision = raw_decision.strip().strip(";").lower()
+        if decision == "yes":
             parsed[label] = 1.0
-        elif watch == "no":
+        elif decision == "no":
             parsed[label] = 0.0
         else:
-            raise ValueError(f"Invalid Agent4Rec WATCH value: {raw_watch!r}")
+            raise ValueError(
+                f"Invalid Agent4Rec {decision_field} value: {raw_decision!r}"
+            )
 
     if unknown_labels:
         raise ValueError(
@@ -354,7 +445,7 @@ def parse_agent4rec_watch_response(
     missing_labels = [label for label in labels if label not in parsed]
     if missing_labels:
         raise ValueError(
-            "Missing Agent4Rec watch decisions: "
+            f"Missing Agent4Rec {decision_name} decisions: "
             f"{missing_labels}"
         )
     return parsed
