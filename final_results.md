@@ -4,6 +4,7 @@ Snapshot of local in-distribution final-result artifacts. Metrics are copied fro
 
 Notes:
 - Interaction prediction uses the reduced `eval_users1000_cg5` protocol: seeds 0-2, 1000 validation/test users per split, and up to 5 candidate groups per selected user.
+- Preference prediction uses the reduced `cap10_eval_users1000_cg5` observed-only protocol: seeds 0-2, up to 10 candidates per group, and at most 5 groups per selected user.
 - Regression prediction includes the current reduced ML-1M `eval_users1000_rows_per_user5` Qwen3-8B run and older full-row ML-1M `eval_users1000` rating artifacts. Do not compare the two protocols as if they used the same test rows.
 - For every listed run, the compact `manifest.json` plus relevant `metrics*.json` files should be tracked; row-level `predictions.parquet` files are local artifacts and should stay untracked.
 - Provenance exception: the Qwen3.6-27B `History + item stats` interaction rows below currently point to local ignored output directories. Treat them as local registry entries, not committed reproducible artifacts, until their compact provenance files are force-added or the rows are removed.
@@ -513,3 +514,72 @@ Additional complete ablation not shown in the current paper table:
 | 19 | 0 | 4730 | 94600 | 0.8325 | 0.6748 | 0.8837 | `20260702T125208Z_steam_cap20_eval_users1000_cg5_m19_seed0_popularity_ranking` |
 | 19 | 1 | 4707 | 94140 | 0.8328 | 0.6745 | 0.8834 | `20260702T125351Z_steam_cap20_eval_users1000_cg5_m19_seed1_popularity_ranking` |
 | 19 | 2 | 4754 | 95080 | 0.8341 | 0.6767 | 0.8814 | `20260702T125531Z_steam_cap20_eval_users1000_cg5_m19_seed2_popularity_ranking` |
+
+## Preference Prediction
+
+Protocol:
+
+- Datasets: `ml-1m` and `steam` canonical `v1`.
+- Targets: MovieLens rating at least 4/5 (`target_like_ge4`) and Steam total
+  playtime at least 120 minutes (`target_played_120`).
+- Split: `RandomFractionSplitter(0.7, 0.1, 0.2, group_column="user_id")`,
+  seeds 0-2.
+- Filter: `MinUserInteractionsFilter(10)`.
+- Candidate construction:
+  `CappedObservedPreferenceCandidateSampler(total_items=10,
+  max_eval_users=1000, max_candidate_groups_per_user=5)`. Each group contains
+  held-out observed positive and observed negative preference labels in the
+  requested `1:m` ratio for `m in {1, 2, 3, 9}`; no unobserved items are used.
+- Popularity baseline: train positive-preference count per item, with the
+  decision threshold selected on validation by
+  `macro_by_user_group_mean_f1` and then fixed on test.
+- LLM method: direct grouped hard yes/no prompting with at most 20 train-history
+  items, temperature 0, 256 output tokens, and Qwen thinking disabled. The
+  prompt includes dataset-native history context (rating or total playtime) and
+  candidate title/genre metadata; it does not include train-derived item
+  statistics.
+- Main metric: `test_failure_as_negative.macro_by_user_group_mean.f1` for LLMs
+  and the corresponding `test.macro_by_user_group_mean.f1` for complete
+  popularity runs. Values below are mean +/- sample standard deviation over
+  seeds 0-2.
+
+Run roots:
+
+- Popularity:
+  `outputs/in_distribution/preference_prediction/*_popularity_f1_threshold/`.
+- Qwen3-8B:
+  `outputs/in_distribution/preference_prediction/20260713T1030Z_qwen3_8b_full/`.
+- Qwen3.6-27B:
+  `outputs/in_distribution/preference_prediction/20260713T1242Z_qwen36_27b_full/`.
+
+### Pointwise F1 seed averages
+
+| dataset | m | seeds | Popularity F1 | Qwen3-8B F1 | Qwen3.6-27B F1 |
+|---|---:|---|---:|---:|---:|
+| ml-1m | 1 | 0,1,2 | 0.679413 +/- 0.006154 | 0.280401 +/- 0.006476 | 0.595869 +/- 0.001003 |
+| ml-1m | 2 | 0,1,2 | 0.538276 +/- 0.002573 | 0.230501 +/- 0.009995 | 0.491398 +/- 0.003695 |
+| ml-1m | 3 | 0,1,2 | 0.453241 +/- 0.004473 | 0.181705 +/- 0.006319 | 0.415506 +/- 0.002372 |
+| ml-1m | 9 | 0,1,2 | 0.255308 +/- 0.002677 | 0.093269 +/- 0.001556 | 0.227566 +/- 0.005996 |
+| steam | 1 | 0,1,2 | 0.718855 +/- 0.007037 | 0.069092 +/- 0.003275 | 0.631637 +/- 0.005006 |
+| steam | 2 | 0,1,2 | 0.594629 +/- 0.010659 | 0.063693 +/- 0.000323 | 0.549780 +/- 0.005868 |
+| steam | 3 | 0,1,2 | 0.520832 +/- 0.005326 | 0.045341 +/- 0.005098 | 0.483103 +/- 0.007694 |
+| steam | 9 | 0,1,2 | 0.320582 +/- 0.008425 | 0.022846 +/- 0.000349 | 0.288638 +/- 0.002519 |
+
+Coverage and interpretation:
+
+- Qwen3.6-27B scored all 428,946 requested rows with zero failed groups.
+- Qwen3-8B had complete MovieLens coverage. On Steam it failed to parse 955 of
+  21,694 candidate groups (8,197 of 176,535 rows); per-slice minimum coverage
+  ranged from 93.89% to 96.00%. The table counts failed rows as negative
+  predictions rather than dropping failed groups.
+- Qwen3.6-27B substantially outperforms Qwen3-8B in every dataset/ratio slice,
+  but popularity remains stronger in all eight slices under this exact target,
+  split, candidate construction, prompt, and metric.
+- These runs evaluate the direct preference-specific prompt. They do not include
+  an Agent4Rec persona/taste pipeline and do not constitute a listwise-ranking
+  experiment.
+- A separate row-level audit found a consistent first-candidate prediction
+  premium despite nearly position-balanced ground-truth labels. The evidence,
+  limitations, and paper-ready wording are recorded in
+  `positional_bias_note.md`; reproducing that audit requires the local ignored
+  `predictions.parquet` files.
