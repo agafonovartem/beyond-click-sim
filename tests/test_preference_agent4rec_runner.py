@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pandas as pd
 
 from beyond_click_sim.tasks import Task, TaskSchema
-from runners.in_distribution.interaction_prediction.methods import (
-    agent4rec_yes_no as grouped_agent4rec_yes_no,
+from runners.in_distribution.preference_prediction.methods import (
+    _grouped_agent4rec_yes_no as grouped_agent4rec_yes_no,
 )
 from runners.in_distribution.preference_prediction.methods import (
     METHOD_RUNNERS as PREFERENCE_METHOD_RUNNERS,

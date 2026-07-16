@@ -13,8 +13,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from runners.in_distribution.interaction_prediction.methods import (  # noqa: E402
-    llm_yes_no as grouped_llm_yes_no,
+from runners.in_distribution.preference_prediction.methods import (  # noqa: E402
+    _grouped_llm_yes_no as grouped_llm_yes_no,
 )
 from runners.in_distribution.preference_prediction.methods import (  # noqa: E402
     llm_yes_no as preference_llm_yes_no,

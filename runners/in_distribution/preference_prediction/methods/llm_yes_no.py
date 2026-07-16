@@ -6,7 +6,7 @@ from pathlib import Path
 from beyond_click_sim.scorers import LLMPreferenceYesNoScorer
 from beyond_click_sim.tasks import Task
 from runners.in_distribution.item_summaries import SummaryVisibility
-from runners.in_distribution.interaction_prediction.methods.llm_yes_no import (
+from runners.in_distribution.preference_prediction.methods._grouped_llm_yes_no import (
     run_method as run_grouped_yes_no_method,
 )
 

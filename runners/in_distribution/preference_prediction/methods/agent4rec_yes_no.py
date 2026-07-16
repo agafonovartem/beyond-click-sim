@@ -7,8 +7,8 @@ from beyond_click_sim.tasks import Task
 from runners.in_distribution.item_summaries import (
     canonical_agent4rec_summary_usage,
 )
-from runners.in_distribution.interaction_prediction.methods.agent4rec_yes_no import (
-    run_method as run_grouped_agent4rec_method,
+from runners.in_distribution.preference_prediction.methods import (
+    _grouped_agent4rec_yes_no,
 )
 from runners.in_distribution.preference_prediction.methods.llm_yes_no import (
     CLIENT_NAME,
@@ -109,7 +109,7 @@ def run_method(
             f"Unsupported Agent4Rec preference dataset: {dataset_name!r}"
         ) from error
 
-    return run_grouped_agent4rec_method(
+    return _grouped_agent4rec_yes_no.run_method(
         task,
         output_dir,
         method_name=method_name,
