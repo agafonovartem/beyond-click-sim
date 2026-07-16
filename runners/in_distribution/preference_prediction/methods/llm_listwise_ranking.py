@@ -23,21 +23,63 @@ from runners.in_distribution.preference_prediction.methods.common import (
 )
 from runners.in_distribution.preference_prediction.methods.llm_yes_no import (
     QWEN_EXTRA_BODY,
+    QWEN3_8B_MAX_WORKERS,
+    QWEN3_8B_MODEL,
     QWEN36_27B_MAX_WORKERS,
     QWEN36_27B_MODEL,
     SMOKE_CANDIDATE_GROUPS,
     TARGET_DESCRIPTIONS,
+    _serving_metadata,
     _source_metadata,
 )
 from runners.in_distribution.preference_prediction.task_builders import repo_root
 
 
-VLLM_CLIENT_NAME = "vllm_local"
-QWEN36_27B_METHOD_NAME = "llm_preference_listwise_ranking_vllm_qwen36_27b"
+LITELLM_CLIENT_NAME = "litellm_local"
+QWEN3_8B_METHOD_NAME = "llm_preference_listwise_ranking_litellm_qwen3_8b"
+QWEN36_27B_METHOD_NAME = "llm_preference_listwise_ranking_litellm_qwen36_27b"
 MAX_HISTORY_ITEMS = 20
 TEMPERATURE = 0.0
 MAX_TOKENS = 512
 MAX_LLM_ATTEMPTS = 5
+
+
+def run_qwen3_8b_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{QWEN3_8B_METHOD_NAME}_smoke",
+        client_name=LITELLM_CLIENT_NAME,
+        model=QWEN3_8B_MODEL,
+        max_candidate_groups=SMOKE_CANDIDATE_GROUPS,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        use_item_stats=False,
+        extra_body=QWEN_EXTRA_BODY,
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
+    )
+
+
+def run_qwen3_8b_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{QWEN3_8B_METHOD_NAME}_full",
+        client_name=LITELLM_CLIENT_NAME,
+        model=QWEN3_8B_MODEL,
+        max_candidate_groups=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        use_item_stats=False,
+        extra_body=QWEN_EXTRA_BODY,
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
+    )
 
 
 def run_qwen36_27b_smoke(
@@ -48,12 +90,13 @@ def run_qwen36_27b_smoke(
         task,
         output_dir,
         method_name=f"{QWEN36_27B_METHOD_NAME}_smoke",
-        client_name=VLLM_CLIENT_NAME,
+        client_name=LITELLM_CLIENT_NAME,
         model=QWEN36_27B_MODEL,
         max_candidate_groups=SMOKE_CANDIDATE_GROUPS,
         max_workers=QWEN36_27B_MAX_WORKERS,
         use_item_stats=False,
         extra_body=QWEN_EXTRA_BODY,
+        serving_metadata=_serving_metadata(),
         source_metadata=_source_metadata(),
     )
 
@@ -66,12 +109,13 @@ def run_qwen36_27b_full(
         task,
         output_dir,
         method_name=f"{QWEN36_27B_METHOD_NAME}_full",
-        client_name=VLLM_CLIENT_NAME,
+        client_name=LITELLM_CLIENT_NAME,
         model=QWEN36_27B_MODEL,
         max_candidate_groups=None,
         max_workers=QWEN36_27B_MAX_WORKERS,
         use_item_stats=False,
         extra_body=QWEN_EXTRA_BODY,
+        serving_metadata=_serving_metadata(),
         source_metadata=_source_metadata(),
     )
 
@@ -84,7 +128,7 @@ def run_method(
     model: str,
     max_candidate_groups: int | None,
     max_workers: int,
-    client_name: str = VLLM_CLIENT_NAME,
+    client_name: str = LITELLM_CLIENT_NAME,
     max_history_items: int = MAX_HISTORY_ITEMS,
     temperature: float = TEMPERATURE,
     max_tokens: int = MAX_TOKENS,

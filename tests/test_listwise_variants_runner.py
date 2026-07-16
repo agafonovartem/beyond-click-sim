@@ -15,6 +15,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from runners.in_distribution.interaction_prediction.methods import (  # noqa: E402
+    METHOD_RUNNERS as INTERACTION_METHOD_RUNNERS,
+)
+from runners.in_distribution.interaction_prediction.methods import (  # noqa: E402
     agent4rec_listwise_ranking as interaction_agent4rec_listwise,
 )
 from runners.in_distribution.preference_prediction.methods import (  # noqa: E402
@@ -212,7 +215,11 @@ def test_preference_agent4rec_listwise_runner_uses_target_and_threshold(
 
 def test_preference_listwise_methods_are_registered() -> None:
     assert (
-        "llm_preference_listwise_ranking_vllm_qwen36_27b_full"
+        "llm_preference_listwise_ranking_litellm_qwen3_8b_full"
+        in PREFERENCE_METHOD_RUNNERS
+    )
+    assert (
+        "llm_preference_listwise_ranking_litellm_qwen36_27b_full"
         in PREFERENCE_METHOD_RUNNERS
     )
     assert (
@@ -221,7 +228,7 @@ def test_preference_listwise_methods_are_registered() -> None:
     )
 
 
-def test_preference_history_listwise_smoke_uses_direct_vllm_without_item_stats(
+def test_preference_history_listwise_smoke_uses_litellm_without_item_stats(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -242,5 +249,16 @@ def test_preference_history_listwise_smoke_uses_direct_vllm_without_item_stats(
         tmp_path,
     )
 
-    assert captured["client_name"] == "vllm_local"
+    assert captured["client_name"] == "litellm_local"
     assert captured["use_item_stats"] is False
+
+
+def test_interaction_history_listwise_qwen_methods_are_registered() -> None:
+    assert (
+        "llm_listwise_ranking_litellm_qwen3_8b_with_item_stats_full"
+        in INTERACTION_METHOD_RUNNERS
+    )
+    assert (
+        "llm_listwise_ranking_litellm_qwen36_27b_with_item_stats_full"
+        in INTERACTION_METHOD_RUNNERS
+    )

@@ -44,6 +44,8 @@ from runners.in_distribution.interaction_prediction.methods.llm_yes_no import (
     run_qwen36_27b_with_item_stats_smoke,
 )
 from runners.in_distribution.interaction_prediction.methods.llm_listwise_ranking import (
+    run_qwen3_8b_with_item_stats_full as run_listwise_qwen3_8b_with_item_stats_full,
+    run_qwen3_8b_with_item_stats_smoke as run_listwise_qwen3_8b_with_item_stats_smoke,
     run_qwen36_27b_with_item_stats_full as run_listwise_qwen36_27b_with_item_stats_full,
     run_qwen36_27b_with_item_stats_smoke as run_listwise_qwen36_27b_with_item_stats_smoke,
 )
@@ -110,10 +112,16 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     "llm_yes_no_vllm_qwen36_27b_with_item_stats_full": (
         run_qwen36_27b_with_item_stats_full
     ),
-    "llm_listwise_ranking_vllm_qwen36_27b_with_item_stats_smoke": (
+    "llm_listwise_ranking_litellm_qwen3_8b_with_item_stats_smoke": (
+        run_listwise_qwen3_8b_with_item_stats_smoke
+    ),
+    "llm_listwise_ranking_litellm_qwen3_8b_with_item_stats_full": (
+        run_listwise_qwen3_8b_with_item_stats_full
+    ),
+    "llm_listwise_ranking_litellm_qwen36_27b_with_item_stats_smoke": (
         run_listwise_qwen36_27b_with_item_stats_smoke
     ),
-    "llm_listwise_ranking_vllm_qwen36_27b_with_item_stats_full": (
+    "llm_listwise_ranking_litellm_qwen36_27b_with_item_stats_full": (
         run_listwise_qwen36_27b_with_item_stats_full
     ),
     "llm_yes_no_openai_vk_gpt54_mini_smoke": run_gpt54_mini_smoke,

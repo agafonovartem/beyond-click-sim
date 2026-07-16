@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -26,14 +27,55 @@ from runners.in_distribution.llm_item_stats import (
 )
 
 
-VLLM_QWEN36_27B_METHOD_NAME = "llm_listwise_ranking_vllm_qwen36_27b"
-VLLM_QWEN36_27B_CLIENT = "vllm_local"
-VLLM_QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
+LITELLM_CLIENT_NAME = "litellm_local"
+QWEN3_8B_METHOD_NAME = "llm_listwise_ranking_litellm_qwen3_8b"
+QWEN3_8B_MODEL = "Qwen/Qwen3-8B"
+QWEN3_8B_MAX_WORKERS = 64
+QWEN36_27B_METHOD_NAME = "llm_listwise_ranking_litellm_qwen36_27b"
+QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
+QWEN36_27B_MAX_WORKERS = 32
 MAX_HISTORY_ITEMS = 20
 TEMPERATURE = 0.0
 MAX_TOKENS = 512
 MAX_LLM_ATTEMPTS = 5
-VLLM_MAX_WORKERS = 32
+
+
+def run_qwen3_8b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{QWEN3_8B_METHOD_NAME}_with_item_stats_smoke",
+        client_name=LITELLM_CLIENT_NAME,
+        model=QWEN3_8B_MODEL,
+        max_candidate_groups=25,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        use_item_stats=True,
+        extra_body=QWEN_EXTRA_BODY,
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
+    )
+
+
+def run_qwen3_8b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{QWEN3_8B_METHOD_NAME}_with_item_stats_full",
+        client_name=LITELLM_CLIENT_NAME,
+        model=QWEN3_8B_MODEL,
+        max_candidate_groups=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+        use_item_stats=True,
+        extra_body=QWEN_EXTRA_BODY,
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
+    )
 
 
 def run_qwen36_27b_with_item_stats_smoke(
@@ -43,13 +85,15 @@ def run_qwen36_27b_with_item_stats_smoke(
     return run_method(
         task,
         output_dir,
-        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_with_item_stats_smoke",
-        client_name=VLLM_QWEN36_27B_CLIENT,
-        model=VLLM_QWEN36_27B_MODEL,
+        method_name=f"{QWEN36_27B_METHOD_NAME}_with_item_stats_smoke",
+        client_name=LITELLM_CLIENT_NAME,
+        model=QWEN36_27B_MODEL,
         max_candidate_groups=25,
-        max_workers=VLLM_MAX_WORKERS,
+        max_workers=QWEN36_27B_MAX_WORKERS,
         use_item_stats=True,
         extra_body=QWEN_EXTRA_BODY,
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
     )
 
 
@@ -60,13 +104,15 @@ def run_qwen36_27b_with_item_stats_full(
     return run_method(
         task,
         output_dir,
-        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_with_item_stats_full",
-        client_name=VLLM_QWEN36_27B_CLIENT,
-        model=VLLM_QWEN36_27B_MODEL,
+        method_name=f"{QWEN36_27B_METHOD_NAME}_with_item_stats_full",
+        client_name=LITELLM_CLIENT_NAME,
+        model=QWEN36_27B_MODEL,
         max_candidate_groups=None,
-        max_workers=VLLM_MAX_WORKERS,
+        max_workers=QWEN36_27B_MAX_WORKERS,
         use_item_stats=True,
         extra_body=QWEN_EXTRA_BODY,
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
     )
 
 
@@ -85,6 +131,7 @@ def run_method(
     max_workers: int = 1,
     use_item_stats: bool = False,
     extra_body: dict | None = None,
+    serving_metadata: dict[str, object] | None = None,
     source_metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Run direct listwise interaction ranking with a validation threshold."""
@@ -161,7 +208,61 @@ def run_method(
             "json_list_columns": list(DATASET_JSON_LIST_COLUMNS[dataset_name]),
             "uses_item_stats": use_item_stats,
             "extra_body": extra_body,
+            "serving": serving_metadata,
         },
         repo_root=repo_root(),
         source_metadata=source_metadata,
     )
+
+
+def _serving_metadata() -> dict[str, object]:
+    return {
+        "backend": "litellm_proxy_over_vllm",
+        "litellm_base_url": os.environ.get(
+            "BEYOND_CLICK_SIM_LITELLM_LOCAL_BASE_URL",
+            "http://127.0.0.1:8080/v1",
+        ),
+        "litellm_version": os.environ.get(
+            "BEYOND_CLICK_SIM_LITELLM_VERSION",
+            "unknown",
+        ),
+        "routing_strategy": os.environ.get(
+            "BEYOND_CLICK_SIM_LITELLM_ROUTING_STRATEGY",
+            "simple-shuffle",
+        ),
+        "vllm_version": os.environ.get(
+            "BEYOND_CLICK_SIM_VLLM_VERSION",
+            "unknown",
+        ),
+        "vllm_replicas": int(
+            os.environ.get("BEYOND_CLICK_SIM_VLLM_REPLICAS", "4")
+        ),
+        "vllm_ports": [8000, 8001, 8002, 8003],
+        "tensor_parallel_size_per_replica": 1,
+        "max_model_len": int(
+            os.environ.get("BEYOND_CLICK_SIM_VLLM_MAX_MODEL_LEN", "4096")
+        ),
+        "gpu_memory_utilization": float(
+            os.environ.get(
+                "BEYOND_CLICK_SIM_VLLM_GPU_MEMORY_UTILIZATION",
+                "0.90",
+            )
+        ),
+        "model_revision": os.environ.get(
+            "BEYOND_CLICK_SIM_MODEL_REVISION",
+            "unknown",
+        ),
+        "thinking_enabled": False,
+    }
+
+
+def _source_metadata() -> dict[str, object]:
+    return {
+        "base_git_commit": os.environ.get(
+            "BEYOND_CLICK_SIM_SOURCE_BASE_GIT_COMMIT"
+        ),
+        "snapshot_sha256": os.environ.get(
+            "BEYOND_CLICK_SIM_SOURCE_SNAPSHOT_SHA256"
+        ),
+        "diff_sha256": os.environ.get("BEYOND_CLICK_SIM_SOURCE_DIFF_SHA256"),
+    }

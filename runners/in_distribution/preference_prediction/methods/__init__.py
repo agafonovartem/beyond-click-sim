@@ -27,6 +27,8 @@ from runners.in_distribution.preference_prediction.methods.llm_yes_no import (
     run_qwen36_27b_smoke,
 )
 from runners.in_distribution.preference_prediction.methods.llm_listwise_ranking import (
+    run_qwen3_8b_full as run_listwise_qwen3_8b_full,
+    run_qwen3_8b_smoke as run_listwise_qwen3_8b_smoke,
     run_qwen36_27b_full as run_listwise_qwen36_27b_full,
     run_qwen36_27b_smoke as run_listwise_qwen36_27b_smoke,
 )
@@ -65,10 +67,16 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     "llm_preference_yes_no_litellm_qwen36_27b_summary_full": (
         run_qwen36_27b_summary_full
     ),
-    "llm_preference_listwise_ranking_vllm_qwen36_27b_smoke": (
+    "llm_preference_listwise_ranking_litellm_qwen3_8b_smoke": (
+        run_listwise_qwen3_8b_smoke
+    ),
+    "llm_preference_listwise_ranking_litellm_qwen3_8b_full": (
+        run_listwise_qwen3_8b_full
+    ),
+    "llm_preference_listwise_ranking_litellm_qwen36_27b_smoke": (
         run_listwise_qwen36_27b_smoke
     ),
-    "llm_preference_listwise_ranking_vllm_qwen36_27b_full": (
+    "llm_preference_listwise_ranking_litellm_qwen36_27b_full": (
         run_listwise_qwen36_27b_full
     ),
 }
