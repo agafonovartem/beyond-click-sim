@@ -1,0 +1,55 @@
+# Candidate-free recommendation on MovieLens-1M
+
+HR@K / nDCG@K, macro-averaged over users. `paper_reference` = Di Palma et al.
+(2025) Table 3, for the reproduction check.
+
+| family | method | split | history | matching | n | HR@1 | ndcg@1 | HR@5 | ndcg@5 | HR@10 | ndcg@10 |
+|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| paper_reference | BPRMF | file_order | all | paper | 6040 | 0.0406 | 0.0406 | 0.1278 | 0.0350 | 0.2149 | 0.0356 |
+| paper_reference | EASEr | file_order | all | paper | 6040 | 0.0295 | 0.0295 | 0.1124 | 0.0278 | 0.1975 | 0.0299 |
+| paper_reference | GPT-3.5 turbo | file_order | all | paper | 6040 | 0.2298 | 0.2298 | 0.4217 | 0.1281 | 0.5902 | 0.1229 |
+| paper_reference | GPT-4o | file_order | all | paper | 6040 | 0.2796 | 0.2796 | 0.5889 | 0.2276 | 0.6897 | 0.1948 |
+| paper_reference | GPT-4o mini | file_order | all | paper | 6040 | 0.0316 | 0.0316 | 0.2132 | 0.0451 | 0.3091 | 0.0413 |
+| paper_reference | ItemKNN | file_order | all | paper | 6040 | 0.0394 | 0.0394 | 0.1217 | 0.0353 | 0.1828 | 0.0337 |
+| paper_reference | LightGCN | file_order | all | paper | 6040 | 0.0358 | 0.0358 | 0.1136 | 0.0306 | 0.1882 | 0.0311 |
+| paper_reference | Llama-3.1 405B | file_order | all | paper | 6040 | 0.1975 | 0.1975 | 0.4165 | 0.1294 | 0.5119 | 0.1039 |
+| paper_reference | Llama-3.1 70B | file_order | all | paper | 6040 | 0.1302 | 0.1302 | 0.3828 | 0.1095 | 0.5148 | 0.0969 |
+| paper_reference | Llama-3.1 8B | file_order | all | paper | 6040 | 0.0687 | 0.0687 | 0.2281 | 0.0609 | 0.3500 | 0.0571 |
+| paper_reference | Llama-3.3 70B | file_order | all | paper | 6040 | 0.2293 | 0.2293 | 0.4985 | 0.1693 | 0.5922 | 0.1359 |
+| paper_reference | MostPop | file_order | all | paper | 6040 | 0.0212 | 0.0212 | 0.0775 | 0.0222 | 0.1520 | 0.0251 |
+| paper_reference | Random | file_order | all | paper | 6040 | 0.0093 | 0.0093 | 0.0442 | 0.0092 | 0.0851 | 0.0094 |
+| paper_reference | UserKNN | file_order | all | paper | 6040 | 0.0306 | 0.0306 | 0.1209 | 0.0306 | 0.2250 | 0.0347 |
+| classical | ALS | file_order |  | exact_item_id | 6040 | 0.0260 | 0.0260 | 0.1058 | 0.0246 | 0.1945 | 0.0274 |
+| classical | BPRMF | file_order |  | exact_item_id | 6040 | 0.0177 | 0.0177 | 0.0695 | 0.0165 | 0.1268 | 0.0181 |
+| classical | ItemKNN | file_order |  | exact_item_id | 6040 | 0.0248 | 0.0248 | 0.0877 | 0.0238 | 0.1391 | 0.0237 |
+| classical | ItemKNNStd | file_order |  | exact_item_id | 6040 | 0.0392 | 0.0392 | 0.1224 | 0.0351 | 0.1831 | 0.0336 |
+| classical | LightGCN | file_order |  | exact_item_id | 6040 | 0.0232 | 0.0232 | 0.0912 | 0.0262 | 0.1810 | 0.0299 |
+| classical | MostPop | file_order |  | exact_item_id | 6040 | 0.0212 | 0.0212 | 0.0775 | 0.0223 | 0.1520 | 0.0251 |
+| classical | Random | file_order |  | exact_item_id | 6040 | 0.0101 | 0.0101 | 0.0480 | 0.0101 | 0.0859 | 0.0097 |
+| classical | ALS | random |  | exact_item_id | 6040 | 0.4858 | 0.4858 | 0.8321 | 0.4214 | 0.9142 | 0.3900 |
+| classical | BPRMF | random |  | exact_item_id | 6040 | 0.3252 | 0.3252 | 0.6906 | 0.2732 | 0.8263 | 0.2532 |
+| classical | ItemKNN | random |  | exact_item_id | 6040 | 0.4430 | 0.4430 | 0.7722 | 0.3734 | 0.8679 | 0.3433 |
+| classical | ItemKNNStd | random |  | exact_item_id | 6040 | 0.4752 | 0.4752 | 0.8091 | 0.4083 | 0.8980 | 0.3760 |
+| classical | LightGCN | random |  | exact_item_id | 6040 | 0.2447 | 0.2447 | 0.5454 | 0.2184 | 0.6818 | 0.2023 |
+| classical | MostPop | random |  | exact_item_id | 6040 | 0.2487 | 0.2487 | 0.5459 | 0.2208 | 0.6730 | 0.2038 |
+| classical | Random | random |  | exact_item_id | 6040 | 0.0101 | 0.0101 | 0.0440 | 0.0094 | 0.0841 | 0.0095 |
+| llm | llama-3.1-8b-instruct | file_order | 20 | article | 6040 | 0.1488 | 0.1488 | 0.4381 | 0.1326 | 0.5694 | 0.1180 |
+| llm | llama-3.1-8b-instruct | file_order | 20 | dedup | 6040 | 0.1247 | 0.1247 | 0.3604 | 0.1066 | 0.4629 | 0.0912 |
+| llm | llama-3.1-8b-instruct | file_order | 20 | fair | 6040 | 0.1555 | 0.1555 | 0.4606 | 0.1413 | 0.5977 | 0.1275 |
+| llm | llama-3.1-8b-instruct | file_order | 20 | in_catalog | 6040 | 0.1901 | 0.1901 | 0.4548 | 0.1531 | 0.5293 | 0.1285 |
+| llm | llama-3.1-8b-instruct | file_order | 20 | paper | 6040 | 0.1247 | 0.1247 | 0.3604 | 0.1066 | 0.4629 | 0.0916 |
+| llm | llama-3.1-8b-instruct | file_order | all | article | 6040 | 0.0879 | 0.0879 | 0.2647 | 0.0746 | 0.4283 | 0.0738 |
+| llm | llama-3.1-8b-instruct | file_order | all | dedup | 6040 | 0.0780 | 0.0780 | 0.2177 | 0.0605 | 0.3558 | 0.0579 |
+| llm | llama-3.1-8b-instruct | file_order | all | fair | 6040 | 0.1123 | 0.1123 | 0.3368 | 0.0943 | 0.5060 | 0.0915 |
+| llm | llama-3.1-8b-instruct | file_order | all | in_catalog | 6040 | 0.1308 | 0.1308 | 0.3914 | 0.1194 | 0.4598 | 0.1006 |
+| llm | llama-3.1-8b-instruct | file_order | all | paper | 6040 | 0.0780 | 0.0780 | 0.2177 | 0.0612 | 0.3558 | 0.0592 |
+| llm | llama-3.1-8b-instruct | random | 20 | article | 6040 | 0.1245 | 0.1245 | 0.3821 | 0.1026 | 0.5240 | 0.0937 |
+| llm | llama-3.1-8b-instruct | random | 20 | dedup | 6040 | 0.0783 | 0.0783 | 0.2657 | 0.0678 | 0.3752 | 0.0605 |
+| llm | llama-3.1-8b-instruct | random | 20 | fair | 6040 | 0.1310 | 0.1310 | 0.4048 | 0.1108 | 0.5586 | 0.1026 |
+| llm | llama-3.1-8b-instruct | random | 20 | in_catalog | 6040 | 0.1205 | 0.1205 | 0.3563 | 0.0993 | 0.4609 | 0.0877 |
+| llm | llama-3.1-8b-instruct | random | 20 | paper | 6040 | 0.0783 | 0.0783 | 0.2657 | 0.0681 | 0.3752 | 0.0612 |
+| llm | llama-3.1-8b-instruct | random | all | article | 6040 | 0.0762 | 0.0762 | 0.2565 | 0.0656 | 0.3922 | 0.0639 |
+| llm | llama-3.1-8b-instruct | random | all | dedup | 6040 | 0.0616 | 0.0616 | 0.1621 | 0.0426 | 0.2556 | 0.0396 |
+| llm | llama-3.1-8b-instruct | random | all | fair | 6040 | 0.1041 | 0.1041 | 0.3081 | 0.0842 | 0.4543 | 0.0791 |
+| llm | llama-3.1-8b-instruct | random | all | in_catalog | 6040 | 0.0911 | 0.0911 | 0.2613 | 0.0718 | 0.3515 | 0.0648 |
+| llm | llama-3.1-8b-instruct | random | all | paper | 6040 | 0.0616 | 0.0616 | 0.1621 | 0.0433 | 0.2556 | 0.0411 |

@@ -1,0 +1,24 @@
+{
+  "created_at": "2026-07-16T14:53:44.542308+00:00",
+  "experiment": "memorization/candidate_free",
+  "method": "ItemKNNStd",
+  "method_family": "classical_policy",
+  "dataset": "ml-1m",
+  "split": "file_order",
+  "k": 50,
+  "ks": [
+    1,
+    5,
+    10
+  ],
+  "seed": 0,
+  "user_set": "all_users_no_filtering",
+  "n_eval_users": 6040,
+  "fit_recommend_seconds": 28.96,
+  "policy_class": "StandardItemKNN",
+  "policy_params": {
+    "k": 50,
+    "n_neighbors": 200,
+    "seed": 0
+  }
+}

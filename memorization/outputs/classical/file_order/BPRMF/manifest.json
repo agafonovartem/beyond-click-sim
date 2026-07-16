@@ -1,0 +1,27 @@
+{
+  "created_at": "2026-07-15T13:58:01.339843+00:00",
+  "experiment": "memorization/candidate_free",
+  "method": "BPRMF",
+  "method_family": "classical_policy",
+  "dataset": "ml-1m",
+  "split": "file_order",
+  "k": 50,
+  "ks": [
+    1,
+    5,
+    10
+  ],
+  "seed": 0,
+  "eval_users": "all",
+  "n_eval_users": 6040,
+  "fit_recommend_seconds": 5.25,
+  "policy_class": "BPRPolicy",
+  "policy_params": {
+    "k": 50,
+    "seed": 0,
+    "n_factors": 64,
+    "learning_rate": 0.01,
+    "regularization": 0.01,
+    "iterations": 100
+  }
+}

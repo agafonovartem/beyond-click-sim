@@ -1,0 +1,44 @@
+{
+  "created_at": "2026-07-16T15:04:31.830365+00:00",
+  "dataset": "ml-1m",
+  "canonical_version": "v1",
+  "train_fraction": 0.8,
+  "rounding_rule": "n_train = floor(train_fraction * n), clamped to [1, n-1]",
+  "seed": 0,
+  "n_interactions": 1000209,
+  "n_users_total": 6040,
+  "n_eval_users": 200,
+  "parity_guaranteed": true,
+  "per_user_train_size": {
+    "min": 16,
+    "median": 76,
+    "max": 1851
+  },
+  "per_user_test_size": {
+    "min": 4,
+    "median": 20,
+    "max": 463
+  },
+  "eval_users_test_size": {
+    "min": 4,
+    "median": 20,
+    "max": 349,
+    "total_held_out": 7245
+  },
+  "file_order_structure_diagnostic": {
+    "n_users_sampled": 300,
+    "temporal": {
+      "mean_adjacent_pairs_time_ordered": 0.5233,
+      "mean_within_user_spearman_pos_timestamp": -0.0003,
+      "verdict": "file order is NOT temporal (~0.5 adjacent, ~0 Spearman)"
+    },
+    "global_item_order": {
+      "n_items_ge50_raters": 2514,
+      "mean_per_item_frac_pos": 0.4964,
+      "mean_per_item_frac_pos_std": 0.1289,
+      "uniform_random_reference_std": 0.289,
+      "verdict": "per-item position std well below the ~0.29 random reference => each item sits at a near-fixed position in every user's block, i.e. the file encodes a global item order"
+    },
+    "interpretation": "Within-user file order is time-independent, but NOT random: it follows a fixed global item permutation. The file-order holdout therefore removes the SAME items across users, collapsing their train popularity and stripping collaborative signal for exactly the held-out items. This suppresses popularity/CF baselines relative to a true random per-user split; it is a structured cross-user item holdout, not a temporal split."
+  }
+}

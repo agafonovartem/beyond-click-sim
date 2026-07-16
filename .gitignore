@@ -28,3 +28,8 @@ __pycache__/
 /outputs/in_distribution/regression_prediction/*/*
 !/outputs/in_distribution/regression_prediction/*eval_users1000*/manifest.json
 !/outputs/in_distribution/regression_prediction/*eval_users1000*/metrics*.json
+
+# memorization experiment: keep compact provenance (manifest.json / metrics.json /
+# summary.csv / *_manifest.json / eval_users.csv), drop large or row-level artifacts.
+/memorization/data/split_*.csv
+/memorization/outputs/llm/**/predictions.jsonl

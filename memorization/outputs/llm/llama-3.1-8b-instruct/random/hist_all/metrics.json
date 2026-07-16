@@ -1,0 +1,19 @@
+{
+  "mean_recall@1": 0.005711355587835588,
+  "mean_ndcg@1": 0.06937086092715232,
+  "mean_hit_rate@1": 0.06937086092715232,
+  "mean_recall@5": 0.0178425384355871,
+  "mean_ndcg@5": 0.05475770944435601,
+  "mean_hit_rate@5": 0.21456953642384105,
+  "mean_recall@10": 0.0273285512177734,
+  "mean_ndcg@10": 0.052120393543622454,
+  "mean_hit_rate@10": 0.32764900662251656,
+  "n_users": 6040,
+  "n_users_scored": 6040,
+  "n_errors": 0,
+  "n_history_fallback": 0,
+  "generation_seconds": 11437.9,
+  "prompt_tokens_median": 783,
+  "prompt_tokens_max": 15432,
+  "n_prompts_at_context_limit": 0
+}

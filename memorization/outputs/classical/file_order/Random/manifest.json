@@ -1,0 +1,23 @@
+{
+  "created_at": "2026-07-15T13:57:48.075955+00:00",
+  "experiment": "memorization/candidate_free",
+  "method": "Random",
+  "method_family": "classical_policy",
+  "dataset": "ml-1m",
+  "split": "file_order",
+  "k": 50,
+  "ks": [
+    1,
+    5,
+    10
+  ],
+  "seed": 0,
+  "eval_users": "all",
+  "n_eval_users": 6040,
+  "fit_recommend_seconds": 1.83,
+  "policy_class": "RandomPolicy",
+  "policy_params": {
+    "k": 50,
+    "seed": 0
+  }
+}
