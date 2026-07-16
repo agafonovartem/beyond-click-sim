@@ -198,6 +198,97 @@ def agent4rec_preference_user_prompt(
     )
 
 
+AGENT4REC_LISTWISE_USER_PROMPT_TEMPLATE = """##recommended list##
+{candidates}
+Rank all {entity_plural} from most likely to least likely that you would {positive_action} them.
+{profile_instruction}
+The complete set of allowed candidate IDs is: {candidate_labels}
+Rank only candidate IDs shown at the start of lines in the ##recommended list##.
+Return only those candidate IDs in ranked order, one per line.
+There are exactly {candidate_count} candidates, so your response must contain exactly {candidate_count} non-empty lines.
+Use every candidate ID exactly once and do not include reasons or other text.
+Before returning, silently verify that every allowed candidate ID appears exactly once. If an ID is missing or duplicated, correct the list.
+Do not output {entity_name} names.
+Do not include rank numbers, punctuation, explanations, or analysis.
+The first character of your response must be C."""
+
+
+def agent4rec_listwise_user_prompt(
+    *,
+    candidates: str,
+    taste: str | None,
+    candidate_labels: Sequence[str],
+    entity_name: str = "movie",
+    entity_plural: str = "movies",
+) -> str:
+    """Build an Agent4Rec profile-conditioned direct-ranking prompt."""
+
+    use_original_movie_wording = entity_name == "movie" and entity_plural == "movies"
+    profile_instruction = (
+        (
+            _AGENT4REC_TASTE_USER_INSTRUCTION
+            if use_original_movie_wording
+            else _AGENT4REC_ENTITY_TASTE_USER_INSTRUCTION_TEMPLATE.format(
+                entity_plural=entity_plural,
+            )
+        )
+        if taste
+        else (
+            _AGENT4REC_PROFILE_USER_INSTRUCTION
+            if use_original_movie_wording
+            else _AGENT4REC_ENTITY_PROFILE_USER_INSTRUCTION_TEMPLATE.format(
+                entity_name=entity_name,
+            )
+        )
+    )
+    return AGENT4REC_LISTWISE_USER_PROMPT_TEMPLATE.format(
+        candidates=candidates,
+        entity_plural=entity_plural,
+        entity_name=entity_name,
+        positive_action="watch" if use_original_movie_wording else "choose",
+        profile_instruction=profile_instruction,
+        candidate_labels=", ".join(candidate_labels),
+        candidate_count=len(candidate_labels),
+    )
+
+
+AGENT4REC_PREFERENCE_LISTWISE_USER_PROMPT_TEMPLATE = """##recommended list##
+{candidates}
+Positive-preference target:
+{target_description}
+Rank all {entity_plural} from most likely to least likely that your response would meet the positive-preference target.
+Use your available profile and the candidate information.
+The complete set of allowed candidate IDs is: {candidate_labels}
+Rank only candidate IDs shown at the start of lines in the ##recommended list##.
+Return only those candidate IDs in ranked order, one per line.
+There are exactly {candidate_count} candidates, so your response must contain exactly {candidate_count} non-empty lines.
+Use every candidate ID exactly once and do not include reasons or other text.
+Before returning, silently verify that every allowed candidate ID appears exactly once. If an ID is missing or duplicated, correct the list.
+Do not output item names.
+Do not include rank numbers, punctuation, explanations, or analysis.
+The first character of your response must be C."""
+
+
+def agent4rec_preference_listwise_user_prompt(
+    *,
+    candidates: str,
+    target_description: str,
+    candidate_labels: Sequence[str],
+    entity_plural: str = "movies",
+) -> str:
+    """Build a target-aware Agent4Rec direct-ranking preference prompt."""
+
+    if not target_description.strip():
+        raise ValueError("target_description must be non-empty")
+    return AGENT4REC_PREFERENCE_LISTWISE_USER_PROMPT_TEMPLATE.format(
+        candidates=candidates,
+        target_description=target_description,
+        entity_plural=entity_plural,
+        candidate_labels=", ".join(candidate_labels),
+        candidate_count=len(candidate_labels),
+    )
+
+
 AGENT4REC_RATING_USER_PROMPT_TEMPLATE = """##movie##
 {candidate}
 {target_description}

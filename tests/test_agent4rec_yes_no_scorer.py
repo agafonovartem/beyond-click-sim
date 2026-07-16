@@ -6,6 +6,8 @@ import pandas as pd
 import pytest
 
 from beyond_click_sim.scorers import (
+    Agent4RecListwiseRankingScorer,
+    Agent4RecPreferenceListwiseRankingScorer,
     Agent4RecPreferenceYesNoScorer,
     Agent4RecProfileGenerator,
     Agent4RecYesNoScorer,
@@ -44,6 +46,58 @@ class FakeClient:
         completions = FakeChatCompletions(responses)
         self.chat = SimpleNamespace(completions=completions)
         self.completions = completions
+
+
+def test_agent4rec_listwise_scorers_reuse_profile_prompt() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "item_id": ["h1", "h2"],
+            "item_genres": ["Animation", "Crime"],
+            "rating": [5, 2],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "candidate_group": ["g1", "g1"],
+            "item_title": ["Lion King", "Heat"],
+        },
+        index=["a", "b"],
+    )
+    profile_generator = Agent4RecProfileGenerator(profile_components=("traits",))
+    interaction_client = FakeClient(["1. C2\n2. C1"])
+    interaction_scorer = Agent4RecListwiseRankingScorer(
+        client=interaction_client,
+        model="fake-model",
+        profile_generator=profile_generator,
+        candidate_description_columns=("item_title",),
+    ).fit(X_train, pd.Series([1, 1]))
+
+    assert interaction_scorer.score(X_test).to_dict() == {"a": 0.0, "b": 1.0}
+    interaction_prompt = interaction_client.completions.calls[0]["messages"][1][
+        "content"
+    ]
+    assert "##recommended list##" in interaction_prompt
+    assert "most likely to least likely" in interaction_prompt
+    assert "Use every candidate ID exactly once" in interaction_prompt
+    assert "exactly 2 non-empty lines" in interaction_prompt
+
+    preference_client = FakeClient(["1. C1\n2. C2"])
+    preference_scorer = Agent4RecPreferenceListwiseRankingScorer(
+        client=preference_client,
+        model="fake-model",
+        profile_generator=Agent4RecProfileGenerator(profile_components=("traits",)),
+        candidate_description_columns=("item_title",),
+        target_description="The user would rate the movie at least 4 out of 5.",
+    ).fit(X_train, pd.Series([1, 1]))
+
+    assert preference_scorer.score(X_test).to_dict() == {"a": 1.0, "b": 0.0}
+    preference_prompt = preference_client.completions.calls[0]["messages"][1][
+        "content"
+    ]
+    assert "Positive-preference target:" in preference_prompt
+    assert "rate the movie at least 4 out of 5" in preference_prompt
 
 
 def test_parse_agent4rec_watch_response_maps_reordered_decisions_by_label() -> None:

@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMInteractionYesNoScorer
+from beyond_click_sim.scorers.base import Scorer
 from beyond_click_sim.tasks import Task
 from runners.in_distribution.llm_item_stats import (
     item_rating_column_labels,
@@ -606,7 +607,7 @@ def run_method(
 
 
 def _score_groups(
-    scorer: LLMInteractionYesNoScorer,
+    scorer: Scorer,
     X: pd.DataFrame,
     *,
     candidate_group_column: str,
@@ -666,7 +667,7 @@ def _score_groups(
 
 
 def _score_one_group(
-    scorer: LLMInteractionYesNoScorer,
+    scorer: Scorer,
     group_id: object,
     group: pd.DataFrame,
     *,

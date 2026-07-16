@@ -14,8 +14,7 @@ from beyond_click_sim.tasks import (
 
 
 VERSION = "v1"
-SEEDS = (0, 1, 2, 3, 4)
-REDUCED_SEEDS = (0, 1, 2)
+SEEDS = (0, 1, 2)
 MIN_INTERACTIONS = 10
 NEGATIVE_RATIOS = (1, 2, 3, 9)
 DATASETS = ("ml-1m", "steam")
@@ -156,7 +155,7 @@ EVAL1000_CG5_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     )
     for dataset_name in DATASETS
     for negative_ratio in NEGATIVE_RATIOS
-    for seed in REDUCED_SEEDS
+    for seed in SEEDS
 }
 
 EVAL100_CG5_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
@@ -176,7 +175,7 @@ EVAL100_CG5_TASK_BUILDERS: dict[str, Callable[[], Task]] = {
     )
     for dataset_name in DATASETS
     for negative_ratio in NEGATIVE_RATIOS
-    for seed in REDUCED_SEEDS
+    for seed in SEEDS
 }
 
 DEFAULT_TASK_NAMES = list(EVAL1000_CG5_TASK_BUILDERS)

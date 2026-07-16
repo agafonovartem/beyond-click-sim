@@ -1,5 +1,9 @@
 """Agent4Rec-style profile modules and scorers."""
 
+from beyond_click_sim.scorers.agent4rec.listwise import (
+    Agent4RecListwiseRankingScorer,
+    Agent4RecPreferenceListwiseRankingScorer,
+)
 from beyond_click_sim.scorers.agent4rec.profiles import (
     Agent4RecProfileGenerator,
     Agent4RecTasteProfile,
@@ -13,7 +17,9 @@ from beyond_click_sim.scorers.agent4rec.yes_no import (
 )
 
 __all__ = [
+    "Agent4RecListwiseRankingScorer",
     "Agent4RecProfileGenerator",
+    "Agent4RecPreferenceListwiseRankingScorer",
     "Agent4RecPreferenceYesNoScorer",
     "Agent4RecRegressor",
     "Agent4RecTasteProfile",

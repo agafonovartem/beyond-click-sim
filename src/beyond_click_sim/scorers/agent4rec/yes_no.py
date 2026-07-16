@@ -229,6 +229,7 @@ class Agent4RecYesNoScorer(Scorer):
         user_prompt = self._build_user_prompt(
             candidates="\n".join(candidate_lines),
             taste=formatted_taste,
+            candidate_labels=candidate_labels,
         )
         return [
             {"role": "system", "content": system_prompt},
@@ -240,7 +241,9 @@ class Agent4RecYesNoScorer(Scorer):
         *,
         candidates: str,
         taste: str | None,
+        candidate_labels: Sequence[str],
     ) -> str:
+        del candidate_labels
         return agent4rec_user_prompt(
             candidates=candidates,
             taste=taste,
@@ -335,8 +338,9 @@ class Agent4RecPreferenceYesNoScorer(Agent4RecYesNoScorer):
         *,
         candidates: str,
         taste: str | None,
+        candidate_labels: Sequence[str],
     ) -> str:
-        del taste
+        del taste, candidate_labels
         return agent4rec_preference_user_prompt(
             candidates=candidates,
             target_description=self.target_description,

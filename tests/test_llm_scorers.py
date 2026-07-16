@@ -6,12 +6,15 @@ import pandas as pd
 import pytest
 
 from beyond_click_sim.scorers import (
+    LLMInteractionListwiseRankingScorer,
     LLMInteractionYesNoScorer,
+    LLMPreferenceListwiseRankingScorer,
     LLMPreferenceYesNoScorer,
     LLMRegressor,
 )
 from beyond_click_sim.scorers.constant import select_user_history_positions
 from beyond_click_sim.scorers.llm import (
+    parse_ranked_labels_response,
     parse_regression_value_response,
     parse_single_yes_no_response,
     parse_yes_no_response,
@@ -161,6 +164,104 @@ def test_llm_preference_scorer_uses_explicit_target_prompt() -> None:
     assert "H1. item_title: Toy Story; rating: 5" in messages[1]["content"]
     assert "rate the movie at least 4 out of 5" in messages[1]["content"]
     assert "whether the user would interact" not in messages[1]["content"]
+
+
+def test_parse_ranked_labels_response_accepts_ranked_lines() -> None:
+    parsed = parse_ranked_labels_response(
+        "1. C2\n2. C1\n3. C3\n",
+        labels=["C1", "C2", "C3"],
+    )
+
+    assert parsed == ["C2", "C1", "C3"]
+
+
+def test_parse_ranked_labels_response_rejects_missing_duplicate_and_unknown() -> None:
+    with pytest.raises(ValueError, match="Missing candidate labels"):
+        parse_ranked_labels_response("1. C1", labels=["C1", "C2"])
+
+    with pytest.raises(ValueError, match="Duplicate candidate labels"):
+        parse_ranked_labels_response("1. C1\n2. C1", labels=["C1", "C2"])
+
+    with pytest.raises(ValueError, match="Unknown candidate labels"):
+        parse_ranked_labels_response("1. C1\n2. C3", labels=["C1", "C2"])
+
+
+def test_llm_listwise_ranking_scorer_scores_candidate_groups() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "item_title": ["Toy Story", "Heat"],
+            "rating": [5, 2],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1"],
+            "candidate_group": ["g1", "g1", "g1"],
+            "item_title": ["Lion King", "Godfather", "Aladdin"],
+            "item_genre": ["Animation", "Crime", "Animation"],
+        },
+        index=["a", "b", "c"],
+    )
+    client = FakeClient(["1. C2\n2. C3\n3. C1"])
+
+    scorer = LLMInteractionListwiseRankingScorer(
+        client=client,
+        model="fake-model",
+        history_description_columns=("item_title", "rating"),
+        candidate_description_columns=("item_title", "item_genre"),
+        max_history_items=2,
+        temperature=0.1,
+        max_tokens=96,
+    )
+    scorer.fit(X_train, pd.Series([1, 0]))
+    scores = scorer.score(X_test)
+
+    assert scores.to_dict() == {"a": 0.0, "b": 2.0, "c": 1.0}
+    assert scores.name == "score"
+    first_call = client.completions.calls[0]
+    assert first_call["model"] == "fake-model"
+    assert first_call["temperature"] == 0.1
+    assert first_call["max_tokens"] == 96
+    user_prompt = first_call["messages"][1]["content"]
+    assert "H1. item_title: Toy Story; rating: 5" in user_prompt
+    assert "C1. item_title: Lion King; item_genre: Animation" in user_prompt
+    assert "C2. item_title: Godfather; item_genre: Crime" in user_prompt
+    assert "C3. item_title: Aladdin; item_genre: Animation" in user_prompt
+    assert "exactly 3 non-empty lines" in user_prompt
+
+
+def test_llm_preference_listwise_ranking_scorer_uses_target_prompt() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "item_title": ["Toy Story", "Heat"],
+            "rating": [5, 2],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "candidate_group": ["g1", "g1"],
+            "item_title": ["Aladdin", "Casino"],
+        }
+    )
+    client = FakeClient(["1. C2\n2. C1"])
+
+    scorer = LLMPreferenceListwiseRankingScorer(
+        client=client,
+        model="fake-model",
+        history_description_columns=("item_title", "rating"),
+        candidate_description_columns=("item_title",),
+        target_description="The user would rate the movie at least 4 out of 5.",
+    ).fit(X_train, pd.Series([1, 0]))
+
+    assert scorer.score(X_test).tolist() == [0.0, 1.0]
+    messages = client.completions.calls[0]["messages"]
+    assert "relative positive preferences" in messages[0]["content"]
+    assert "User feedback history:" in messages[1]["content"]
+    assert "rate the movie at least 4 out of 5" in messages[1]["content"]
+    assert "most likely to least likely to meet" in messages[1]["content"]
 
 
 def test_llm_regressor_passes_extra_body() -> None:

@@ -10,7 +10,9 @@ from beyond_click_sim.scorers.constant import (
     UserModeRegressor,
 )
 from beyond_click_sim.scorers.agent4rec import (
+    Agent4RecListwiseRankingScorer,
     Agent4RecProfileGenerator,
+    Agent4RecPreferenceListwiseRankingScorer,
     Agent4RecPreferenceYesNoScorer,
     Agent4RecRegressor,
     Agent4RecTasteProfile,
@@ -18,7 +20,9 @@ from beyond_click_sim.scorers.agent4rec import (
     Agent4RecYesNoScorer,
 )
 from beyond_click_sim.scorers.history import (
+    LLMInteractionListwiseRankingScorer,
     LLMInteractionYesNoScorer,
+    LLMPreferenceListwiseRankingScorer,
     LLMPreferenceYesNoScorer,
     LLMRegressor,
 )
@@ -29,13 +33,17 @@ __all__ = [
     "ColdItemKNNScorer",
     "ItemMeanRegressor",
     "ItemModeRegressor",
+    "Agent4RecListwiseRankingScorer",
     "Agent4RecProfileGenerator",
+    "Agent4RecPreferenceListwiseRankingScorer",
     "Agent4RecPreferenceYesNoScorer",
     "Agent4RecRegressor",
     "Agent4RecTasteProfile",
     "Agent4RecUserProfile",
     "Agent4RecYesNoScorer",
+    "LLMInteractionListwiseRankingScorer",
     "LLMInteractionYesNoScorer",
+    "LLMPreferenceListwiseRankingScorer",
     "LLMPreferenceYesNoScorer",
     "LLMRegressor",
     "MeanRegressor",
