@@ -29,6 +29,61 @@ from runners.in_distribution.item_summaries import (
 
 
 VLLM_QWEN36_27B_METHOD_NAME = "agent4rec_listwise_ranking_vllm_qwen36_27b"
+LITELLM_QWEN3_8B_TRAITS_TASTE_METHOD_NAME = (
+    "agent4rec_listwise_ranking_litellm_qwen3_8b_traits_taste_"
+    "gpt4o_mini_candidate_summary"
+)
+
+
+def run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary(
+        task,
+        output_dir,
+        max_candidate_groups=25,
+        suffix="smoke",
+    )
+
+
+def run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary(
+        task,
+        output_dir,
+        max_candidate_groups=None,
+        suffix="full",
+    )
+
+
+def _run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary(
+    task: Task,
+    output_dir: Path,
+    *,
+    max_candidate_groups: int | None,
+    suffix: str,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{LITELLM_QWEN3_8B_TRAITS_TASTE_METHOD_NAME}_{suffix}",
+        client_name=agent4rec_yes_no.LITELLM_CLIENT_NAME,
+        model=agent4rec_yes_no.QWEN3_8B_MODEL,
+        max_candidate_groups=max_candidate_groups,
+        max_workers=agent4rec_yes_no.QWEN3_8B_MAX_WORKERS,
+        extra_body=agent4rec_yes_no.QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=agent4rec_yes_no.OPENAI_CLIENT,
+        taste_model=agent4rec_yes_no.GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=agent4rec_yes_no.TASTE_TEMPERATURE,
+        taste_max_tokens=agent4rec_yes_no.TASTE_MAX_TOKENS,
+        summary_usage="candidate",
+        serving_metadata=agent4rec_yes_no._serving_metadata(),
+        source_metadata=agent4rec_yes_no._source_metadata(),
+    )
 
 
 def run_qwen36_27b_traits_smoke(
@@ -87,6 +142,7 @@ def run_method(
     taste_max_attempts: int = agent4rec_yes_no.MAX_LLM_ATTEMPTS,
     taste_prompt_version: str | None = None,
     taste_cache_path: Path | None = None,
+    serving_metadata: dict[str, object] | None = None,
     source_metadata: dict[str, object] | None = None,
     summary_usage: Agent4RecSummaryUsage = "candidate",
 ) -> dict[str, object]:
@@ -227,6 +283,7 @@ def run_method(
             "prompt": agent4rec_yes_no.DATASET_PROMPT_KWARGS[dataset_name],
             "summary_usage": summary_usage,
             "item_summaries": item_summary_metadata,
+            "serving": serving_metadata,
         },
         repo_root=repo_root(),
         source_metadata=source_metadata,

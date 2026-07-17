@@ -251,12 +251,18 @@ Available interaction-prediction methods:
 | `agent4rec_yes_no_ollama_llama31_8b_full` | Local Ollama Llama 3.1 8B Agent4Rec-style yes/no scorer on the full selected task. |
 | `agent4rec_yes_no_vllm_llama33_70b_smoke` | vLLM Llama 3.3 70B Agent4Rec-style yes/no scorer on a small candidate-group subset. |
 | `agent4rec_yes_no_vllm_llama33_70b_full` | vLLM Llama 3.3 70B Agent4Rec-style yes/no scorer on the full selected task. |
+| `agent4rec_yes_no_litellm_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_smoke` | LiteLLM Qwen3-8B Agent4Rec-style yes/no scorer with traits, cached `gpt-4o-mini` taste, and candidate summaries on a small candidate-group subset. |
+| `agent4rec_yes_no_litellm_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_full` | LiteLLM Qwen3-8B Agent4Rec-style yes/no scorer with traits, cached `gpt-4o-mini` taste, and candidate summaries on the full selected task. |
 | `agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_smoke` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer with train-derived traits and cached `gpt-4o-mini` taste profiles on a small candidate-group subset. |
 | `agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer with train-derived traits and cached `gpt-4o-mini` taste profiles on the full selected task. |
 | `agent4rec_yes_no_vllm_qwen36_27b_port8001_smoke` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8001` endpoint on a small candidate-group subset. |
 | `agent4rec_yes_no_vllm_qwen36_27b_port8001_full` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8001` endpoint on the full selected task. |
 | `agent4rec_yes_no_vllm_qwen36_27b_port8002_smoke` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8002` endpoint on a small candidate-group subset. |
 | `agent4rec_yes_no_vllm_qwen36_27b_port8002_full` | vLLM Qwen3.6 27B Agent4Rec-style yes/no scorer using the `127.0.0.1:8002` endpoint on the full selected task. |
+
+The corresponding Qwen3-8B Agent4Rec `traits+taste` candidate-summary
+configuration is also registered for listwise ranking as
+`agent4rec_listwise_ranking_litellm_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_{smoke,full}`.
 
 Each LLM yes/no method also has an explicit item-stats variant with `_with_item_stats`
 before `_smoke` / `_full`, for example
@@ -292,6 +298,9 @@ canonical movie summaries in both the history and candidate rows. The generic
 preference runner also accepts `summary_visibility=none|history|candidate|both`;
 movie-summary modes are not available for Steam. ML-1M Agent4Rec preference
 methods use candidate-only summaries under the same canonical-enrichment rule.
+Named Qwen3-8B Agent4Rec `traits+taste` methods are available for both grouped
+yes/no and listwise ranking; they use cached `gpt-4o-mini` taste profiles and
+candidate summaries.
 
 Available regression-prediction methods:
 

@@ -780,3 +780,54 @@ def test_agent4rec_qwen_traits_taste_wrappers_use_openai_taste(
             "summary_usage": "candidate",
         },
     ]
+
+
+def test_agent4rec_qwen3_8b_candidate_summary_wrapper_uses_litellm_and_taste(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(agent4rec_yes_no, "run_method", fake_run_method)
+    monkeypatch.setattr(
+        agent4rec_yes_no,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        agent4rec_yes_no,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+    task = SimpleNamespace(manifest=_ml1m_summary_task().manifest)
+
+    agent4rec_yes_no.run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_smoke(
+        task,
+        tmp_path,
+    )
+
+    assert calls == [
+        {
+            "method_name": (
+                "agent4rec_yes_no_litellm_qwen3_8b_traits_taste_"
+                "gpt4o_mini_candidate_summary_smoke"
+            ),
+            "client_name": "litellm_local",
+            "model": "Qwen/Qwen3-8B",
+            "max_candidate_groups": 25,
+            "max_workers": 64,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "profile_components": ("traits", "taste"),
+            "taste_client_name": "openai",
+            "taste_model": "gpt-4o-mini",
+            "taste_temperature": 0.0,
+            "taste_max_tokens": None,
+            "summary_usage": "candidate",
+            "serving_metadata": {"backend": "test"},
+            "source_metadata": {"snapshot": "test"},
+        }
+    ]
