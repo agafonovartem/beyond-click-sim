@@ -43,6 +43,8 @@ from runners.in_distribution.interaction_prediction.methods.llm_listwise_ranking
     LITELLM_CLIENT_NAME,
     QWEN3_8B_MAX_WORKERS,
     QWEN3_8B_MODEL,
+    QWEN36_27B_MAX_WORKERS,
+    QWEN36_27B_MODEL,
     _serving_metadata,
     _source_metadata,
 )
@@ -79,6 +81,10 @@ GPT4O_MINI_TASTE_CLIENT = "openai_vk_proxy"
 GPT4O_MINI_TASTE_MODEL = "gpt-4o-mini"
 LITELLM_QWEN3_8B_TRAITS_TASTE_METHOD_NAME = (
     "agent4rec_yes_no_litellm_qwen3_8b_traits_taste_gpt4o_mini_"
+    "candidate_summary"
+)
+LITELLM_QWEN36_27B_TRAITS_TASTE_METHOD_NAME = (
+    "agent4rec_yes_no_litellm_qwen36_27b_traits_taste_gpt4o_mini_"
     "candidate_summary"
 )
 TEMPERATURE = 0.0
@@ -282,6 +288,59 @@ def _run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary(
         model=QWEN3_8B_MODEL,
         max_candidate_groups=max_candidate_groups,
         max_workers=QWEN3_8B_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=GPT4O_MINI_TASTE_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="candidate",
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
+    )
+
+
+def run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary(
+        task,
+        output_dir,
+        max_candidate_groups=25,
+        suffix="smoke",
+    )
+
+
+def run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary(
+        task,
+        output_dir,
+        max_candidate_groups=None,
+        suffix="full",
+    )
+
+
+def _run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary(
+    task: Task,
+    output_dir: Path,
+    *,
+    max_candidate_groups: int | None,
+    suffix: str,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=(
+            f"{LITELLM_QWEN36_27B_TRAITS_TASTE_METHOD_NAME}_{suffix}"
+        ),
+        client_name=LITELLM_CLIENT_NAME,
+        model=QWEN36_27B_MODEL,
+        max_candidate_groups=max_candidate_groups,
+        max_workers=QWEN36_27B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits", "taste"),
         taste_client_name=GPT4O_MINI_TASTE_CLIENT,

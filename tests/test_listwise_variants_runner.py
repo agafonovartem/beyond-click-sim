@@ -322,3 +322,79 @@ def test_agent4rec_qwen3_listwise_taste_uses_vk_proxy(
         "gpt-4o-mini",
         "gpt-4o-mini",
     ]
+
+
+def test_agent4rec_qwen36_listwise_candidate_summary_wrappers(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        captured.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(interaction_agent4rec_listwise, "run_method", fake_run_method)
+    monkeypatch.setattr(preference_agent4rec_listwise, "run_method", fake_run_method)
+    monkeypatch.setattr(
+        interaction_agent4rec_listwise.agent4rec_yes_no,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        interaction_agent4rec_listwise.agent4rec_yes_no,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_listwise,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_listwise,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+
+    interaction_agent4rec_listwise.run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_smoke(
+        _task(preference=False),
+        tmp_path,
+    )
+    preference_agent4rec_listwise.run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_smoke(
+        _task(preference=True),
+        tmp_path,
+    )
+
+    assert [call["model"] for call in captured] == [
+        "Qwen/Qwen3.6-27B",
+        "Qwen/Qwen3.6-27B",
+    ]
+    assert [call["max_workers"] for call in captured] == [32, 64]
+    assert [call["taste_client_name"] for call in captured] == [
+        "openai_vk_proxy",
+        "openai_vk_proxy",
+    ]
+    assert [call["summary_usage"] for call in captured] == [
+        "candidate",
+        "candidate",
+    ]
+
+
+def test_qwen36_candidate_summary_methods_are_registered() -> None:
+    assert (
+        "agent4rec_yes_no_litellm_qwen36_27b_traits_taste_gpt4o_mini_"
+        "candidate_summary_full"
+    ) in INTERACTION_METHOD_RUNNERS
+    assert (
+        "agent4rec_listwise_ranking_litellm_qwen36_27b_traits_taste_"
+        "gpt4o_mini_candidate_summary_full"
+    ) in INTERACTION_METHOD_RUNNERS
+    assert (
+        "agent4rec_preference_yes_no_litellm_qwen36_27b_traits_taste_"
+        "gpt4o_mini_candidate_summary_full"
+    ) in PREFERENCE_METHOD_RUNNERS
+    assert (
+        "agent4rec_preference_listwise_ranking_litellm_qwen36_27b_"
+        "traits_taste_gpt4o_mini_candidate_summary_full"
+    ) in PREFERENCE_METHOD_RUNNERS

@@ -831,3 +831,38 @@ def test_agent4rec_qwen3_8b_candidate_summary_wrapper_uses_litellm_and_taste(
             "source_metadata": {"snapshot": "test"},
         }
     ]
+
+
+def test_agent4rec_qwen36_27b_candidate_summary_wrapper_uses_litellm_and_taste(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(agent4rec_yes_no, "run_method", fake_run_method)
+    monkeypatch.setattr(
+        agent4rec_yes_no, "_serving_metadata", lambda: {"backend": "test"}
+    )
+    monkeypatch.setattr(
+        agent4rec_yes_no, "_source_metadata", lambda: {"snapshot": "test"}
+    )
+
+    agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_smoke(
+        SimpleNamespace(manifest=_ml1m_summary_task().manifest),
+        tmp_path,
+    )
+
+    assert captured["method_name"] == (
+        "agent4rec_yes_no_litellm_qwen36_27b_traits_taste_"
+        "gpt4o_mini_candidate_summary_smoke"
+    )
+    assert captured["client_name"] == "litellm_local"
+    assert captured["model"] == "Qwen/Qwen3.6-27B"
+    assert captured["max_workers"] == 32
+    assert captured["profile_components"] == ("traits", "taste")
+    assert captured["taste_client_name"] == "openai_vk_proxy"
+    assert captured["summary_usage"] == "candidate"
