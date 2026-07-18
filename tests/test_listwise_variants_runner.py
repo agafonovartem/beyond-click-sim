@@ -262,3 +262,63 @@ def test_interaction_history_listwise_qwen_methods_are_registered() -> None:
         "llm_listwise_ranking_litellm_qwen36_27b_with_item_stats_full"
         in INTERACTION_METHOD_RUNNERS
     )
+
+
+def test_agent4rec_qwen3_listwise_taste_uses_vk_proxy(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        captured.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(
+        interaction_agent4rec_listwise,
+        "run_method",
+        fake_run_method,
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_listwise,
+        "run_method",
+        fake_run_method,
+    )
+    monkeypatch.setattr(
+        interaction_agent4rec_listwise.agent4rec_yes_no,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        interaction_agent4rec_listwise.agent4rec_yes_no,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_listwise,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_listwise,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+
+    interaction_agent4rec_listwise.run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_smoke(
+        _task(preference=False),
+        tmp_path,
+    )
+    preference_agent4rec_listwise.run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_smoke(
+        _task(preference=True),
+        tmp_path,
+    )
+
+    assert [call["taste_client_name"] for call in captured] == [
+        "openai_vk_proxy",
+        "openai_vk_proxy",
+    ]
+    assert [call["taste_model"] for call in captured] == [
+        "gpt-4o-mini",
+        "gpt-4o-mini",
+    ]

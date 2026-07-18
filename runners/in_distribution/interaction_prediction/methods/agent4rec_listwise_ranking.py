@@ -76,7 +76,7 @@ def _run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary(
         max_workers=agent4rec_yes_no.QWEN3_8B_MAX_WORKERS,
         extra_body=agent4rec_yes_no.QWEN_EXTRA_BODY,
         profile_components=("traits", "taste"),
-        taste_client_name=agent4rec_yes_no.OPENAI_CLIENT,
+        taste_client_name=agent4rec_yes_no.GPT4O_MINI_TASTE_CLIENT,
         taste_model=agent4rec_yes_no.GPT4O_MINI_TASTE_MODEL,
         taste_temperature=agent4rec_yes_no.TASTE_TEMPERATURE,
         taste_max_tokens=agent4rec_yes_no.TASTE_MAX_TOKENS,

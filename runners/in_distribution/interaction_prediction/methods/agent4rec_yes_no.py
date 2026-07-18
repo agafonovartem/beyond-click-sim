@@ -75,7 +75,7 @@ VLLM_QWEN36_27B_PORT8002_METHOD_NAME = (
 VLLM_QWEN36_27B_PORT8002_CLIENT = "vllm_local_8002"
 VLLM_QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
 QWEN_EXTRA_BODY: dict = {"chat_template_kwargs": {"enable_thinking": False}}
-OPENAI_CLIENT = "openai"
+GPT4O_MINI_TASTE_CLIENT = "openai_vk_proxy"
 GPT4O_MINI_TASTE_MODEL = "gpt-4o-mini"
 LITELLM_QWEN3_8B_TRAITS_TASTE_METHOD_NAME = (
     "agent4rec_yes_no_litellm_qwen3_8b_traits_taste_gpt4o_mini_"
@@ -211,7 +211,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_smoke(
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits", "taste"),
-        taste_client_name=OPENAI_CLIENT,
+        taste_client_name=GPT4O_MINI_TASTE_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
@@ -235,7 +235,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_full(
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits", "taste"),
-        taste_client_name=OPENAI_CLIENT,
+        taste_client_name=GPT4O_MINI_TASTE_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
@@ -284,7 +284,7 @@ def _run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary(
         max_workers=QWEN3_8B_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         profile_components=("traits", "taste"),
-        taste_client_name=OPENAI_CLIENT,
+        taste_client_name=GPT4O_MINI_TASTE_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,

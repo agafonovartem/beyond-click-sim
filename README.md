@@ -276,16 +276,19 @@ candidate parsing; Steam methods use game title/genre/tag candidate fields and a
 playtime-oriented profile prompt. The `traits_taste_gpt4o_mini` Qwen methods add
 a separate pre-scoring taste stage: they generate cached `gpt-4o-mini` taste
 profiles from the same 20-item train-history window used by the history LLM
-baseline. Taste outputs are cached as append-only JSONL under
-`outputs/agent4rec_taste_cache/`; `make_llm_client("openai")` loads
-`OPENAI_API_KEY` from the environment or `.env`. The generic ML-1M Agent4Rec
-runner accepts `summary_usage=none|profile|candidate|both`; `profile` controls
-only the taste-generation history, while `candidate` controls the final movie
-rows. Canonical named Agent4Rec methods use candidate summaries whenever the
-task carries canonical movie-summary enrichment, matching the original
-Agent4Rec item profile; profile generation remains summary-free. They fall
-back to `none` for an explicit canonical opt-out and for datasets without a
-configured summary source, including Steam. Treat direct comparisons against
+baseline. For named interaction/preference methods, taste generation uses
+`make_llm_client("openai_vk_proxy")`, which loads `OPENAI_VK_PROXY_API_KEY`
+from the environment or `.env`. Taste outputs are cached as append-only JSONL
+under `outputs/agent4rec_taste_cache/`; cache identity depends on the taste
+model and prompt version rather than the OpenAI-compatible transport. The
+generic ML-1M Agent4Rec runner accepts
+`summary_usage=none|profile|candidate|both`; `profile` controls only the
+taste-generation history, while `candidate` controls the final movie rows.
+Canonical named Agent4Rec methods use candidate summaries whenever the task
+carries canonical movie-summary enrichment, matching the original Agent4Rec
+item profile; profile generation remains summary-free. They fall back to
+`none` for an explicit canonical opt-out and for datasets without a configured
+summary source, including Steam. Treat direct comparisons against
 `llm_yes_no_*` as exploratory unless temperature, token budget, visible item
 fields, and history/profile representation are controlled.
 

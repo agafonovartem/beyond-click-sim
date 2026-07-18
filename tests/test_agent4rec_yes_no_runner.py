@@ -734,7 +734,7 @@ def test_agent4rec_qwen_port_wrappers_use_port_clients(
     ]
 
 
-def test_agent4rec_qwen_traits_taste_wrappers_use_openai_taste(
+def test_agent4rec_qwen_traits_taste_wrappers_use_vk_proxy_taste(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -759,7 +759,7 @@ def test_agent4rec_qwen_traits_taste_wrappers_use_openai_taste(
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
             "profile_components": ("traits", "taste"),
-            "taste_client_name": "openai",
+            "taste_client_name": "openai_vk_proxy",
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,
@@ -773,7 +773,7 @@ def test_agent4rec_qwen_traits_taste_wrappers_use_openai_taste(
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
             "profile_components": ("traits", "taste"),
-            "taste_client_name": "openai",
+            "taste_client_name": "openai_vk_proxy",
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,
@@ -822,7 +822,7 @@ def test_agent4rec_qwen3_8b_candidate_summary_wrapper_uses_litellm_and_taste(
             "max_workers": 64,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
             "profile_components": ("traits", "taste"),
-            "taste_client_name": "openai",
+            "taste_client_name": "openai_vk_proxy",
             "taste_model": "gpt-4o-mini",
             "taste_temperature": 0.0,
             "taste_max_tokens": None,

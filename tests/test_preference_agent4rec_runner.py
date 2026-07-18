@@ -196,3 +196,34 @@ def test_preference_agent4rec_qwen_wrappers_use_planned_models(
             "max_workers": 64,
         },
     ]
+
+
+def test_preference_agent4rec_qwen3_taste_uses_vk_proxy(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(grouped_agent4rec_yes_no, "run_method", fake_run_method)
+    monkeypatch.setattr(
+        preference_agent4rec_yes_no,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_yes_no,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+
+    preference_agent4rec_yes_no.run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_smoke(
+        SimpleNamespace(manifest={"dataset": "ml-1m"}),
+        tmp_path,
+    )
+
+    assert captured["taste_client_name"] == "openai_vk_proxy"
+    assert captured["taste_model"] == "gpt-4o-mini"
