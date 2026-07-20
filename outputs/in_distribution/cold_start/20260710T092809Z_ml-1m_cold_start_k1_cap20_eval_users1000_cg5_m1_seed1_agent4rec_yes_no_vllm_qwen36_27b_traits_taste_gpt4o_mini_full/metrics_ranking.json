@@ -1,0 +1,91 @@
+{
+  "candidate_groups": {
+    "requested": {
+      "groups": 2978,
+      "positives_max": 10,
+      "positives_mean": 9.658159838818,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.316319677636,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 9.658159838818,
+      "sampled_min": 1
+    },
+    "scored": {
+      "groups": 2975,
+      "positives_max": 10,
+      "positives_mean": 9.657815126050421,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.315630252100842,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 9.657815126050421,
+      "sampled_min": 1
+    }
+  },
+  "llm_errors": 3,
+  "main_metric": "test.macro_by_user_group_mean.ndcg@5",
+  "max_candidate_groups": null,
+  "max_workers": 64,
+  "method": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
+  "protocol": "ranking",
+  "ranking_evaluation": {
+    "ks": [
+      1,
+      3,
+      5,
+      10
+    ],
+    "tie_policy": "average"
+  },
+  "requested_rows": 57524,
+  "scored_rows": 57464,
+  "task": "ml-1m_cold_start_k1_cap20_eval_users1000_cg5_m1_seed1",
+  "test": {
+    "macro_by_group": {
+      "groups_with_score_ties": 2962,
+      "groups_with_score_ties_fraction": 0.9956302521008403,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 116,
+      "groups_with_size_lte@3": 24,
+      "groups_with_size_lte@5": 40,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.5438884348502945,
+      "hit_rate@10": 0.9995682737650112,
+      "hit_rate@3": 0.8762506781115674,
+      "hit_rate@5": 0.9611296060277511,
+      "n": 57464,
+      "n_groups": 2975,
+      "n_positive": 28732,
+      "ndcg@1": 0.5438884348502945,
+      "ndcg@10": 0.5653249802698477,
+      "ndcg@3": 0.549663671454933,
+      "ndcg@5": 0.5555858090168856,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 2962,
+      "groups_with_score_ties_fraction": 0.9956302521008403,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 116,
+      "groups_with_size_lte@3": 24,
+      "groups_with_size_lte@5": 40,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.5459208677587188,
+      "hit_rate@10": 0.9996301083289914,
+      "hit_rate@3": 0.8818865208607676,
+      "hit_rate@5": 0.9649894462693482,
+      "n": 57464,
+      "n_groups": 2975,
+      "n_positive": 28732,
+      "n_users": 695,
+      "ndcg@1": 0.5459208677587188,
+      "ndcg@10": 0.5843132188427101,
+      "ndcg@3": 0.5571284085367499,
+      "ndcg@5": 0.5666272122332914,
+      "tie_policy": "average"
+    }
+  }
+}
