@@ -14,6 +14,12 @@ from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMInteractionYesNoScorer
 from beyond_click_sim.tasks import Task
 
+from runners.in_distribution.llm_error_budget import (
+    DEFAULT_MAX_ERROR_RATE,
+    DEFAULT_MIN_GROUPS_BEFORE_CHECK,
+    LLMErrorRateExceededError,
+    check_error_budget,
+)
 from runners.in_distribution.llm_item_stats import (
     item_rating_column_labels,
     maybe_add_item_rating_prompt_columns,
@@ -53,7 +59,7 @@ TEMPERATURE = 0.0
 MAX_TOKENS = 256
 MAX_LLM_ATTEMPTS = 5
 OLLAMA_MAX_WORKERS = 1
-VLLM_MAX_WORKERS = 32
+VLLM_MAX_WORKERS = 128
 
 # ---------------------------------------------------------------------------
 # Prompt columns per dataset — same as Q1/Q2
@@ -465,6 +471,8 @@ def _run(
     run_count: int = 1,
     tie_break: Callable[[list[float]], float] | None = None,
     batch_dedup_mode: str = "ordered",
+    max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
+    min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
 ) -> dict[str, object]:
     if scoring not in ("batch", "itemwise"):
         raise ValueError(f"scoring must be 'batch' or 'itemwise', got {scoring!r}")
@@ -572,15 +580,23 @@ def _run(
         X_to_score["_llm_group_"] = X_to_score["_llm_group_"].map(gid_to_sig)
 
     t = perf_counter()
-    unique_scores, errors = _score_groups(
-        scorer,
-        X_to_score,
-        candidate_group_column="_llm_group_",
-        max_attempts=MAX_LLM_ATTEMPTS,
-        max_workers=max_workers,
-        run_count=run_count,
-        tie_break_fn=tie_break_fn,
-    )
+    try:
+        unique_scores, errors = _score_groups(
+            scorer,
+            X_to_score,
+            candidate_group_column="_llm_group_",
+            max_attempts=MAX_LLM_ATTEMPTS,
+            max_workers=max_workers,
+            run_count=run_count,
+            tie_break_fn=tie_break_fn,
+            method_name=method_name,
+            task_name=task.name,
+            max_error_rate=max_error_rate,
+            min_groups_before_check=min_groups_before_check,
+        )
+    except LLMErrorRateExceededError as error:
+        _write_errors(output_dir / "llm_errors.jsonl", error.errors)
+        raise
     _record(stage_times, "score_test", t)
 
     # Join scores back to the full X_test (including rows filtered by dedup).
@@ -613,12 +629,6 @@ def _run(
     simulated_utilities, real_utilities = compute_policy_utilities(
         X_scored, y_scored, scores_scored, policy_column="policy",
     )
-    if not simulated_utilities:
-        raise RuntimeError(
-            f"All {len(errors)} LLM group(s) failed — no valid scores. "
-            "Check that the server is reachable and the model name is correct. "
-            f"First error: {errors[0] if errors else 'none'}"
-        )
     policy_names = sorted(simulated_utilities)
     agreement = policy_ranking_agreement_metrics(
         policy_names,
@@ -682,6 +692,8 @@ def _run(
             "max_llm_groups": max_llm_groups,
             "max_llm_attempts": MAX_LLM_ATTEMPTS,
             "max_workers": max_workers,
+            "max_error_rate": max_error_rate,
+            "min_groups_before_check": min_groups_before_check,
         },
         "llm_errors": len(errors),
         "groups": {"requested": requested_groups, "unique_score_units": unique_score_units},
@@ -710,14 +722,31 @@ def _score_groups(
     max_workers: int = 1,
     run_count: int = 1,
     tie_break_fn: Callable[[list[float]], float] = majority_vote,
+    method_name: str = "unknown_method",
+    task_name: str = "unknown_task",
+    max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
+    min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
 ) -> tuple[pd.Series, list[dict[str, object]]]:
     scores = pd.Series(index=X.index, dtype=float, name="score")
     errors: list[dict[str, object]] = []
     groups = list(X.groupby(candidate_group_column, sort=False))
+    total = len(groups)
+
+    def _check(attempted: int, *, force: bool = False) -> None:
+        check_error_budget(
+            errors=errors,
+            attempted=attempted,
+            total=total,
+            method_name=method_name,
+            task_name=task_name,
+            max_error_rate=max_error_rate,
+            min_groups_before_check=min_groups_before_check,
+            force=force,
+        )
 
     if max_workers == 1:
         progress = tqdm(groups, desc="llm groups", unit="group")
-        for group_id, group in progress:
+        for attempted, (group_id, group) in enumerate(progress, start=1):
             group_scores, error = _score_one_group(
                 scorer, group_id, group,
                 max_attempts=max_attempts,
@@ -729,6 +758,8 @@ def _score_groups(
                 progress.set_postfix(errors=len(errors))
             else:
                 scores.loc[group_scores.index] = group_scores
+            _check(attempted)
+        _check(total, force=True)
         return scores, errors
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -742,13 +773,21 @@ def _score_groups(
             for group_id, group in groups
         ]
         progress = tqdm(as_completed(futures), total=len(futures), desc="llm groups", unit="group")
+        attempted = 0
         for future in progress:
+            attempted += 1
             group_scores, error = future.result()
             if error is not None:
                 errors.append(error)
                 progress.set_postfix(errors=len(errors))
             else:
                 scores.loc[group_scores.index] = group_scores
+            try:
+                _check(attempted)
+            except LLMErrorRateExceededError:
+                executor.shutdown(wait=False, cancel_futures=True)
+                raise
+    _check(total, force=True)
     return scores, errors
 
 
@@ -767,6 +806,9 @@ def _score_one_group(
     Outer loop (run_count) is deliberate repetition for noise reduction.
     If some but not all runs fail, the successful runs are aggregated.
     The group returns NaN only when every run exhausts all attempts.
+
+    Note: when run_count > 1, only groups where *all* runs fail are surfaced in
+    `errors`; partial per-run failures remain hidden, matching existing behavior.
     """
     per_run_results: list[pd.Series] = []
     all_errors: list[str] = []

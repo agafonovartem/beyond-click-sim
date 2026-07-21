@@ -1017,3 +1017,48 @@ def test_llm_interaction_scorer_itemwise_rejects_group_size_gt_1() -> None:
 
     with pytest.raises(ValueError, match="exactly one row"):
         scorer.score(X_test)
+
+
+def test_llm_interaction_scorer_itemwise_parse_error_includes_raw_response() -> None:
+    X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["Toy Story"]})
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "item_title": ["Lion King"],
+        }
+    )
+    client = FakeClient(["I am not sure, maybe?"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        item_description_columns=("item_title",),
+        prompt_style="itemwise",
+    )
+    scorer.fit(X_train, pd.Series([1]))
+
+    with pytest.raises(ValueError, match="raw_response='I am not sure, maybe\\?'"):
+        scorer.score(X_test)
+
+
+def test_llm_interaction_scorer_batch_parse_error_includes_raw_response() -> None:
+    X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["Toy Story"]})
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "item_title": ["Lion King"],
+        }
+    )
+    client = FakeClient(["this is not the expected format at all"])
+
+    scorer = LLMInteractionYesNoScorer(
+        client=client,
+        model="fake-model",
+        item_description_columns=("item_title",),
+    )
+    scorer.fit(X_train, pd.Series([1]))
+
+    with pytest.raises(ValueError, match="raw_response="):
+        scorer.score(X_test)

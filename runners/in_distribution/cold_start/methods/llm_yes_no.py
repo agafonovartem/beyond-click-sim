@@ -16,6 +16,12 @@ from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMInteractionYesNoScorer
 from beyond_click_sim.tasks import split_xy
 from beyond_click_sim.tasks.cold_start import ColdStartTask
+from runners.in_distribution.llm_error_budget import (
+    DEFAULT_MAX_ERROR_RATE,
+    DEFAULT_MIN_GROUPS_BEFORE_CHECK,
+    LLMErrorRateExceededError,
+    check_error_budget,
+)
 from runners.in_distribution.llm_item_stats import (
     item_rating_column_labels,
     maybe_add_item_rating_prompt_columns,
@@ -73,6 +79,7 @@ def run_llama31_8b_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, obj
         model=OLLAMA_LLAMA31_8B_MODEL,
         max_candidate_groups=25,
         max_workers=OLLAMA_MAX_WORKERS,
+        scoring="batch",
     )
 
 
@@ -85,6 +92,33 @@ def run_llama31_8b_full(task: ColdStartTask, output_dir: Path) -> dict[str, obje
         model=OLLAMA_LLAMA31_8B_MODEL,
         max_candidate_groups=None,
         max_workers=OLLAMA_MAX_WORKERS,
+        scoring="batch",
+    )
+
+
+def run_llama31_8b_itemwise_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_itemwise_smoke",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=25,
+        max_workers=OLLAMA_MAX_WORKERS,
+        scoring="itemwise",
+    )
+
+
+def run_llama31_8b_itemwise_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_itemwise_full",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=None,
+        max_workers=OLLAMA_MAX_WORKERS,
+        scoring="itemwise",
     )
 
 
@@ -97,6 +131,7 @@ def run_llama33_70b_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, ob
         model=VLLM_LLAMA33_70B_MODEL,
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
+        scoring="batch",
     )
 
 
@@ -109,6 +144,33 @@ def run_llama33_70b_full(task: ColdStartTask, output_dir: Path) -> dict[str, obj
         model=VLLM_LLAMA33_70B_MODEL,
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
+        scoring="batch",
+    )
+
+
+def run_llama33_70b_itemwise_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_itemwise_smoke",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        scoring="itemwise",
+    )
+
+
+def run_llama33_70b_itemwise_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_itemwise_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        scoring="itemwise",
     )
 
 
@@ -122,6 +184,7 @@ def run_qwen36_27b_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, obj
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
+        scoring="batch",
     )
 
 
@@ -135,6 +198,35 @@ def run_qwen36_27b_full(task: ColdStartTask, output_dir: Path) -> dict[str, obje
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
+        scoring="batch",
+    )
+
+
+def run_qwen36_27b_itemwise_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_27b_itemwise_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_full",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        scoring="itemwise",
     )
 
 
@@ -153,14 +245,22 @@ def run_method(
     max_workers: int = 1,
     use_item_stats: bool = False,
     extra_body: dict | None = None,
+    scoring: str = "itemwise",
+    max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
+    min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
 ) -> dict[str, object]:
     """Run the yes/no LLM scorer for cold-start interaction alignment.
 
     The scorer is fitted on task.online_session_history — the cold user's k earliest
     temporal interactions — not on task.train (which contains only warm-user rows and
     would give the LLM zero per-cold-user context).
+
+    `scoring="itemwise"` (default) issues one LLM call per candidate. `scoring="batch"`
+    issues one LLM call per full candidate group (all positives + negatives together).
     """
 
+    if scoring not in ("batch", "itemwise"):
+        raise ValueError(f"scoring must be 'batch' or 'itemwise', got {scoring!r}")
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
     prompt_columns = maybe_add_item_rating_prompt_columns(
@@ -201,15 +301,28 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
+        prompt_style=scoring,
     ).fit(X_history, y_history)
 
-    scores, errors = _score_groups(
-        scorer,
-        X_test,
-        candidate_group_column=candidate_group_column,
-        max_attempts=max_llm_attempts,
-        max_workers=max_workers,
-    )
+    X_scoring, score_group_column = _assign_itemwise_groups(
+        X_test, candidate_group_column=candidate_group_column
+    ) if scoring == "itemwise" else (X_test, candidate_group_column)
+
+    try:
+        scores, errors = _score_groups(
+            scorer,
+            X_scoring,
+            candidate_group_column=score_group_column,
+            max_attempts=max_llm_attempts,
+            max_workers=max_workers,
+            method_name=method_name,
+            task_name=task.name,
+            max_error_rate=max_error_rate,
+            min_groups_before_check=min_groups_before_check,
+        )
+    except LLMErrorRateExceededError as error:
+        _write_errors(output_dir / "llm_errors.jsonl", error.errors)
+        raise
     valid = scores.notna()
     predictions = scores.astype("boolean").rename("prediction")
     prediction_frame(
@@ -220,9 +333,6 @@ def run_method(
         predictions=predictions,
     ).to_parquet(output_dir / "predictions.parquet", index=False)
     _write_errors(output_dir / "llm_errors.jsonl", errors)
-
-    if not valid.any():
-        raise RuntimeError("LLM scorer did not produce any valid scores")
 
     valid_scores = scores.loc[valid]
     valid_X = X_test.loc[valid].copy()
@@ -275,6 +385,7 @@ def run_method(
             "column_labels": column_labels,
             "uses_item_stats": use_item_stats,
             "extra_body": extra_body,
+            "prompt_style": scoring,
         },
         "decision_rule": {
             "kind": "hard_binary_yes_no_parser",
@@ -284,6 +395,8 @@ def run_method(
             "max_candidate_groups": max_candidate_groups,
             "max_llm_attempts": max_llm_attempts,
             "max_workers": max_workers,
+            "max_error_rate": max_error_rate,
+            "min_groups_before_check": min_groups_before_check,
         },
         "llm_errors": len(errors),
         "candidate_groups": {
@@ -310,6 +423,7 @@ def run_method(
         "requested_rows": int(len(X_test)),
         "max_candidate_groups": max_candidate_groups,
         "max_workers": max_workers,
+        "scoring": scoring,
         "candidate_groups": {
             "requested": requested_candidate_groups,
             "scored": scored_candidate_groups,
@@ -330,6 +444,7 @@ def run_method(
         "requested_rows": int(len(X_test)),
         "max_candidate_groups": max_candidate_groups,
         "max_workers": max_workers,
+        "scoring": scoring,
         "candidate_groups": {
             "requested": requested_candidate_groups,
             "scored": scored_candidate_groups,
@@ -341,6 +456,25 @@ def run_method(
     return result
 
 
+_ITEMWISE_GROUP_COLUMN = "_itemwise_group_"
+
+
+def _assign_itemwise_groups(
+    X: pd.DataFrame, *, candidate_group_column: str
+) -> tuple[pd.DataFrame, str]:
+    """Explode a candidate-group column into one row per group for itemwise scoring.
+
+    Cold-start candidate rows are already unique per (candidate_group, item), so a
+    per-row group id is sufficient — unlike policy_ranking_agreement, there is no
+    cross-group duplication of the same (user, item) pair to dedupe here.
+    """
+
+    del candidate_group_column
+    X_itemwise = X.copy()
+    X_itemwise[_ITEMWISE_GROUP_COLUMN] = X_itemwise.index.astype(str)
+    return X_itemwise, _ITEMWISE_GROUP_COLUMN
+
+
 def _score_groups(
     scorer: LLMInteractionYesNoScorer,
     X: pd.DataFrame,
@@ -348,6 +482,10 @@ def _score_groups(
     candidate_group_column: str,
     max_attempts: int,
     max_workers: int = 1,
+    method_name: str,
+    task_name: str,
+    max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
+    min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
 ) -> tuple[pd.Series, list[dict[str, object]]]:
     if max_workers < 1:
         raise ValueError("max_workers must be positive")
@@ -357,10 +495,23 @@ def _score_groups(
     scores = pd.Series(index=X.index, dtype=float, name="score")
     errors: list[dict[str, object]] = []
     groups = list(X.groupby(candidate_group_column, sort=False))
+    total = len(groups)
+
+    def _check(attempted: int, *, force: bool = False) -> None:
+        check_error_budget(
+            errors=errors,
+            attempted=attempted,
+            total=total,
+            method_name=method_name,
+            task_name=task_name,
+            max_error_rate=max_error_rate,
+            min_groups_before_check=min_groups_before_check,
+            force=force,
+        )
 
     if max_workers == 1:
         progress = tqdm(groups, desc="llm groups", unit="group")
-        for group_id, group in progress:
+        for attempted, (group_id, group) in enumerate(progress, start=1):
             group_scores, error = _score_one_group(
                 scorer,
                 group_id,
@@ -372,6 +523,8 @@ def _score_groups(
                 progress.set_postfix(errors=len(errors))
             else:
                 scores.loc[group_scores.index] = group_scores
+            _check(attempted)
+        _check(total, force=True)
         return scores, errors
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -391,13 +544,21 @@ def _score_groups(
             desc="llm groups",
             unit="group",
         )
+        attempted = 0
         for future in progress:
+            attempted += 1
             group_scores, error = future.result()
             if error is not None:
                 errors.append(error)
                 progress.set_postfix(errors=len(errors))
             else:
                 scores.loc[group_scores.index] = group_scores
+            try:
+                _check(attempted)
+            except LLMErrorRateExceededError:
+                executor.shutdown(wait=False, cancel_futures=True)
+                raise
+        _check(total, force=True)
     return scores, errors
 
 

@@ -1,0 +1,46 @@
+# Local litellm proxy: routes requests across each pod's forwarded litellm proxy.
+# Current batch: port_forward.sh with BASE_PORT=8001 → pods agent-exp-0..7 on 8001-8008.
+model_list:
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8001/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8002/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8003/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8004/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8005/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8006/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8007/v1
+      api_key: "not-needed"
+  - model_name: Qwen/Qwen3.6-27B
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B
+      api_base: http://localhost:8008/v1
+      api_key: "not-needed"
+
+router_settings:
+  routing_strategy: least-busy  # or "usage-based-routing", "latency-based-routing"

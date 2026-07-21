@@ -16,6 +16,11 @@ from beyond_click_sim.scorers.agent4rec.prompts import (
 )
 from beyond_click_sim.tasks import Task
 
+from runners.in_distribution.llm_error_budget import (
+    DEFAULT_MAX_ERROR_RATE,
+    DEFAULT_MIN_GROUPS_BEFORE_CHECK,
+    LLMErrorRateExceededError,
+)
 from runners.in_distribution.item_summaries import (
     Agent4RecSummaryUsage,
     ITEM_SUMMARY_COLUMN,
@@ -57,7 +62,7 @@ MAX_HISTORY_ITEMS = 20
 MAX_LLM_ATTEMPTS = 5
 TASTE_TEMPERATURE = 0.0
 TASTE_MAX_TOKENS = None
-VLLM_MAX_WORKERS = 32
+VLLM_MAX_WORKERS = 128
 
 DATASET_CANDIDATE_COLUMNS = {
     "ml-1m": ("item_title", "item_genres"),
@@ -200,6 +205,8 @@ def run_method(
     max_workers: int = 1,
     extra_body: dict | None = None,
     summary_usage: Agent4RecSummaryUsage = "candidate",
+    max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
+    min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based yes/no scorer for policy ranking agreement."""
 
@@ -302,15 +309,23 @@ def run_method(
     if uses_taste:
         scorer.build_taste(X_test)
 
-    scores, errors = _score_groups(
-        scorer,
-        X_test,
-        candidate_group_column="_llm_group_",
-        max_attempts=max_llm_attempts,
-        max_workers=max_workers,
-        run_count=1,
-        tie_break_fn=majority_vote,
-    )
+    try:
+        scores, errors = _score_groups(
+            scorer,
+            X_test,
+            candidate_group_column="_llm_group_",
+            max_attempts=max_llm_attempts,
+            max_workers=max_workers,
+            run_count=1,
+            tie_break_fn=majority_vote,
+            method_name=method_name,
+            task_name=task.name,
+            max_error_rate=max_error_rate,
+            min_groups_before_check=min_groups_before_check,
+        )
+    except LLMErrorRateExceededError as error:
+        _write_errors(output_dir / "llm_errors.jsonl", error.errors)
+        raise
 
     valid = scores.notna()
     X_scored = X_test.loc[valid].drop(columns=["_llm_group_"])
@@ -320,11 +335,6 @@ def run_method(
     simulated_utilities, real_utilities = compute_policy_utilities(
         X_scored, y_scored, scores_scored, policy_column="policy",
     )
-    if not simulated_utilities:
-        raise RuntimeError(
-            "Agent4Rec policy ranking scorer did not produce any valid scores. "
-            f"First error: {errors[0] if errors else 'none'}"
-        )
     policy_names = sorted(simulated_utilities)
     agreement = policy_ranking_agreement_metrics(
         policy_names,
@@ -379,6 +389,8 @@ def run_method(
             "max_candidate_groups": max_candidate_groups,
             "max_llm_attempts": max_llm_attempts,
             "max_workers": max_workers,
+            "max_error_rate": max_error_rate,
+            "min_groups_before_check": min_groups_before_check,
         },
         "llm_errors": len(errors),
         "groups": {"requested": requested_groups},

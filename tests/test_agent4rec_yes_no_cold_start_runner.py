@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from runners.in_distribution.cold_start.methods import agent4rec_yes_no  # noqa: E402
+from runners.in_distribution.llm_error_budget import LLMErrorRateExceededError  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +196,7 @@ def test_cold_start_agent4rec_runner_writes_all_artifacts(
         max_candidate_groups=None,
         max_llm_attempts=1,
         max_workers=1,
+        scoring="batch",
     )
 
     assert result["scored_rows"] == 2
@@ -208,6 +210,46 @@ def test_cold_start_agent4rec_runner_writes_all_artifacts(
     predictions = pd.read_parquet(tmp_path / "predictions.parquet")
     assert predictions["score"].tolist() == [1.0, 0.0]
     assert predictions["prediction"].tolist() == [True, False]
+
+
+# ---------------------------------------------------------------------------
+# Itemwise scoring — default mode
+# ---------------------------------------------------------------------------
+
+
+def test_cold_start_agent4rec_runner_itemwise_scores_one_call_per_candidate(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Itemwise (the run_method default) must issue one LLM call per candidate
+    row, not one call per ~20-item candidate group, and must record the mode
+    in manifest.json for provenance."""
+
+    client = FakeClient(["yes", "no"])
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: client)
+
+    task = _ml1m_cold_task()
+    result = agent4rec_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="agent4rec_yes_no_cold_start_itemwise_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+    )
+
+    assert result["scoring"] == "itemwise"
+    assert result["scored_rows"] == 2
+    assert result["requested_rows"] == 2
+    assert result["llm_errors"] == 0
+    assert len(client.completions.calls) == 2
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["prompt_style"] == "itemwise"
+
+    predictions = pd.read_parquet(tmp_path / "predictions.parquet")
+    assert sorted(predictions["score"].tolist()) == [0.0, 1.0]
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +304,7 @@ def test_cold_start_agent4rec_runner_fits_on_online_session_history_not_train(
         max_candidate_groups=None,
         max_llm_attempts=1,
         max_workers=1,
+        scoring="batch",
     )
 
     assert result["scored_rows"] == 2, (
@@ -297,12 +340,14 @@ def test_cold_start_agent4rec_runner_manifest_records_fit_on_history_and_k(
         max_candidate_groups=None,
         max_llm_attempts=1,
         max_workers=1,
+        scoring="batch",
     )
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["scorer"]["fit_on"] == "online_session_history"
     assert manifest["scorer"]["k"] == task.k
     assert manifest["scorer"]["class"] == "Agent4RecYesNoScorer"
+    assert manifest["scorer"]["prompt_style"] == "batch"
     # Basic ml-1m config must NOT include item_rating_mean
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
@@ -339,6 +384,7 @@ def test_cold_start_agent4rec_runner_item_stats_includes_rating_mean_column(
         max_llm_attempts=1,
         max_workers=1,
         use_item_stats=True,
+        scoring="batch",
     )
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
@@ -455,6 +501,7 @@ def test_cold_start_agent4rec_runner_taste_profile_writes_cache(
         profile_components=("traits", "taste"),
         taste_client_name="openai",
         taste_model="gpt-4o-mini",
+        scoring="batch",
     )
 
     assert result["scored_rows"] == 2
@@ -579,6 +626,7 @@ def test_cold_start_agent4rec_qwen_smoke_and_full_wrappers(
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
             "summary_usage": "candidate",
+            "scoring": "batch",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_full",
@@ -588,6 +636,7 @@ def test_cold_start_agent4rec_qwen_smoke_and_full_wrappers(
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
             "summary_usage": "candidate",
+            "scoring": "batch",
         },
     ]
 
@@ -619,6 +668,7 @@ def test_cold_start_agent4rec_qwen_traits_taste_wrappers(
             "taste_client_name": "openai",
             "taste_model": "gpt-4o-mini",
             "summary_usage": "candidate",
+            "scoring": "batch",
         },
         {
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_traits_taste_gpt4o_mini_full",
@@ -631,5 +681,42 @@ def test_cold_start_agent4rec_qwen_traits_taste_wrappers(
             "taste_client_name": "openai",
             "taste_model": "gpt-4o-mini",
             "summary_usage": "candidate",
+            "scoring": "batch",
         },
     ]
+
+
+def test_cold_start_agent4rec_runner_fails_fast_and_persists_partial_errors(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client = FakeClient(["maybe", "maybe"])
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: client)
+    task = _ml1m_cold_task()
+
+    with pytest.raises(LLMErrorRateExceededError):
+        agent4rec_yes_no.run_method(
+            task,
+            tmp_path,
+            method_name="agent4rec_yes_no_fail_fast_test",
+            client_name="fake",
+            model="fake-model",
+            max_candidate_groups=None,
+            max_llm_attempts=1,
+            max_workers=1,
+            scoring="itemwise",
+            max_error_rate=0.10,
+            min_groups_before_check=1,
+        )
+
+    assert (tmp_path / "llm_errors.jsonl").exists()
+    errors = [
+        json.loads(line)
+        for line in (tmp_path / "llm_errors.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(errors) == 1
+    assert "raw_response='maybe'" in errors[0]["errors"][0]
+
+    assert not (tmp_path / "predictions.parquet").exists()
+    assert not (tmp_path / "manifest.json").exists()
+    assert not (tmp_path / "metrics.json").exists()
+    assert not (tmp_path / "metrics_ranking.json").exists()
