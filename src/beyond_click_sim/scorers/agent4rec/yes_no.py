@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 
 from beyond_click_sim.scorers.agent4rec.prompts import (
+    agent4rec_itemwise_user_prompt,
     agent4rec_preference_user_prompt,
     agent4rec_system_prompt,
     agent4rec_user_prompt,
@@ -22,6 +23,7 @@ from beyond_click_sim.scorers.history.selection import (
     UserHistory,
     select_history_by_user,
 )
+from beyond_click_sim.scorers.history.yes_no import parse_single_yes_no_response
 
 
 class Agent4RecYesNoScorer(Scorer):
@@ -50,6 +52,7 @@ class Agent4RecYesNoScorer(Scorer):
         entity_field: str = "MOVIE",
         entity_name: str = "movie",
         entity_plural: str = "movies",
+        prompt_style: str = "batch",
     ) -> None:
         if candidate_description_columns is None:
             candidate_description_columns = item_description_columns
@@ -57,6 +60,10 @@ class Agent4RecYesNoScorer(Scorer):
             raise ValueError("candidate_description_columns must be non-empty")
         if max_history_items is not None and max_history_items < 0:
             raise ValueError("max_history_items must be non-negative")
+        if prompt_style not in ("batch", "itemwise"):
+            raise ValueError(
+                f"prompt_style must be 'batch' or 'itemwise', got {prompt_style!r}"
+            )
 
         self.client = client
         self.model = model
@@ -80,6 +87,7 @@ class Agent4RecYesNoScorer(Scorer):
         self.entity_field = entity_field
         self.entity_name = entity_name
         self.entity_plural = entity_plural
+        self.prompt_style = prompt_style
         self.profile_by_user_: dict[Any, Agent4RecUserProfile] | None = None
         self.history_by_user_: dict[Any, UserHistory] | None = None
 
@@ -149,7 +157,12 @@ class Agent4RecYesNoScorer(Scorer):
         return self
 
     def score(self, X: pd.DataFrame) -> pd.Series:
-        """Score explicit candidate groups with one LLM call per group."""
+        """Score explicit candidate groups.
+
+        In `prompt_style="batch"`, all candidates in a group share one LLM call.
+        In `prompt_style="itemwise"` (default), each group must contain exactly
+        one candidate row and gets its own LLM call with a bare yes/no answer.
+        """
 
         if self.profile_by_user_ is None:
             raise RuntimeError("Agent4RecYesNoScorer is not fitted")
@@ -170,6 +183,31 @@ class Agent4RecYesNoScorer(Scorer):
             if len(user_ids) != 1:
                 raise ValueError("Each candidate group must contain exactly one user")
 
+            if self.prompt_style == "itemwise":
+                if len(group) != 1:
+                    raise ValueError(
+                        "prompt_style='itemwise' requires groups of exactly one row; "
+                        f"got {len(group)} rows in group"
+                    )
+                candidate_row = next(group.itertuples(index=False))
+                messages = self._build_itemwise_messages(
+                    user_id=user_ids.iloc[0],
+                    candidate=candidate_row,
+                )
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    **({"extra_body": self.extra_body} if self.extra_body else {}),
+                )
+                text = _chat_completion_text(response)
+                try:
+                    scores.loc[group.index[0]] = parse_single_yes_no_response(text)
+                except ValueError as error:
+                    raise ValueError(f"{error} | raw_response={text!r}") from error
+                continue
+
             candidate_labels = _candidate_labels(len(group))
             messages = self._build_messages(
                 user_id=user_ids.iloc[0],
@@ -183,10 +221,11 @@ class Agent4RecYesNoScorer(Scorer):
                 max_tokens=self.max_tokens,
                 **({"extra_body": self.extra_body} if self.extra_body else {}),
             )
-            parsed = self._parse_response(
-                _chat_completion_text(response),
-                labels=candidate_labels,
-            )
+            text = _chat_completion_text(response)
+            try:
+                parsed = self._parse_response(text, labels=candidate_labels)
+            except ValueError as error:
+                raise ValueError(f"{error} | raw_response={text!r}") from error
             scores.loc[group.index] = [parsed[label] for label in candidate_labels]
 
         return scores
@@ -235,6 +274,51 @@ class Agent4RecYesNoScorer(Scorer):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
+
+    def _build_itemwise_messages(
+        self,
+        *,
+        user_id: Any,
+        candidate: Any,
+    ) -> list[dict[str, str]]:
+        if self.profile_by_user_ is None:
+            raise RuntimeError("Agent4RecYesNoScorer is not fitted")
+        if user_id not in self.profile_by_user_:
+            raise ValueError(f"No fitted Agent4Rec profile for user: {user_id!r}")
+
+        profile = self.profile_by_user_[user_id]
+        if "taste" in self.profile_generator.profile_components and not profile.taste:
+            raise RuntimeError(
+                "Agent4RecYesNoScorer requires taste profiles for this method. "
+                "Call scorer.build_taste(X_eval) before score()."
+            )
+        formatted_taste = _format_agent4rec_taste(profile.taste) or None
+        system_prompt = self._format_system_prompt(profile, taste=formatted_taste)
+        candidate_description = self._format_item_description(
+            row=candidate,
+            columns=self.candidate_description_columns,
+        )
+        user_prompt = self._build_itemwise_user_prompt(
+            candidate=candidate_description,
+            taste=formatted_taste,
+        )
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def _build_itemwise_user_prompt(
+        self,
+        *,
+        candidate: str,
+        taste: str | None,
+    ) -> str:
+        return agent4rec_itemwise_user_prompt(
+            candidate=candidate,
+            taste=taste,
+            entity_name=self.entity_name,
+            entity_plural=self.entity_plural,
+        )
 
     def _build_user_prompt(
         self,

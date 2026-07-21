@@ -14,11 +14,30 @@ fi
 
 PORT=$((8000 + GPU_ID))
 
-export MODEL_NAME="Qwen/Qwen3.6-27B"
+export MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3.6-27B}"
+export MODEL_PATH="$HOME/$MODEL_NAME"
 export TENSOR_PARALLEL_SIZE=1
 export DATA_PARALLEL_SIZE=1
+export HF_HUB_DISABLE_XET="1"
+export HF_ENDPOINT="http://huggingface.proxy"
 
-CUDA_VISIBLE_DEVICES="$GPU_ID" vllm serve --port "$PORT" "$MODEL_NAME" --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" --data-parallel-size "$DATA_PARALLEL_SIZE" --max-model-len 32000 --max-num-seqs=16 --enable-prefix-caching --gpu-memory-utilization 0.95
+# vllm serve requires the model as the first positional argument (not after --port),
+# and must point at the local download dir from install.sh's --local-dir download
+# rather than the bare repo id, since the default HF endpoint isn't reachable from
+# the pod and the --local-dir layout isn't the default HF cache layout vllm expects.
+#
+# For Qwen3-style models, --reasoning-parser qwen3 + --default-chat-template-kwargs
+# '{"enable_thinking": false}' disable thinking/reasoning output by default.
+# A client can still opt back in per-request via
+# extra_body={"chat_template_kwargs": {"enable_thinking": true}}.
+VLLM_EXTRA_ARGS=()
+case "$MODEL_NAME" in
+    Qwen/*)
+        VLLM_EXTRA_ARGS+=(--reasoning-parser qwen3 --default-chat-template-kwargs '{"enable_thinking": false}')
+        ;;
+esac
+
+CUDA_VISIBLE_DEVICES="$GPU_ID" vllm serve "$MODEL_PATH" --port "$PORT" --served-model-name "$MODEL_NAME" --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" --data-parallel-size "$DATA_PARALLEL_SIZE" --max-model-len 32000 --max-num-seqs=16 --enable-prefix-caching --gpu-memory-utilization 0.95 "${VLLM_EXTRA_ARGS[@]}"
 
 # CUDA_VISIBLE_DEVICES=0 vllm serve --port 8000 $MODEL_NAME --tensor-parallel-size $TENSOR_PARALLEL_SIZE --data-parallel-size $DATA_PARALLEL_SIZE --max-model-len 32000 --max-num-seqs=16 --enable-prefix-caching --gpu-memory-utilization 0.95
 # CUDA_VISIBLE_DEVICES=1 vllm serve --port 8001 $MODEL_NAME --tensor-parallel-size $TENSOR_PARALLEL_SIZE --data-parallel-size $DATA_PARALLEL_SIZE --max-model-len 32000 --max-num-seqs=16 --enable-prefix-caching --gpu-memory-utilization 0.95

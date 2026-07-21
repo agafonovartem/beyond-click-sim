@@ -166,6 +166,48 @@ def agent4rec_user_prompt(
     )
 
 
+AGENT4REC_ITEMWISE_USER_PROMPT_TEMPLATE = """##candidate {entity_name}##
+{candidate}
+Would you {positive_action} this {entity_name}?
+{profile_instruction}
+Answer with exactly one word: yes or no."""
+
+
+def agent4rec_itemwise_user_prompt(
+    *,
+    candidate: str,
+    taste: str | None,
+    entity_name: str = "movie",
+    entity_plural: str = "movies",
+) -> str:
+    """Build the Agent4Rec single-candidate itemwise user prompt."""
+
+    use_original_movie_wording = entity_name == "movie" and entity_plural == "movies"
+    profile_instruction = (
+        (
+            _AGENT4REC_TASTE_USER_INSTRUCTION
+            if use_original_movie_wording
+            else _AGENT4REC_ENTITY_TASTE_USER_INSTRUCTION_TEMPLATE.format(
+                entity_plural=entity_plural,
+            )
+        )
+        if taste
+        else (
+            _AGENT4REC_PROFILE_USER_INSTRUCTION
+            if use_original_movie_wording
+            else _AGENT4REC_ENTITY_PROFILE_USER_INSTRUCTION_TEMPLATE.format(
+                entity_name=entity_name,
+            )
+        )
+    )
+    return AGENT4REC_ITEMWISE_USER_PROMPT_TEMPLATE.format(
+        candidate=candidate,
+        entity_name=entity_name,
+        positive_action="watch" if use_original_movie_wording else "choose",
+        profile_instruction=profile_instruction,
+    )
+
+
 AGENT4REC_PREFERENCE_USER_PROMPT_TEMPLATE = """##recommended list##
 {candidates}
 Positive-preference target:

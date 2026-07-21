@@ -18,6 +18,7 @@ directly to count LLM calls.
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -29,6 +30,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from beyond_click_sim.scorers import LLMInteractionYesNoScorer
+from runners.in_distribution.llm_error_budget import LLMErrorRateExceededError
 from runners.in_distribution.policy_ranking_agreement.methods.llm_yes_no import (
     _score_groups,
     _score_one_group,
@@ -45,8 +47,8 @@ class FakeChatCompletions:
         self.responses = responses
         self.calls: list[dict] = []
 
-    def create(self, **kwargs):
-        self.calls.append(kwargs)
+    def create(self, **_kwargs):
+        self.calls.append(_kwargs)
         response = self.responses.pop(0)
         return SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content=response))]
@@ -292,7 +294,7 @@ def test_itemwise_dedup_calls_each_pair_once() -> None:
         "policy":     ["PX",       "PX",       "PY",       "PY"],
         "_llm_group_": ["u1::PX::A","u1::PX::B","u1::PY::A","u1::PY::B"],
     })
-    X_test_with_key, X_to_score = _apply_itemwise_dedup(X_test)
+    _X_test_with_key, X_to_score = _apply_itemwise_dedup(X_test)
 
     client = FakeClient(["yes", "no"])  # exactly 2 responses
     X_train = pd.DataFrame({"user_id": ["u1"], "item_title": ["History"]})
@@ -306,7 +308,7 @@ def test_itemwise_dedup_calls_each_pair_once() -> None:
     )
     scorer.fit(X_train, pd.Series([1]))
 
-    unique_scores, errors = _score_groups(
+    _unique_scores, errors = _score_groups(
         scorer, X_to_score,
         candidate_group_column="_llm_group_",
         max_attempts=1,
@@ -430,3 +432,66 @@ def test_batch_dedup_different_item_sets_always_different() -> None:
     for mode in ("ordered", "unordered"):
         group_sigs = _compute_batch_sigs(X_test, mode)
         assert len(set(group_sigs.values())) == 2, f"failed in mode={mode!r}"
+
+
+def test_score_groups_fails_fast_when_error_rate_exceeded_single_thread() -> None:
+    class AlwaysFailScorer:
+        def score(self, group):  # noqa: ANN001
+            raise ValueError("simulated parser failure")
+
+    scorer = AlwaysFailScorer()
+    X = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1"],
+            "item_title": ["A", "B", "C"],
+            "_llm_group_": ["g1", "g2", "g3"],
+        }
+    )
+
+    with pytest.raises(LLMErrorRateExceededError):
+        _score_groups(
+            scorer,
+            X,
+            candidate_group_column="_llm_group_",
+            max_attempts=1,
+            max_workers=1,
+            method_name="test_method",
+            task_name="test_task",
+            max_error_rate=0.10,
+            min_groups_before_check=1,
+        )
+
+
+def test_score_groups_threaded_stops_dispatching_after_budget_exceeded() -> None:
+    class SlowAlwaysFailScorer:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def score(self, _group):  # noqa: ANN001
+            self.calls += 1
+            time.sleep(0.03)
+            raise ValueError("simulated parser failure")
+
+    scorer = SlowAlwaysFailScorer()
+    X = pd.DataFrame(
+        {
+            "user_id": ["u1"] * 12,
+            "item_title": [f"item_{idx}" for idx in range(12)],
+            "_llm_group_": [f"g{idx}" for idx in range(12)],
+        }
+    )
+
+    with pytest.raises(LLMErrorRateExceededError):
+        _score_groups(
+            scorer,
+            X,
+            candidate_group_column="_llm_group_",
+            max_attempts=1,
+            max_workers=4,
+            method_name="test_method",
+            task_name="test_task",
+            max_error_rate=0.10,
+            min_groups_before_check=1,
+        )
+
+    assert scorer.calls < 12

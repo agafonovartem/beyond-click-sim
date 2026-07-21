@@ -13,6 +13,11 @@ from beyond_click_sim.scorers import Agent4RecProfileGenerator, Agent4RecYesNoSc
 from beyond_click_sim.scorers.agent4rec.prompts import AGENT4REC_TASTE_PROMPT_VERSION
 from beyond_click_sim.tasks import PREFIXED_ITEM_RATING_MEAN_COLUMN, split_xy
 from beyond_click_sim.tasks.cold_start import ColdStartTask
+from runners.in_distribution.llm_error_budget import (
+    DEFAULT_MAX_ERROR_RATE,
+    DEFAULT_MIN_GROUPS_BEFORE_CHECK,
+    LLMErrorRateExceededError,
+)
 from runners.in_distribution.item_summaries import (
     Agent4RecSummaryUsage,
     ITEM_SUMMARY_COLUMN,
@@ -22,6 +27,7 @@ from runners.in_distribution.item_summaries import (
     task_item_summary_metadata,
 )
 from runners.in_distribution.cold_start.methods.llm_yes_no import (
+    _assign_itemwise_groups,
     _score_groups,
     _write_errors,
 )
@@ -92,6 +98,7 @@ def run_llama31_8b_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, obj
         max_candidate_groups=25,
         max_workers=OLLAMA_MAX_WORKERS,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
     )
 
 
@@ -104,6 +111,33 @@ def run_llama31_8b_full(task: ColdStartTask, output_dir: Path) -> dict[str, obje
         max_candidate_groups=None,
         max_workers=OLLAMA_MAX_WORKERS,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_llama31_8b_itemwise_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_itemwise_smoke",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=25,
+        max_workers=OLLAMA_MAX_WORKERS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_llama31_8b_itemwise_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_itemwise_full",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT,
+        model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=None,
+        max_workers=OLLAMA_MAX_WORKERS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
     )
 
 
@@ -116,6 +150,7 @@ def run_llama33_70b_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, ob
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
     )
 
 
@@ -128,6 +163,33 @@ def run_llama33_70b_full(task: ColdStartTask, output_dir: Path) -> dict[str, obj
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_llama33_70b_itemwise_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_itemwise_smoke",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_llama33_70b_itemwise_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_itemwise_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
     )
 
 
@@ -141,6 +203,7 @@ def run_qwen36_27b_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, obj
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
     )
 
 
@@ -154,6 +217,35 @@ def run_qwen36_27b_full(task: ColdStartTask, output_dir: Path) -> dict[str, obje
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_27b_itemwise_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_27b_itemwise_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_full",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
     )
 
 
@@ -172,6 +264,7 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_smoke(
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
     )
 
 
@@ -190,6 +283,45 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_full(
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_27b_itemwise_traits_taste_gpt4o_mini_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_traits_taste_gpt4o_mini_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_27b_itemwise_traits_taste_gpt4o_mini_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_traits_taste_gpt4o_mini_full",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
     )
 
 
@@ -206,6 +338,7 @@ def run_qwen36_27b_item_stats_smoke(
         extra_body=QWEN_EXTRA_BODY,
         use_item_stats=True,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
     )
 
 
@@ -222,6 +355,41 @@ def run_qwen36_27b_item_stats_full(
         extra_body=QWEN_EXTRA_BODY,
         use_item_stats=True,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_27b_itemwise_item_stats_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_item_stats_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_27b_itemwise_item_stats_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_item_stats_full",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
     )
 
 
@@ -241,6 +409,7 @@ def run_qwen36_27b_item_stats_traits_taste_gpt4o_mini_smoke(
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
     )
 
 
@@ -260,6 +429,51 @@ def run_qwen36_27b_item_stats_traits_taste_gpt4o_mini_full(
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
         summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_27b_itemwise_item_stats_traits_taste_gpt4o_mini_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=(
+            f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_item_stats_traits_taste_gpt4o_mini_smoke"
+        ),
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_27b_itemwise_item_stats_traits_taste_gpt4o_mini_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=(
+            f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_item_stats_traits_taste_gpt4o_mini_full"
+        ),
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
     )
 
 
@@ -285,6 +499,9 @@ def run_method(
     max_workers: int = 1,
     extra_body: dict | None = None,
     summary_usage: Agent4RecSummaryUsage = "candidate",
+    scoring: str = "itemwise",
+    max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
+    min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
 ) -> dict[str, object]:
     """Run Agent4Rec yes/no scorer for cold-start evaluation.
 
@@ -292,7 +509,12 @@ def run_method(
     task.train contains only warm users and provides no per-cold-user context.
     Trait groupings are degenerate for k=1 (all users same activity count) but
     valid; more informative for k=3 and k=5.
+
+    `scoring="itemwise"` (default) issues one LLM call per candidate. `scoring="batch"`
+    issues one LLM call per full candidate group (all positives + negatives together).
     """
+    if scoring not in ("batch", "itemwise"):
+        raise ValueError(f"scoring must be 'batch' or 'itemwise', got {scoring!r}")
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
     config_key = f"{dataset_name}_item_stats" if use_item_stats else dataset_name
@@ -368,18 +590,31 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
+        prompt_style=scoring,
     ).fit(X_history, y_history, profile_user_ids=profile_user_ids)
 
     if uses_taste:
         scorer.build_taste(X_test)
 
-    scores, errors = _score_groups(
-        scorer,
-        X_test,
-        candidate_group_column=candidate_group_column,
-        max_attempts=max_llm_attempts,
-        max_workers=max_workers,
-    )
+    X_scoring, score_group_column = _assign_itemwise_groups(
+        X_test, candidate_group_column=candidate_group_column
+    ) if scoring == "itemwise" else (X_test, candidate_group_column)
+
+    try:
+        scores, errors = _score_groups(
+            scorer,
+            X_scoring,
+            candidate_group_column=score_group_column,
+            max_attempts=max_llm_attempts,
+            max_workers=max_workers,
+            method_name=method_name,
+            task_name=task.name,
+            max_error_rate=max_error_rate,
+            min_groups_before_check=min_groups_before_check,
+        )
+    except LLMErrorRateExceededError as error:
+        _write_errors(output_dir / "llm_errors.jsonl", error.errors)
+        raise
     valid = scores.notna()
     predictions = scores.astype("boolean").rename("prediction")
     prediction_frame(
@@ -390,9 +625,6 @@ def run_method(
         predictions=predictions,
     ).to_parquet(output_dir / "predictions.parquet", index=False)
     _write_errors(output_dir / "llm_errors.jsonl", errors)
-
-    if not valid.any():
-        raise RuntimeError("Agent4Rec cold-start scorer did not produce any valid scores")
 
     valid_scores = scores.loc[valid]
     valid_X = X_test.loc[valid].copy()
@@ -442,6 +674,7 @@ def run_method(
             "extra_body": extra_body,
             "summary_usage": summary_usage,
             "item_summaries": item_summary_metadata,
+            "prompt_style": scoring,
         },
         "decision_rule": {
             "kind": "hard_binary_yes_no_parser",
@@ -451,6 +684,8 @@ def run_method(
             "max_candidate_groups": max_candidate_groups,
             "max_llm_attempts": max_llm_attempts,
             "max_workers": max_workers,
+            "max_error_rate": max_error_rate,
+            "min_groups_before_check": min_groups_before_check,
         },
         "llm_errors": len(errors),
         "candidate_groups": {
@@ -477,6 +712,7 @@ def run_method(
         "requested_rows": int(len(X_test)),
         "max_candidate_groups": max_candidate_groups,
         "max_workers": max_workers,
+        "scoring": scoring,
         "candidate_groups": {
             "requested": requested_candidate_groups,
             "scored": scored_candidate_groups,
@@ -497,6 +733,7 @@ def run_method(
         "requested_rows": int(len(X_test)),
         "max_candidate_groups": max_candidate_groups,
         "max_workers": max_workers,
+        "scoring": scoring,
         "candidate_groups": {
             "requested": requested_candidate_groups,
             "scored": scored_candidate_groups,

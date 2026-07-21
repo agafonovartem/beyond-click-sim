@@ -309,7 +309,180 @@ def test_agent4rec_yes_no_scorer_uses_profile_prompt() -> None:
     assert "Toy Story" not in user_prompt
 
 
-def test_agent4rec_preference_scorer_uses_target_aware_profile_prompt() -> None:
+# ---------------------------------------------------------------------------
+# Agent4RecYesNoScorer — itemwise prompt style
+# ---------------------------------------------------------------------------
+
+
+def test_agent4rec_yes_no_scorer_rejects_invalid_prompt_style() -> None:
+    with pytest.raises(ValueError, match="prompt_style"):
+        Agent4RecYesNoScorer(
+            client=FakeClient([]),
+            model="fake-model",
+            candidate_description_columns=("item_title",),
+            prompt_style="unknown",
+        )
+
+
+def test_agent4rec_yes_no_scorer_itemwise_uses_bare_yes_no_prompt() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1"],
+            "item_id": ["i1", "i2", "i3"],
+            "item_title": ["Toy Story", "Aladdin", "Heat"],
+            "item_genres": ["Animation|Comedy", "Animation", "Crime"],
+            "rating": [5, 4, 2],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "item_title": ["Lion King"],
+            "item_genres": ["Animation"],
+        },
+        index=["a"],
+    )
+    client = FakeClient(["yes"])
+
+    scorer = Agent4RecYesNoScorer(
+        client=client,
+        model="fake-model",
+        candidate_description_columns=("item_title", "item_genres"),
+        prompt_style="itemwise",
+    ).fit(X_train, pd.Series([1, 1, 1], name="target"))
+    scores = scorer.score(X_test)
+
+    assert scores.to_dict() == {"a": 1.0}
+    assert len(client.completions.calls) == 1
+    system_prompt = client.completions.calls[0]["messages"][0]["content"]
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "Your activity trait is described as:" in system_prompt
+    assert "##candidate movie##" in user_prompt
+    assert "Would you watch this movie?" in user_prompt
+    assert "Answer with exactly one word: yes or no." in user_prompt
+    assert "C1" not in user_prompt
+    assert "WATCH:" not in user_prompt
+
+
+def test_agent4rec_yes_no_scorer_itemwise_scores_each_item_separately() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_id": ["i1"],
+            "item_title": ["Toy Story"],
+            "item_genres": ["Animation"],
+            "rating": [5],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "candidate_group": ["g1", "g2"],
+            "item_title": ["Lion King", "Godfather"],
+            "item_genres": ["Animation", "Crime"],
+        },
+        index=["a", "b"],
+    )
+    client = FakeClient(["yes", "no"])
+
+    scorer = Agent4RecYesNoScorer(
+        client=client,
+        model="fake-model",
+        candidate_description_columns=("item_title", "item_genres"),
+        prompt_style="itemwise",
+    ).fit(X_train, pd.Series([1], name="target"))
+    scores = scorer.score(X_test)
+
+    assert scores.to_dict() == {"a": 1.0, "b": 0.0}
+    assert len(client.completions.calls) == 2
+
+
+def test_agent4rec_yes_no_scorer_itemwise_rejects_group_size_gt_1() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_id": ["i1"],
+            "item_title": ["Toy Story"],
+            "item_genres": ["Animation"],
+            "rating": [5],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "candidate_group": ["g1", "g1"],
+            "item_title": ["Lion King", "Godfather"],
+            "item_genres": ["Animation", "Crime"],
+        },
+        index=["a", "b"],
+    )
+    scorer = Agent4RecYesNoScorer(
+        client=FakeClient(["yes"]),
+        model="fake-model",
+        candidate_description_columns=("item_title", "item_genres"),
+        prompt_style="itemwise",
+    ).fit(X_train, pd.Series([1], name="target"))
+
+    with pytest.raises(ValueError, match="exactly one row"):
+        scorer.score(X_test)
+
+
+def test_agent4rec_yes_no_scorer_itemwise_parse_error_includes_raw_response() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_id": ["i1"],
+            "item_title": ["Toy Story"],
+            "item_genres": ["Animation"],
+            "rating": [5],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "item_title": ["Lion King"],
+            "item_genres": ["Animation"],
+        }
+    )
+    scorer = Agent4RecYesNoScorer(
+        client=FakeClient(["I am not sure, maybe?"]),
+        model="fake-model",
+        candidate_description_columns=("item_title", "item_genres"),
+        prompt_style="itemwise",
+    ).fit(X_train, pd.Series([1], name="target"))
+
+    with pytest.raises(ValueError, match="raw_response='I am not sure, maybe\\?'"):
+        scorer.score(X_test)
+
+
+def test_agent4rec_yes_no_scorer_batch_parse_error_includes_raw_response() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "item_id": ["i1"],
+            "item_title": ["Toy Story"],
+            "item_genres": ["Animation"],
+            "rating": [5],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "candidate_group": ["g1"],
+            "item_title": ["Lion King"],
+            "item_genres": ["Animation"],
+        }
+    )
+    scorer = Agent4RecYesNoScorer(
+        client=FakeClient(["this is not the expected format at all"]),
+        model="fake-model",
+        candidate_description_columns=("item_title", "item_genres"),
+    ).fit(X_train, pd.Series([1], name="target"))
+
+    with pytest.raises(ValueError, match="raw_response="):
+        scorer.score(X_test)
     X_train = pd.DataFrame(
         {
             "user_id": ["u1", "u1", "u1"],

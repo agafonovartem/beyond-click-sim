@@ -193,9 +193,11 @@ class LLMInteractionYesNoScorer(Scorer):
                     max_tokens=self.max_tokens,
                     **({"extra_body": self.extra_body} if self.extra_body else {}),
                 )
-                scores.loc[group.index[0]] = parse_single_yes_no_response(
-                    _chat_completion_text(response)
-                )
+                text = _chat_completion_text(response)
+                try:
+                    scores.loc[group.index[0]] = parse_single_yes_no_response(text)
+                except ValueError as error:
+                    raise ValueError(f"{error} | raw_response={text!r}") from error
             else:
                 labels = [f"C{position}" for position in range(1, len(group) + 1)]
                 messages = self._build_messages(
@@ -210,10 +212,11 @@ class LLMInteractionYesNoScorer(Scorer):
                     max_tokens=self.max_tokens,
                     **({"extra_body": self.extra_body} if self.extra_body else {}),
                 )
-                parsed = parse_yes_no_response(
-                    _chat_completion_text(response),
-                    labels=labels,
-                )
+                text = _chat_completion_text(response)
+                try:
+                    parsed = parse_yes_no_response(text, labels=labels)
+                except ValueError as error:
+                    raise ValueError(f"{error} | raw_response={text!r}") from error
                 scores.loc[group.index] = [parsed[label] for label in labels]
 
         return scores

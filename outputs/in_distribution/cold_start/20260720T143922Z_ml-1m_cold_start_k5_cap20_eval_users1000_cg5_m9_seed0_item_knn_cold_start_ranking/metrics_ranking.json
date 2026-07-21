@@ -1,0 +1,140 @@
+{
+  "candidate_groups": {
+    "test": {
+      "groups": 5000,
+      "positives_max": 2,
+      "positives_mean": 2.0,
+      "positives_min": 2,
+      "rows_max": 20,
+      "rows_mean": 20.0,
+      "rows_min": 20,
+      "sampled_max": 18,
+      "sampled_mean": 18.0,
+      "sampled_min": 18
+    },
+    "val": {
+      "groups": 3020,
+      "positives_max": 2,
+      "positives_mean": 2.0,
+      "positives_min": 2,
+      "rows_max": 20,
+      "rows_mean": 20.0,
+      "rows_min": 20,
+      "sampled_max": 18,
+      "sampled_mean": 18.0,
+      "sampled_min": 18
+    }
+  },
+  "main_metric": "test.macro_by_user_group_mean.ndcg@5",
+  "method": "item_knn_cold_start_ranking",
+  "protocol": "ranking",
+  "ranking_evaluation": {
+    "ks": [
+      1,
+      3,
+      5,
+      10
+    ],
+    "tie_policy": "average"
+  },
+  "stage_times_seconds": {
+    "candidate_group_summary": 0.016,
+    "compute_ranking_metrics": 1.049,
+    "fit": 0.472,
+    "prepare_xy": 0.011,
+    "score_test": 0.135,
+    "score_val": 0.083,
+    "write_predictions": 0.056
+  },
+  "task": "ml-1m_cold_start_k5_cap20_eval_users1000_cg5_m9_seed0",
+  "test": {
+    "macro_by_group": {
+      "groups_with_score_ties": 5000,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.3389,
+      "hit_rate@10": 0.8325986842105263,
+      "hit_rate@3": 0.49407602339181284,
+      "hit_rate@5": 0.6093969298245614,
+      "n": 100000,
+      "n_groups": 5000,
+      "n_positive": 10000,
+      "ndcg@1": 0.3389,
+      "ndcg@10": 0.42109772273271256,
+      "ndcg@3": 0.298575356675666,
+      "ndcg@5": 0.34011651132933174,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 5000,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.33890000000000003,
+      "hit_rate@10": 0.8325986842105265,
+      "hit_rate@3": 0.4940760233918128,
+      "hit_rate@5": 0.6093969298245613,
+      "n": 100000,
+      "n_groups": 5000,
+      "n_positive": 10000,
+      "n_users": 1000,
+      "ndcg@1": 0.33890000000000003,
+      "ndcg@10": 0.42109772273271256,
+      "ndcg@3": 0.29857535667566604,
+      "ndcg@5": 0.34011651132933174,
+      "tie_policy": "average"
+    }
+  },
+  "val": {
+    "macro_by_group": {
+      "groups_with_score_ties": 3020,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.3357615894039735,
+      "hit_rate@10": 0.8299648371024952,
+      "hit_rate@3": 0.48611595213198555,
+      "hit_rate@5": 0.6032512865724889,
+      "n": 60400,
+      "n_groups": 3020,
+      "n_positive": 6040,
+      "ndcg@1": 0.3357615894039735,
+      "ndcg@10": 0.4169365531922657,
+      "ndcg@3": 0.29322794162550075,
+      "ndcg@5": 0.3353060874641977,
+      "tie_policy": "average"
+    },
+    "macro_by_user_group_mean": {
+      "groups_with_score_ties": 3020,
+      "groups_with_score_ties_fraction": 1.0,
+      "groups_with_size_lte@1": 0,
+      "groups_with_size_lte@10": 0,
+      "groups_with_size_lte@3": 0,
+      "groups_with_size_lte@5": 0,
+      "groups_without_positive": 0,
+      "hit_rate@1": 0.33576158940397355,
+      "hit_rate@10": 0.8299648371024951,
+      "hit_rate@3": 0.48611595213198555,
+      "hit_rate@5": 0.6032512865724888,
+      "n": 60400,
+      "n_groups": 3020,
+      "n_positive": 6040,
+      "n_users": 604,
+      "ndcg@1": 0.33576158940397355,
+      "ndcg@10": 0.4169365531922658,
+      "ndcg@3": 0.2932279416255008,
+      "ndcg@5": 0.33530608746419766,
+      "tie_policy": "average"
+    }
+  }
+}

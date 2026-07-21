@@ -133,8 +133,10 @@ def test_llm_yes_no_runner_retries_and_keeps_failed_rows(
             "attempts": 2,
             "candidate_group": "g2",
             "errors": [
-                "ValueError(\"Invalid yes/no answer for 'C1': 'maybe'\")",
-                "ValueError(\"Invalid yes/no answer for 'C1': 'maybe'\")",
+                "ValueError(\"Invalid yes/no answer for 'C1': 'maybe' | "
+                "raw_response='C1: maybe\\\\nC2: no'\")",
+                "ValueError(\"Invalid yes/no answer for 'C1': 'maybe' | "
+                "raw_response='C1: maybe\\\\nC2: no'\")",
             ],
         }
     ]
