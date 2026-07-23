@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -55,6 +56,13 @@ VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
 VLLM_QWEN36_27B_METHOD_NAME = "llm_yes_no_vllm_qwen36_27b"
 VLLM_QWEN36_27B_CLIENT = "vllm_local"
 VLLM_QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
+LITELLM_CLIENT_NAME = "litellm_local"
+LITELLM_QWEN3_8B_METHOD_NAME = "llm_yes_no_litellm_qwen3_8b"
+LITELLM_QWEN3_8B_MODEL = "Qwen/Qwen3-8B"
+LITELLM_QWEN3_8B_MAX_WORKERS = 64
+LITELLM_QWEN36_27B_METHOD_NAME = "llm_yes_no_litellm_qwen36_27b"
+LITELLM_QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
+LITELLM_QWEN36_27B_MAX_WORKERS = 32
 OPENAI_VK_GPT54_MINI_METHOD_NAME = "llm_yes_no_openai_vk_gpt54_mini"
 OPENAI_VK_GPT54_MINI_CLIENT = "openai_vk_proxy"
 OPENAI_VK_GPT54_MINI_MODEL = "gpt-5.4-mini"
@@ -264,6 +272,86 @@ def run_qwen36_27b_with_item_stats_full(
         max_workers=VLLM_MAX_WORKERS,
         use_item_stats=True,
         extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_litellm_qwen3_8b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_litellm_qwen_with_item_stats(
+        task,
+        output_dir,
+        method_name=f"{LITELLM_QWEN3_8B_METHOD_NAME}_with_item_stats_smoke",
+        model=LITELLM_QWEN3_8B_MODEL,
+        max_candidate_groups=25,
+        max_workers=LITELLM_QWEN3_8B_MAX_WORKERS,
+    )
+
+
+def run_litellm_qwen3_8b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_litellm_qwen_with_item_stats(
+        task,
+        output_dir,
+        method_name=f"{LITELLM_QWEN3_8B_METHOD_NAME}_with_item_stats_full",
+        model=LITELLM_QWEN3_8B_MODEL,
+        max_candidate_groups=None,
+        max_workers=LITELLM_QWEN3_8B_MAX_WORKERS,
+    )
+
+
+def run_litellm_qwen36_27b_with_item_stats_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_litellm_qwen_with_item_stats(
+        task,
+        output_dir,
+        method_name=f"{LITELLM_QWEN36_27B_METHOD_NAME}_with_item_stats_smoke",
+        model=LITELLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=LITELLM_QWEN36_27B_MAX_WORKERS,
+    )
+
+
+def run_litellm_qwen36_27b_with_item_stats_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_litellm_qwen_with_item_stats(
+        task,
+        output_dir,
+        method_name=f"{LITELLM_QWEN36_27B_METHOD_NAME}_with_item_stats_full",
+        model=LITELLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=LITELLM_QWEN36_27B_MAX_WORKERS,
+    )
+
+
+def _run_litellm_qwen_with_item_stats(
+    task: Task,
+    output_dir: Path,
+    *,
+    method_name: str,
+    model: str,
+    max_candidate_groups: int | None,
+    max_workers: int,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=method_name,
+        client_name=LITELLM_CLIENT_NAME,
+        model=model,
+        max_candidate_groups=max_candidate_groups,
+        max_workers=max_workers,
+        use_item_stats=True,
+        extra_body=QWEN_EXTRA_BODY,
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
     )
 
 
@@ -692,3 +780,56 @@ def _write_errors(path: Path, errors: list[dict[str, object]]) -> None:
     with path.open("w", encoding="utf-8") as file:
         for error in errors:
             file.write(json.dumps(error, sort_keys=True) + "\n")
+
+
+def _serving_metadata() -> dict[str, object]:
+    return {
+        "backend": "litellm_proxy_over_vllm",
+        "litellm_base_url": os.environ.get(
+            "BEYOND_CLICK_SIM_LITELLM_LOCAL_BASE_URL",
+            "http://127.0.0.1:8080/v1",
+        ),
+        "litellm_version": os.environ.get(
+            "BEYOND_CLICK_SIM_LITELLM_VERSION",
+            "unknown",
+        ),
+        "routing_strategy": os.environ.get(
+            "BEYOND_CLICK_SIM_LITELLM_ROUTING_STRATEGY",
+            "simple-shuffle",
+        ),
+        "vllm_version": os.environ.get(
+            "BEYOND_CLICK_SIM_VLLM_VERSION",
+            "unknown",
+        ),
+        "vllm_replicas": int(
+            os.environ.get("BEYOND_CLICK_SIM_VLLM_REPLICAS", "4")
+        ),
+        "vllm_ports": [8000, 8001, 8002, 8003],
+        "tensor_parallel_size_per_replica": 1,
+        "max_model_len": int(
+            os.environ.get("BEYOND_CLICK_SIM_VLLM_MAX_MODEL_LEN", "4096")
+        ),
+        "gpu_memory_utilization": float(
+            os.environ.get(
+                "BEYOND_CLICK_SIM_VLLM_GPU_MEMORY_UTILIZATION",
+                "0.90",
+            )
+        ),
+        "model_revision": os.environ.get(
+            "BEYOND_CLICK_SIM_MODEL_REVISION",
+            "unknown",
+        ),
+        "thinking_enabled": False,
+    }
+
+
+def _source_metadata() -> dict[str, object]:
+    return {
+        "base_git_commit": os.environ.get(
+            "BEYOND_CLICK_SIM_SOURCE_BASE_GIT_COMMIT"
+        ),
+        "snapshot_sha256": os.environ.get(
+            "BEYOND_CLICK_SIM_SOURCE_SNAPSHOT_SHA256"
+        ),
+        "diff_sha256": os.environ.get("BEYOND_CLICK_SIM_SOURCE_DIFF_SHA256"),
+    }

@@ -60,7 +60,7 @@ def test_openai_vk_proxy_client_uses_vk_proxy_env_key(monkeypatch) -> None:
 
     assert isinstance(client, FakeOpenAI)
     assert dotenv_calls == [True]
-    assert FakeHTTPXClient.calls == [{"trust_env": False}]
+    assert FakeHTTPXClient.calls == [{"timeout": 60.0, "trust_env": False}]
     assert isinstance(FakeOpenAI.calls[0]["http_client"], FakeHTTPXClient)
     assert FakeOpenAI.calls == [
         {
@@ -82,6 +82,17 @@ def test_openai_vk_proxy_client_requires_env_key(monkeypatch) -> None:
     assert dotenv_calls == [True]
     assert FakeHTTPXClient.calls == []
     assert FakeOpenAI.calls == []
+
+
+def test_openai_vk_proxy_client_reads_timeout_after_dotenv(monkeypatch) -> None:
+    dotenv_calls = patch_client_dependencies(monkeypatch)
+    monkeypatch.setenv("OPENAI_VK_PROXY_API_KEY", "test-vk-proxy-key")
+    monkeypatch.setenv("BEYOND_CLICK_SIM_OPENAI_TIMEOUT_SECONDS", "123.5")
+
+    llm_clients.openai_vk_proxy_client()
+
+    assert dotenv_calls == [True]
+    assert FakeHTTPXClient.calls == [{"timeout": 123.5, "trust_env": False}]
 
 
 def test_vllm_client_passes_base_url_and_api_key(monkeypatch) -> None:
@@ -132,7 +143,7 @@ def test_make_llm_client_uses_fixed_named_clients(monkeypatch) -> None:
         assert call["timeout"] == 120.0
         assert call["trust_env"] is False
         assert "limits" in call
-    assert FakeHTTPXClient.calls[3] == {"trust_env": False}
+    assert FakeHTTPXClient.calls[3] == {"timeout": 60.0, "trust_env": False}
     assert isinstance(FakeOpenAI.calls[1]["http_client"], FakeHTTPXClient)
     assert isinstance(FakeOpenAI.calls[2]["http_client"], FakeHTTPXClient)
     assert isinstance(FakeOpenAI.calls[3]["http_client"], FakeHTTPXClient)

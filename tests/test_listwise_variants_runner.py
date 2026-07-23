@@ -398,3 +398,96 @@ def test_qwen36_candidate_summary_methods_are_registered() -> None:
         "agent4rec_preference_listwise_ranking_litellm_qwen36_27b_"
         "traits_taste_gpt4o_mini_candidate_summary_full"
     ) in PREFERENCE_METHOD_RUNNERS
+
+
+def test_agent4rec_listwise_no_summary_wrappers_support_steam(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        captured.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(
+        interaction_agent4rec_listwise,
+        "run_method",
+        fake_run_method,
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_listwise,
+        "run_method",
+        fake_run_method,
+    )
+    monkeypatch.setattr(
+        interaction_agent4rec_listwise.agent4rec_yes_no,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        interaction_agent4rec_listwise.agent4rec_yes_no,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_listwise,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_listwise,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+    task = SimpleNamespace(manifest={"dataset": "steam"})
+
+    interaction_agent4rec_listwise.run_qwen3_8b_traits_taste_gpt4o_mini_no_summary_smoke(
+        task,
+        tmp_path,
+    )
+    interaction_agent4rec_listwise.run_qwen36_27b_traits_taste_gpt4o_mini_no_summary_full(
+        task,
+        tmp_path,
+    )
+    preference_agent4rec_listwise.run_qwen3_8b_traits_taste_gpt4o_mini_no_summary_smoke(
+        task,
+        tmp_path,
+    )
+    preference_agent4rec_listwise.run_qwen36_27b_traits_taste_gpt4o_mini_no_summary_full(
+        task,
+        tmp_path,
+    )
+
+    assert [call["model"] for call in captured] == [
+        "Qwen/Qwen3-8B",
+        "Qwen/Qwen3.6-27B",
+        "Qwen/Qwen3-8B",
+        "Qwen/Qwen3.6-27B",
+    ]
+    assert [call["summary_usage"] for call in captured] == [
+        "none",
+        "none",
+        "none",
+        "none",
+    ]
+    assert all(
+        call["profile_components"] == ("traits", "taste")
+        for call in captured
+    )
+    assert (
+        "agent4rec_listwise_ranking_litellm_qwen3_8b_traits_taste_"
+        "gpt4o_mini_no_summary_full"
+    ) in INTERACTION_METHOD_RUNNERS
+    assert (
+        "agent4rec_listwise_ranking_litellm_qwen36_27b_traits_taste_"
+        "gpt4o_mini_no_summary_full"
+    ) in INTERACTION_METHOD_RUNNERS
+    assert (
+        "agent4rec_preference_listwise_ranking_litellm_qwen3_8b_"
+        "traits_taste_gpt4o_mini_no_summary_full"
+    ) in PREFERENCE_METHOD_RUNNERS
+    assert (
+        "agent4rec_preference_listwise_ranking_litellm_qwen36_27b_"
+        "traits_taste_gpt4o_mini_no_summary_full"
+    ) in PREFERENCE_METHOD_RUNNERS

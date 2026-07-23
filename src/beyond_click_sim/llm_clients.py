@@ -68,7 +68,10 @@ def openai_vk_proxy_client(
     api_key = os.environ.get(api_key_env)
     if not api_key:
         raise RuntimeError(f"{api_key_env} is not set")
-    http_client = httpx.Client(trust_env=trust_env)
+    http_client = httpx.Client(
+        timeout=_float_env(OPENAI_TIMEOUT_SECONDS_ENV, default=60.0),
+        trust_env=trust_env,
+    )
     return OpenAI(
         base_url=base_url,
         api_key=api_key,

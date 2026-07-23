@@ -3,9 +3,9 @@
 Tracked defects in the **current** code, especially the in-distribution interaction-prediction
 pipeline (popularity + LLM yes/no scorers, pointwise and raw-score ranking) and the first
 rating-regression protocol, including protocol-validity and provenance gaps that affect how current
-outputs should be interpreted. Unimplemented future work — preference tasks, additional regression
-targets/methods, additional negative samplers, stronger classic baselines, temporal/stratified
-splitters, direct re-ranking prompts, policy-ranking, OOD, behavioral extrapolation, memorization
+outputs should be interpreted. Unimplemented future work — additional regression targets/methods,
+additional negative samplers, stronger classic baselines, temporal/stratified splitters, OOD,
+behavioral extrapolation, memorization
 — is not listed here; it lives in the design notes
 (`architecture_note.md`, `in_distribution_scenarios.md`, `notes.md`).
 

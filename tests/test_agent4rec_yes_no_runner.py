@@ -15,6 +15,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from runners.in_distribution.interaction_prediction.methods import agent4rec_yes_no  # noqa: E402
+from runners.in_distribution.interaction_prediction.methods import (  # noqa: E402
+    METHOD_RUNNERS,
+)
 
 
 class FakeChatCompletions:
@@ -866,3 +869,58 @@ def test_agent4rec_qwen36_27b_candidate_summary_wrapper_uses_litellm_and_taste(
     assert captured["profile_components"] == ("traits", "taste")
     assert captured["taste_client_name"] == "openai_vk_proxy"
     assert captured["summary_usage"] == "candidate"
+
+
+def test_agent4rec_no_summary_wrappers_support_steam_for_both_qwen_models(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(agent4rec_yes_no, "run_method", fake_run_method)
+    monkeypatch.setattr(
+        agent4rec_yes_no,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        agent4rec_yes_no,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+    task = SimpleNamespace(manifest={"dataset": "steam"})
+
+    agent4rec_yes_no.run_qwen3_8b_traits_taste_gpt4o_mini_no_summary_smoke(
+        task,
+        tmp_path,
+    )
+    agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_no_summary_full(
+        task,
+        tmp_path,
+    )
+
+    assert [call["model"] for call in calls] == [
+        "Qwen/Qwen3-8B",
+        "Qwen/Qwen3.6-27B",
+    ]
+    assert [call["summary_usage"] for call in calls] == ["none", "none"]
+    assert [call["profile_components"] for call in calls] == [
+        ("traits", "taste"),
+        ("traits", "taste"),
+    ]
+    assert [call["taste_client_name"] for call in calls] == [
+        "openai_vk_proxy",
+        "openai_vk_proxy",
+    ]
+    assert (
+        "agent4rec_yes_no_litellm_qwen3_8b_traits_taste_"
+        "gpt4o_mini_no_summary_full"
+    ) in METHOD_RUNNERS
+    assert (
+        "agent4rec_yes_no_litellm_qwen36_27b_traits_taste_"
+        "gpt4o_mini_no_summary_full"
+    ) in METHOD_RUNNERS

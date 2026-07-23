@@ -268,6 +268,9 @@ Each LLM yes/no method also has an explicit item-stats variant with `_with_item_
 before `_smoke` / `_full`, for example
 `llm_yes_no_ollama_llama31_8b_with_item_stats_smoke`. Use these with item-stats
 task variants when the prompt should expose average rating and number of prior reviews.
+The two Qwen backbones have matched LiteLLM/vLLM methods for both output
+contracts:
+`llm_{yes_no,listwise_ranking}_litellm_qwen{3_8b,36_27b}_with_item_stats_{smoke,full}`.
 
 The current Agent4Rec yes/no scorer has dataset-specific prompt/profile configs
 for ML-1M and Steam. ML-1M methods build train-only traits (`activity`,
@@ -292,8 +295,14 @@ summary source, including Steam. Treat direct comparisons against
 `llm_yes_no_*` as exploratory unless temperature, token budget, visible item
 fields, and history/profile representation are controlled.
 
+For matched Steam runs, use the explicit
+`agent4rec[_preference]_{yes_no,listwise_ranking}_litellm_qwen{3_8b,36_27b}_traits_taste_gpt4o_mini_no_summary_{smoke,full}`
+methods. They expose game title, genres, and tags, generate playtime-oriented
+taste profiles through the VK `gpt-4o-mini` client, and record
+`summary_usage=none` in the manifest.
+
 > [!NOTE]
-> LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; the default vLLM client is expected at `http://127.0.0.1:8000/v1`. VK AI proxy methods use `https://ai-proxy.vk.team/v1` and load `OPENAI_VK_PROXY_API_KEY` from the environment or `.env`. Some Agent4Rec Qwen methods intentionally target additional local vLLM ports `8001` and `8002`.
+> LLM methods use OpenAI-compatible clients. Ollama is expected at `http://localhost:11434/v1`; the default vLLM client is expected at `http://127.0.0.1:8000/v1`. VK AI proxy methods use `https://ai-proxy.vk.team/v1` and load `OPENAI_VK_PROXY_API_KEY` from the environment or `.env`. Set `BEYOND_CLICK_SIM_OPENAI_TIMEOUT_SECONDS` to override the 60-second OpenAI/VK request timeout and `BEYOND_CLICK_SIM_OPENAI_MAX_RETRIES` to override the default of zero SDK-level retries. Some Agent4Rec Qwen methods intentionally target additional local vLLM ports `8001` and `8002`.
 
 Available preference-prediction LLM methods include Qwen3-8B and Qwen3.6-27B
 `_smoke` / `_full` variants. Their ML-1M `_summary_full` variants expose

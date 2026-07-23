@@ -264,3 +264,68 @@ def test_preference_agent4rec_qwen36_taste_summary_uses_matching_model(
     assert captured["max_workers"] == 64
     assert captured["taste_client_name"] == "openai_vk_proxy"
     assert captured["summary_usage"] == "candidate"
+
+
+def test_preference_agent4rec_no_summary_wrappers_support_steam(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(grouped_agent4rec_yes_no, "run_method", fake_run_method)
+    monkeypatch.setattr(
+        preference_agent4rec_yes_no,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        preference_agent4rec_yes_no,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+    task = SimpleNamespace(manifest={"dataset": "steam"})
+
+    preference_agent4rec_yes_no.run_qwen3_8b_traits_taste_gpt4o_mini_no_summary_smoke(
+        task,
+        tmp_path,
+    )
+    preference_agent4rec_yes_no.run_qwen36_27b_traits_taste_gpt4o_mini_no_summary_full(
+        task,
+        tmp_path,
+    )
+
+    assert [call["model"] for call in calls] == [
+        "Qwen/Qwen3-8B",
+        "Qwen/Qwen3.6-27B",
+    ]
+    assert [call["summary_usage"] for call in calls] == ["none", "none"]
+    assert [call["candidate_description_columns"] for call in calls] == [
+        ("item_title", "item_genres_json", "item_tags_json"),
+        ("item_title", "item_genres_json", "item_tags_json"),
+    ]
+    assert [call["scorer_kwargs"] for call in calls] == [
+        {
+            "target_description": (
+                "The user would play the candidate game for at least "
+                "120 minutes in total."
+            )
+        },
+        {
+            "target_description": (
+                "The user would play the candidate game for at least "
+                "120 minutes in total."
+            )
+        },
+    ]
+    assert (
+        "agent4rec_preference_yes_no_litellm_qwen3_8b_traits_taste_"
+        "gpt4o_mini_no_summary_full"
+    ) in PREFERENCE_METHOD_RUNNERS
+    assert (
+        "agent4rec_preference_yes_no_litellm_qwen36_27b_traits_taste_"
+        "gpt4o_mini_no_summary_full"
+    ) in PREFERENCE_METHOD_RUNNERS

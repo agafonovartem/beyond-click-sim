@@ -15,6 +15,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from runners.in_distribution.interaction_prediction.methods import llm_yes_no  # noqa: E402
+from runners.in_distribution.interaction_prediction.methods import (  # noqa: E402
+    METHOD_RUNNERS,
+)
 
 
 class FakeChatCompletions:
@@ -41,6 +44,70 @@ class FakeClient:
         completions = FakeChatCompletions(responses)
         self.chat = SimpleNamespace(completions=completions)
         self.completions = completions
+
+
+def test_litellm_qwen_item_stats_wrappers_are_registered_and_configured(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_yes_no, "run_method", fake_run_method)
+    monkeypatch.setattr(
+        llm_yes_no,
+        "_serving_metadata",
+        lambda: {"backend": "test"},
+    )
+    monkeypatch.setattr(
+        llm_yes_no,
+        "_source_metadata",
+        lambda: {"snapshot": "test"},
+    )
+    task = SimpleNamespace(manifest={"dataset": "steam"})
+
+    llm_yes_no.run_litellm_qwen3_8b_with_item_stats_smoke(task, tmp_path)
+    llm_yes_no.run_litellm_qwen36_27b_with_item_stats_full(task, tmp_path)
+
+    assert calls == [
+        {
+            "method_name": (
+                "llm_yes_no_litellm_qwen3_8b_with_item_stats_smoke"
+            ),
+            "client_name": "litellm_local",
+            "model": "Qwen/Qwen3-8B",
+            "max_candidate_groups": 25,
+            "max_workers": 64,
+            "use_item_stats": True,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "serving_metadata": {"backend": "test"},
+            "source_metadata": {"snapshot": "test"},
+        },
+        {
+            "method_name": (
+                "llm_yes_no_litellm_qwen36_27b_with_item_stats_full"
+            ),
+            "client_name": "litellm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": None,
+            "max_workers": 32,
+            "use_item_stats": True,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "serving_metadata": {"backend": "test"},
+            "source_metadata": {"snapshot": "test"},
+        },
+    ]
+    assert (
+        "llm_yes_no_litellm_qwen3_8b_with_item_stats_full"
+        in METHOD_RUNNERS
+    )
+    assert (
+        "llm_yes_no_litellm_qwen36_27b_with_item_stats_full"
+        in METHOD_RUNNERS
+    )
 
 
 def test_llm_yes_no_runner_retries_and_keeps_failed_rows(

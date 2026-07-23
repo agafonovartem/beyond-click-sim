@@ -36,6 +36,14 @@ QWEN36_27B_TRAITS_TASTE_METHOD_NAME = (
     "agent4rec_preference_yes_no_litellm_qwen36_27b_traits_taste_"
     "gpt4o_mini_candidate_summary"
 )
+QWEN3_8B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME = (
+    "agent4rec_preference_yes_no_litellm_qwen3_8b_traits_taste_"
+    "gpt4o_mini_no_summary"
+)
+QWEN36_27B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME = (
+    "agent4rec_preference_yes_no_litellm_qwen36_27b_traits_taste_"
+    "gpt4o_mini_no_summary"
+)
 
 DATASET_CANDIDATE_COLUMNS = {
     "ml-1m": ("item_title", "item_genres"),
@@ -95,6 +103,112 @@ def run_qwen36_27b_full(task: Task, output_dir: Path) -> dict[str, object]:
         model=QWEN36_27B_MODEL,
         max_candidate_groups=None,
         max_workers=QWEN36_27B_MAX_WORKERS,
+    )
+
+
+def run_qwen3_8b_traits_taste_gpt4o_mini_no_summary_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_traits_taste_gpt4o_mini_no_summary(
+        task,
+        output_dir,
+        method_name=(
+            f"{QWEN3_8B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME}_smoke"
+        ),
+        model=QWEN3_8B_MODEL,
+        max_candidate_groups=SMOKE_CANDIDATE_GROUPS,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+    )
+
+
+def run_qwen3_8b_traits_taste_gpt4o_mini_no_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_traits_taste_gpt4o_mini_no_summary(
+        task,
+        output_dir,
+        method_name=f"{QWEN3_8B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME}_full",
+        model=QWEN3_8B_MODEL,
+        max_candidate_groups=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+    )
+
+
+def run_qwen36_27b_traits_taste_gpt4o_mini_no_summary_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_traits_taste_gpt4o_mini_no_summary(
+        task,
+        output_dir,
+        method_name=(
+            f"{QWEN36_27B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME}_smoke"
+        ),
+        model=QWEN36_27B_MODEL,
+        max_candidate_groups=SMOKE_CANDIDATE_GROUPS,
+        max_workers=QWEN36_27B_MAX_WORKERS,
+    )
+
+
+def run_qwen36_27b_traits_taste_gpt4o_mini_no_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_traits_taste_gpt4o_mini_no_summary(
+        task,
+        output_dir,
+        method_name=(
+            f"{QWEN36_27B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME}_full"
+        ),
+        model=QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=QWEN36_27B_MAX_WORKERS,
+    )
+
+
+def _run_traits_taste_gpt4o_mini_no_summary(
+    task: Task,
+    output_dir: Path,
+    *,
+    method_name: str,
+    model: str,
+    max_candidate_groups: int | None,
+    max_workers: int,
+) -> dict[str, object]:
+    dataset_name = str(task.manifest["dataset"])
+    try:
+        target_description = TARGET_DESCRIPTIONS[dataset_name]
+        candidate_description_columns = DATASET_CANDIDATE_COLUMNS[dataset_name]
+        column_labels = DATASET_COLUMN_LABELS[dataset_name]
+    except KeyError as error:
+        raise ValueError(
+            f"Unsupported Agent4Rec preference dataset: {dataset_name!r}"
+        ) from error
+
+    return _grouped_agent4rec_yes_no.run_method(
+        task,
+        output_dir,
+        method_name=method_name,
+        client_name=CLIENT_NAME,
+        model=model,
+        max_candidate_groups=max_candidate_groups,
+        max_workers=max_workers,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=_grouped_agent4rec_yes_no.GPT4O_MINI_TASTE_CLIENT,
+        taste_model=_grouped_agent4rec_yes_no.GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=_grouped_agent4rec_yes_no.TASTE_TEMPERATURE,
+        taste_max_tokens=_grouped_agent4rec_yes_no.TASTE_MAX_TOKENS,
+        scorer_class=Agent4RecPreferenceYesNoScorer,
+        scorer_kwargs={"target_description": target_description},
+        candidate_description_columns=candidate_description_columns,
+        column_labels=column_labels,
+        parser_contract="agent4rec_labeled_id_entity_preference_reason",
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
+        summary_usage="none",
     )
 
 

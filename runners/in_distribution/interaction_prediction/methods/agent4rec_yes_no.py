@@ -87,6 +87,12 @@ LITELLM_QWEN36_27B_TRAITS_TASTE_METHOD_NAME = (
     "agent4rec_yes_no_litellm_qwen36_27b_traits_taste_gpt4o_mini_"
     "candidate_summary"
 )
+LITELLM_QWEN3_8B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME = (
+    "agent4rec_yes_no_litellm_qwen3_8b_traits_taste_gpt4o_mini_no_summary"
+)
+LITELLM_QWEN36_27B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME = (
+    "agent4rec_yes_no_litellm_qwen36_27b_traits_taste_gpt4o_mini_no_summary"
+)
 TEMPERATURE = 0.0
 MAX_TOKENS = 1000
 MAX_HISTORY_ITEMS = 20
@@ -246,6 +252,99 @@ def run_qwen36_27b_traits_taste_gpt4o_mini_full(
         taste_temperature=TASTE_TEMPERATURE,
         taste_max_tokens=TASTE_MAX_TOKENS,
         summary_usage=canonical_agent4rec_summary_usage(task),
+    )
+
+
+def run_qwen3_8b_traits_taste_gpt4o_mini_no_summary_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_litellm_traits_taste_gpt4o_mini_no_summary(
+        task,
+        output_dir,
+        method_name=(
+            f"{LITELLM_QWEN3_8B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME}_smoke"
+        ),
+        model=QWEN3_8B_MODEL,
+        max_candidate_groups=25,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+    )
+
+
+def run_qwen3_8b_traits_taste_gpt4o_mini_no_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_litellm_traits_taste_gpt4o_mini_no_summary(
+        task,
+        output_dir,
+        method_name=(
+            f"{LITELLM_QWEN3_8B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME}_full"
+        ),
+        model=QWEN3_8B_MODEL,
+        max_candidate_groups=None,
+        max_workers=QWEN3_8B_MAX_WORKERS,
+    )
+
+
+def run_qwen36_27b_traits_taste_gpt4o_mini_no_summary_smoke(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_litellm_traits_taste_gpt4o_mini_no_summary(
+        task,
+        output_dir,
+        method_name=(
+            f"{LITELLM_QWEN36_27B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME}_smoke"
+        ),
+        model=QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=QWEN36_27B_MAX_WORKERS,
+    )
+
+
+def run_qwen36_27b_traits_taste_gpt4o_mini_no_summary_full(
+    task: Task,
+    output_dir: Path,
+) -> dict[str, object]:
+    return _run_litellm_traits_taste_gpt4o_mini_no_summary(
+        task,
+        output_dir,
+        method_name=(
+            f"{LITELLM_QWEN36_27B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME}_full"
+        ),
+        model=QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=QWEN36_27B_MAX_WORKERS,
+    )
+
+
+def _run_litellm_traits_taste_gpt4o_mini_no_summary(
+    task: Task,
+    output_dir: Path,
+    *,
+    method_name: str,
+    model: str,
+    max_candidate_groups: int | None,
+    max_workers: int,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=method_name,
+        client_name=LITELLM_CLIENT_NAME,
+        model=model,
+        max_candidate_groups=max_candidate_groups,
+        max_workers=max_workers,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=GPT4O_MINI_TASTE_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        taste_temperature=TASTE_TEMPERATURE,
+        taste_max_tokens=TASTE_MAX_TOKENS,
+        summary_usage="none",
+        serving_metadata=_serving_metadata(),
+        source_metadata=_source_metadata(),
     )
 
 
