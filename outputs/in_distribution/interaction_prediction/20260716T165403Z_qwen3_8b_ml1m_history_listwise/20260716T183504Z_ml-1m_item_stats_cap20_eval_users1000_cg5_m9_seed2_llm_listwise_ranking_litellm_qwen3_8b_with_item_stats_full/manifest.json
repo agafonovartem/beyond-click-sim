@@ -1,0 +1,214 @@
+{
+  "candidate_groups": {
+    "test": {
+      "requested": {
+        "groups": 4621,
+        "positives_max": 2,
+        "positives_mean": 1.9668902834884223,
+        "positives_min": 1,
+        "rows_max": 20,
+        "rows_mean": 19.668902834884225,
+        "rows_min": 10,
+        "sampled_max": 18,
+        "sampled_mean": 17.702012551395804,
+        "sampled_min": 9
+      },
+      "scored": {
+        "groups": 3757,
+        "positives_max": 2,
+        "positives_mean": 1.9635347351610328,
+        "positives_min": 1,
+        "rows_max": 20,
+        "rows_mean": 19.635347351610328,
+        "rows_min": 10,
+        "sampled_max": 18,
+        "sampled_mean": 17.671812616449294,
+        "sampled_min": 9
+      }
+    },
+    "val": {
+      "requested": {
+        "groups": 3994,
+        "positives_max": 2,
+        "positives_mean": 1.93064596895343,
+        "positives_min": 1,
+        "rows_max": 20,
+        "rows_mean": 19.3064596895343,
+        "rows_min": 10,
+        "sampled_max": 18,
+        "sampled_mean": 17.375813720580872,
+        "sampled_min": 9
+      },
+      "scored": {
+        "groups": 3276,
+        "positives_max": 2,
+        "positives_mean": 1.924908424908425,
+        "positives_min": 1,
+        "rows_max": 20,
+        "rows_mean": 19.249084249084248,
+        "rows_min": 10,
+        "sampled_max": 18,
+        "sampled_mean": 17.324175824175825,
+        "sampled_min": 9
+      }
+    }
+  },
+  "decision_rule": {
+    "pointwise": {
+      "kind": "threshold_on_validation",
+      "metric": "macro_by_user_group_mean_f1",
+      "metric_value": 0.31814963259853046,
+      "selection_metric": "macro_by_user_group_mean_f1",
+      "threshold": 17.0
+    },
+    "ranking": {
+      "kind": "complete_listwise_rank_parser",
+      "score_mapping": "score = n_candidates - rank"
+    }
+  },
+  "git_commit": "24e56a89c46fb366c30035505aa04abcfcb4aba8",
+  "limits": {
+    "max_candidate_groups_per_split": null,
+    "max_llm_attempts": 5,
+    "max_workers": 64
+  },
+  "llm_errors": {
+    "test": 864,
+    "val": 718
+  },
+  "method": "llm_listwise_ranking_litellm_qwen3_8b_with_item_stats_full",
+  "protocol": "listwise_ranking_with_validation_threshold",
+  "scorer": {
+    "class": "LLMInteractionListwiseRankingScorer",
+    "client_name": "litellm_local",
+    "column_labels": {
+      "item_rating_count": "number of prior reviews",
+      "item_rating_mean": "average rating",
+      "rating": "user rating"
+    },
+    "extra_body": {
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      }
+    },
+    "json_list_columns": [],
+    "max_history_items": 20,
+    "max_tokens": 512,
+    "model": "Qwen/Qwen3-8B",
+    "prompt_columns": {
+      "candidate_description_columns": [
+        "item_title",
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count"
+      ],
+      "history_description_columns": [
+        "item_title",
+        "item_genres",
+        "rating",
+        "item_rating_mean",
+        "item_rating_count"
+      ]
+    },
+    "serving": {
+      "backend": "litellm_proxy_over_vllm",
+      "gpu_memory_utilization": 0.9,
+      "litellm_base_url": "http://127.0.0.1:8080/v1",
+      "litellm_version": "1.92.0",
+      "max_model_len": 4096,
+      "model_revision": "b968826d9c46dd6066d109eabc6255188de91218",
+      "routing_strategy": "simple-shuffle",
+      "tensor_parallel_size_per_replica": 1,
+      "thinking_enabled": false,
+      "vllm_ports": [
+        8000,
+        8001,
+        8002,
+        8003
+      ],
+      "vllm_replicas": 4,
+      "vllm_version": "0.18.1"
+    },
+    "temperature": 0.0,
+    "uses_item_stats": true
+  },
+  "source": {
+    "base_git_commit": "24e56a89c46fb366c30035505aa04abcfcb4aba8",
+    "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "snapshot_sha256": "44b257a19e9e2afe6a9d61ccc29e2a3f5b7d5bae2ea528fc6d18d4e79fe7fe2f"
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres",
+        "item_rating_mean",
+        "item_rating_count"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_enrichment": null,
+      "item_feature_builder": {
+        "class": "TrainItemRatingStatistics",
+        "count_column": "rating_count",
+        "items_total": 3883,
+        "items_with_statistics": 3672,
+        "mean_column": "rating_mean",
+        "missing_policy": {
+          "rating_count": 0,
+          "rating_mean": "nan"
+        },
+        "source": "train_split_only",
+        "value_column": "rating"
+      },
+      "items": 3883,
+      "rows": {
+        "test": 90890,
+        "train": 694335,
+        "val": 77110
+      },
+      "sampled_column": "sampled",
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedUserInteractionCandidateSampler",
+        "item_column": "item_id",
+        "max_candidate_groups_per_user": 5,
+        "max_eval_users": 1000,
+        "negative_ratio": 9,
+        "sampled_column": "sampled",
+        "seed": 2,
+        "target_column": "target",
+        "total_items": 20,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 2,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_interact",
+      "users": 6040
+    },
+    "name": "ml-1m_item_stats_cap20_eval_users1000_cg5_m9_seed2"
+  }
+}

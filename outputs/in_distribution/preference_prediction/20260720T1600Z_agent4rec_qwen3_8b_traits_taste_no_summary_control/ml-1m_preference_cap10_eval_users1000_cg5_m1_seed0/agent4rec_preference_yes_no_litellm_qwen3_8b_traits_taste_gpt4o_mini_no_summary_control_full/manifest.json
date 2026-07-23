@@ -1,0 +1,225 @@
+{
+  "candidate_groups": {
+    "requested": {
+      "groups": 2491,
+      "positives_max": 5,
+      "positives_mean": 4.544359694901646,
+      "positives_min": 1,
+      "rows_max": 10,
+      "rows_mean": 9.088719389803291,
+      "rows_min": 2,
+      "sampled_max": 0,
+      "sampled_mean": 0.0,
+      "sampled_min": 0
+    },
+    "scored": {
+      "groups": 2465,
+      "positives_max": 5,
+      "positives_mean": 4.541987829614604,
+      "positives_min": 1,
+      "rows_max": 10,
+      "rows_mean": 9.083975659229209,
+      "rows_min": 2,
+      "sampled_max": 0,
+      "sampled_mean": 0.0,
+      "sampled_min": 0
+    }
+  },
+  "decision_rule": {
+    "kind": "hard_binary_yes_no_parser",
+    "parser_contract": "agent4rec_labeled_id_entity_preference_reason",
+    "threshold": null
+  },
+  "git_commit": "868e3f7b7d3249e6ad454f5673bfeace78f51779",
+  "limits": {
+    "max_candidate_groups": null,
+    "max_llm_attempts": 5,
+    "max_workers": 128
+  },
+  "llm_errors": 26,
+  "method": "agent4rec_preference_yes_no_litellm_qwen3_8b_traits_taste_gpt4o_mini_no_summary_control_full",
+  "scorer": {
+    "candidate_description_columns": [
+      "item_title",
+      "item_genres"
+    ],
+    "class": "Agent4RecPreferenceYesNoScorer",
+    "client_name": "litellm_local",
+    "column_labels": {
+      "item_genres": "genres",
+      "item_title": "movie title"
+    },
+    "extra_body": {
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      }
+    },
+    "item_summaries": {
+      "candidate_item_summaries": false,
+      "canonical_enrichment": {
+        "movie_summaries": {
+          "canonical_column": "summary",
+          "enabled": true,
+          "source_sha256": "b8e791dc6e77245f6d29825ee08c0916a8a55344ef04ee76ef5686138f7d96d5",
+          "task_column": "item_summary"
+        }
+      },
+      "history_item_summaries": false,
+      "profile_item_summaries": false,
+      "summary_column": null,
+      "uses_item_summaries": false
+    },
+    "json_list_columns": [],
+    "max_history_items": 20,
+    "max_tokens": 1000,
+    "model": "Qwen/Qwen3-8B",
+    "profile_generator": {
+      "class": "Agent4RecProfileGenerator",
+      "diversity_top_mass": 0.8,
+      "genre_column": "item_genres",
+      "include_conformity": true,
+      "item_column": "item_id",
+      "playtime_column": "playtime_forever",
+      "profile_components": [
+        "traits",
+        "taste"
+      ],
+      "rating_column": "rating",
+      "summary_column": null,
+      "tag_column": null,
+      "taste": {
+        "cache_path": "/llm_storage/beyond-click-sim/outputs/agent4rec_taste_cache/ml-1m_v1_seed0_gpt-4o-mini_agent4rec_modify_v1.jsonl",
+        "cache_stats": {
+          "generated": 0,
+          "hits": 773,
+          "max_workers": 1,
+          "misses": 0,
+          "requested_users": 773
+        },
+        "client_name": "openai_vk_proxy",
+        "max_attempts": 5,
+        "max_tokens": null,
+        "max_workers": 1,
+        "model": "gpt-4o-mini",
+        "prompt_kind": "rating",
+        "prompt_version": "agent4rec_modify_v1",
+        "temperature": 0.0
+      },
+      "title_column": "item_title",
+      "trait_thresholds": {
+        "activity": {
+          "p60": 87.0,
+          "p90": 279.0
+        },
+        "conformity": {
+          "p25": 0.6617274726747795,
+          "p80": 1.2497022486884295
+        },
+        "diversity": {
+          "p33": 5.0,
+          "p66": 7.0
+        }
+      },
+      "user_column": "user_id"
+    },
+    "prompt": {},
+    "scorer_kwargs": {
+      "target_description": "The user would rate the candidate movie at least 4 out of 5."
+    },
+    "serving": {
+      "backend": "litellm_proxy_over_vllm",
+      "gpu_memory_utilization": 0.9,
+      "litellm_base_url": "http://127.0.0.1:8080/v1",
+      "litellm_version": "1.91.0",
+      "max_model_len": 4096,
+      "model_revision": "b968826d9c46dd6066d109eabc6255188de91218",
+      "routing_strategy": "simple-shuffle",
+      "tensor_parallel_size_per_replica": 1,
+      "thinking_enabled": false,
+      "vllm_ports": [
+        8000,
+        8001,
+        8002,
+        8003
+      ],
+      "vllm_replicas": 4,
+      "vllm_version": "0.19.1"
+    },
+    "summary_usage": "none",
+    "temperature": 0.0
+  },
+  "source": {
+    "base_git_commit": "868e3f7b7d3249e6ad454f5673bfeace78f51779",
+    "control": "candidate summaries disabled explicitly",
+    "diff_sha256": null,
+    "snapshot_sha256": null
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "ml-1m",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_raw_user_id",
+        "user_gender",
+        "user_age",
+        "user_occupation",
+        "user_zip_code",
+        "item_raw_item_id",
+        "item_title",
+        "item_genres",
+        "item_summary"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "rating"
+      ],
+      "item_enrichment": {
+        "movie_summaries": {
+          "canonical_column": "summary",
+          "enabled": true,
+          "source_sha256": "b8e791dc6e77245f6d29825ee08c0916a8a55344ef04ee76ef5686138f7d96d5",
+          "task_column": "item_summary"
+        }
+      },
+      "item_feature_builder": null,
+      "items": 3883,
+      "rows": {
+        "test": 22640,
+        "train": 694335,
+        "val": 12594
+      },
+      "sampled_column": null,
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedObservedPreferenceCandidateSampler",
+        "item_column": "item_id",
+        "max_candidate_groups_per_user": 5,
+        "max_eval_users": 1000,
+        "negative_ratio": 1,
+        "seed": 0,
+        "target_column": "target",
+        "target_source_column": "target_like_ge4",
+        "total_items": 10,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 0,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_like_ge4",
+      "users": 6040
+    },
+    "name": "ml-1m_preference_cap10_eval_users1000_cg5_m1_seed0"
+  }
+}
