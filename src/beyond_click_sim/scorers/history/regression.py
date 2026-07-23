@@ -12,8 +12,13 @@ from beyond_click_sim.scorers.history.common import (
     _format_prompt_value,
 )
 from beyond_click_sim.scorers.history.prompts import (
+    HistoryPromptFamily,
+    OPENP5_STYLE_REGRESSION_USER_PROMPT_TEMPLATE,
     REGRESSION_SYSTEM_PROMPT,
     REGRESSION_USER_PROMPT_TEMPLATE,
+    history_prompt_messages,
+    history_prompt_metadata,
+    validate_history_prompt_family,
 )
 from beyond_click_sim.scorers.history.selection import select_history_by_user
 
@@ -46,6 +51,7 @@ class LLMRegressor(Scorer):
         max_tokens: int = 64,
         column_labels: dict[str, str] | None = None,
         extra_body: dict | None = None,
+        prompt_family: str = "simulator",
     ) -> None:
         if candidate_description_columns is None:
             candidate_description_columns = item_description_columns
@@ -63,6 +69,7 @@ class LLMRegressor(Scorer):
             raise ValueError("target_description must be non-empty")
         if not output_instructions:
             raise ValueError("output_instructions must be non-empty")
+        resolved_prompt_family = validate_history_prompt_family(prompt_family)
 
         valid_values_tuple = tuple(valid_values)
         if not valid_values_tuple:
@@ -87,7 +94,14 @@ class LLMRegressor(Scorer):
         self.max_tokens = max_tokens
         self.column_labels = {} if column_labels is None else dict(column_labels)
         self.extra_body = extra_body
+        self.prompt_family: HistoryPromptFamily = resolved_prompt_family
         self.history_by_user_: dict[Any, list[str]] | None = None
+
+    @property
+    def prompt_metadata(self) -> dict[str, object]:
+        """Return prompt provenance suitable for an experiment manifest."""
+
+        return history_prompt_metadata(self.prompt_family)
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "LLMRegressor":
         """Store formatted train rows as per-user response history."""
@@ -156,18 +170,26 @@ class LLMRegressor(Scorer):
             label="Candidate",
             columns=self.candidate_description_columns,
         )
-        user_prompt = REGRESSION_USER_PROMPT_TEMPLATE.format(
-            history="\n".join(history)
+        prompt_values = {
+            "history": "\n".join(history)
             if history
             else "- No interaction history available.",
-            candidate=candidate,
-            target_description=self.target_description,
-            output_instructions=self.output_instructions,
+            "candidate": candidate,
+            "target_description": self.target_description,
+            "output_instructions": self.output_instructions,
+        }
+        simulator_user_prompt = REGRESSION_USER_PROMPT_TEMPLATE.format(
+            **prompt_values
         )
-        return [
-            {"role": "system", "content": REGRESSION_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
+        openp5_style_user_prompt = (
+            OPENP5_STYLE_REGRESSION_USER_PROMPT_TEMPLATE.format(**prompt_values)
+        )
+        return history_prompt_messages(
+            prompt_family=self.prompt_family,
+            simulator_system_prompt=REGRESSION_SYSTEM_PROMPT,
+            simulator_user_prompt=simulator_user_prompt,
+            openp5_style_user_prompt=openp5_style_user_prompt,
+        )
 
     def _format_item_description(
         self,

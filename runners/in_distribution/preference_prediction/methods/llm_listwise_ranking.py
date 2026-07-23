@@ -134,6 +134,7 @@ def run_method(
     extra_body: dict | None = None,
     serving_metadata: dict[str, object] | None = None,
     source_metadata: dict[str, object] | None = None,
+    prompt_family: str = "simulator",
 ) -> dict[str, object]:
     """Run direct listwise preference ranking with a validation threshold."""
 
@@ -192,6 +193,7 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
+        prompt_family=prompt_family,
     ).fit(X_train, y_train, history_user_ids=history_user_ids.tolist())
 
     return evaluate_listwise_scorer(
@@ -220,6 +222,7 @@ def run_method(
             "json_list_columns": list(json_list_columns),
             "uses_item_stats": use_item_stats,
             "extra_body": extra_body,
+            "prompt": scorer.prompt_metadata,
             "serving": serving_metadata,
         },
         repo_root=repo_root(),

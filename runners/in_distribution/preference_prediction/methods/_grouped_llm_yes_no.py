@@ -145,6 +145,7 @@ def run_method(
     scorer_kwargs: dict[str, object] | None = None,
     serving_metadata: dict[str, object] | None = None,
     source_metadata: dict[str, object] | None = None,
+    prompt_family: str = "simulator",
 ) -> dict[str, object]:
     """Run a history-conditioned yes/no LLM scorer on candidate groups."""
 
@@ -200,6 +201,7 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
+        prompt_family=prompt_family,
         **({} if scorer_kwargs is None else scorer_kwargs),
     ).fit(X_train, y_train, history_user_ids=history_user_ids)
 
@@ -284,6 +286,7 @@ def run_method(
             "item_summaries": item_summary_metadata,
             "extra_body": extra_body,
             "scorer_kwargs": scorer_kwargs,
+            "prompt": scorer.prompt_metadata,
             "serving": serving_metadata,
         },
         "decision_rule": {

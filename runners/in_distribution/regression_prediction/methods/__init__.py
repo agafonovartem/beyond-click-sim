@@ -69,6 +69,9 @@ from runners.in_distribution.regression_prediction.methods.llm_regressor import 
     run_qwen36_27b_with_item_stats_smoke,
     run_qwen36_27b_with_item_stats_summary_full,
 )
+from runners.in_distribution.regression_prediction.methods.openp5_style import (
+    run_ollama_qwen3_30b_a3b_smoke5,
+)
 from runners.in_distribution.regression_prediction.methods.mean import run as run_mean
 from runners.in_distribution.regression_prediction.methods.mode import run as run_mode
 from runners.in_distribution.regression_prediction.methods.user import (
@@ -175,6 +178,9 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     "llm_regressor_ollama_llama31_8b_smoke": run_llama31_8b_smoke,
     "llm_regressor_ollama_llama31_8b_smoke10": run_llama31_8b_smoke10,
     "llm_regressor_ollama_llama31_8b_full": run_llama31_8b_full,
+    "llm_regressor_openp5_style_ollama_qwen3_30b_a3b_smoke5": (
+        run_ollama_qwen3_30b_a3b_smoke5
+    ),
     "llm_regressor_ollama_llama31_8b_with_item_stats_smoke": (
         run_llama31_8b_with_item_stats_smoke
     ),

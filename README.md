@@ -271,6 +271,10 @@ task variants when the prompt should expose average rating and number of prior r
 The two Qwen backbones have matched LiteLLM/vLLM methods for both output
 contracts:
 `llm_{yes_no,listwise_ranking}_litellm_qwen{3_8b,36_27b}_with_item_stats_{smoke,full}`.
+Matched neutral ranker-prompt variants use
+`llm_{yes_no,listwise_ranking}_openp5_style_litellm_qwen{3_8b,36_27b}_with_item_stats_{smoke,full}`.
+They keep the same interaction histories, item statistics, candidate rows,
+models, and output contracts while removing the simulator role-play framing.
 
 The current Agent4Rec yes/no scorer has dataset-specific prompt/profile configs
 for ML-1M and Steam. ML-1M methods build train-only traits (`activity`,
@@ -313,6 +317,9 @@ methods use candidate-only summaries under the same canonical-enrichment rule.
 Named Qwen3-8B Agent4Rec `traits+taste` methods are available for both grouped
 yes/no and listwise ranking; they use cached `gpt-4o-mini` taste profiles and
 candidate summaries.
+Neutral ranker-prompt controls are registered as
+`llm_preference_{yes_no,listwise_ranking}_openp5_style_litellm_qwen{3_8b,36_27b}_{smoke,full}`.
+The matched ML-1M/Steam launcher is documented in `scripts/README.md`.
 
 Available regression-prediction methods:
 

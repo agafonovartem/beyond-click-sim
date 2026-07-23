@@ -106,6 +106,7 @@ def run_method(
     max_candidate_groups: int | None,
     max_workers: int = QWEN3_8B_MAX_WORKERS,
     summary_visibility: SummaryVisibility = "none",
+    prompt_family: str = "simulator",
 ) -> dict[str, object]:
     dataset_name = str(task.manifest["dataset"])
     try:
@@ -127,6 +128,7 @@ def run_method(
         extra_body=QWEN_EXTRA_BODY,
         scorer_class=LLMPreferenceYesNoScorer,
         scorer_kwargs={"target_description": target_description},
+        prompt_family=prompt_family,
         serving_metadata=_serving_metadata(),
         source_metadata=_source_metadata(),
     )

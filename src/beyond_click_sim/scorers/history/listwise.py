@@ -12,10 +12,16 @@ from beyond_click_sim.scorers.history.common import (
     _format_prompt_value,
 )
 from beyond_click_sim.scorers.history.prompts import (
+    HistoryPromptFamily,
     INTERACTION_LISTWISE_RANKING_SYSTEM_PROMPT,
     INTERACTION_LISTWISE_RANKING_USER_PROMPT_TEMPLATE,
+    OPENP5_STYLE_INTERACTION_LISTWISE_RANKING_USER_PROMPT_TEMPLATE,
+    OPENP5_STYLE_PREFERENCE_LISTWISE_RANKING_USER_PROMPT_TEMPLATE,
     PREFERENCE_LISTWISE_RANKING_SYSTEM_PROMPT,
     PREFERENCE_LISTWISE_RANKING_USER_PROMPT_TEMPLATE,
+    history_prompt_messages,
+    history_prompt_metadata,
+    validate_history_prompt_family,
 )
 from beyond_click_sim.scorers.history.selection import select_history_by_user
 
@@ -46,6 +52,7 @@ class LLMInteractionListwiseRankingScorer(Scorer):
         column_labels: dict[str, str] | None = None,
         json_list_columns: tuple[str, ...] = (),
         extra_body: dict | None = None,
+        prompt_family: str = "simulator",
     ) -> None:
         if not history_description_columns:
             raise ValueError("history_description_columns must be non-empty")
@@ -53,6 +60,7 @@ class LLMInteractionListwiseRankingScorer(Scorer):
             raise ValueError("candidate_description_columns must be non-empty")
         if max_history_items is not None and max_history_items < 0:
             raise ValueError("max_history_items must be non-negative")
+        resolved_prompt_family = validate_history_prompt_family(prompt_family)
 
         self.client = client
         self.model = model
@@ -66,7 +74,14 @@ class LLMInteractionListwiseRankingScorer(Scorer):
         self.column_labels = {} if column_labels is None else dict(column_labels)
         self.json_list_columns = tuple(json_list_columns)
         self.extra_body = extra_body
+        self.prompt_family: HistoryPromptFamily = resolved_prompt_family
         self.history_by_user_: dict[Any, list[str]] | None = None
+
+    @property
+    def prompt_metadata(self) -> dict[str, object]:
+        """Return prompt provenance suitable for an experiment manifest."""
+
+        return history_prompt_metadata(self.prompt_family)
 
     def fit(
         self,
@@ -166,18 +181,28 @@ class LLMInteractionListwiseRankingScorer(Scorer):
             )
             for label, row in zip(labels, candidates.itertuples(index=False), strict=True)
         ]
-        user_prompt = INTERACTION_LISTWISE_RANKING_USER_PROMPT_TEMPLATE.format(
-            history="\n".join(history)
+        prompt_values = {
+            "history": "\n".join(history)
             if history
             else "- No interaction history available.",
-            candidates="\n".join(candidate_lines),
-            output_labels=", ".join(labels),
-            candidate_count=len(labels),
+            "candidates": "\n".join(candidate_lines),
+            "output_labels": ", ".join(labels),
+            "candidate_count": len(labels),
+        }
+        simulator_user_prompt = (
+            INTERACTION_LISTWISE_RANKING_USER_PROMPT_TEMPLATE.format(**prompt_values)
         )
-        return [
-            {"role": "system", "content": INTERACTION_LISTWISE_RANKING_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
+        openp5_style_user_prompt = (
+            OPENP5_STYLE_INTERACTION_LISTWISE_RANKING_USER_PROMPT_TEMPLATE.format(
+                **prompt_values
+            )
+        )
+        return history_prompt_messages(
+            prompt_family=self.prompt_family,
+            simulator_system_prompt=INTERACTION_LISTWISE_RANKING_SYSTEM_PROMPT,
+            simulator_user_prompt=simulator_user_prompt,
+            openp5_style_user_prompt=openp5_style_user_prompt,
+        )
 
     def _format_item_description(
         self,
@@ -234,19 +259,29 @@ class LLMPreferenceListwiseRankingScorer(LLMInteractionListwiseRankingScorer):
             )
             for label, row in zip(labels, candidates.itertuples(index=False), strict=True)
         ]
-        user_prompt = PREFERENCE_LISTWISE_RANKING_USER_PROMPT_TEMPLATE.format(
-            history="\n".join(history)
+        prompt_values = {
+            "history": "\n".join(history)
             if history
             else "- No feedback history available.",
-            target_description=self.target_description,
-            candidates="\n".join(candidate_lines),
-            output_labels=", ".join(labels),
-            candidate_count=len(labels),
+            "target_description": self.target_description,
+            "candidates": "\n".join(candidate_lines),
+            "output_labels": ", ".join(labels),
+            "candidate_count": len(labels),
+        }
+        simulator_user_prompt = (
+            PREFERENCE_LISTWISE_RANKING_USER_PROMPT_TEMPLATE.format(**prompt_values)
         )
-        return [
-            {"role": "system", "content": PREFERENCE_LISTWISE_RANKING_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
+        openp5_style_user_prompt = (
+            OPENP5_STYLE_PREFERENCE_LISTWISE_RANKING_USER_PROMPT_TEMPLATE.format(
+                **prompt_values
+            )
+        )
+        return history_prompt_messages(
+            prompt_family=self.prompt_family,
+            simulator_system_prompt=PREFERENCE_LISTWISE_RANKING_SYSTEM_PROMPT,
+            simulator_user_prompt=simulator_user_prompt,
+            openp5_style_user_prompt=openp5_style_user_prompt,
+        )
 
 
 def parse_ranked_labels_response(text: str, *, labels: Sequence[str]) -> list[str]:

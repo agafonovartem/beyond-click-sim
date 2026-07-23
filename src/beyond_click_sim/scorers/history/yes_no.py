@@ -11,12 +11,19 @@ from beyond_click_sim.scorers.history.common import (
     _format_prompt_value,
 )
 from beyond_click_sim.scorers.history.prompts import (
+    HistoryPromptFamily,
     INTERACTION_YES_NO_SYSTEM_PROMPT,
     INTERACTION_YES_NO_USER_PROMPT_TEMPLATE,
+    OPENP5_STYLE_INTERACTION_YES_NO_USER_PROMPT_TEMPLATE,
+    OPENP5_STYLE_POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE,
+    OPENP5_STYLE_PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE,
     POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT,
     POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE,
     PREFERENCE_YES_NO_SYSTEM_PROMPT,
     PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE,
+    history_prompt_messages,
+    history_prompt_metadata,
+    validate_history_prompt_family,
 )
 from beyond_click_sim.scorers.history.selection import select_history_by_user
 
@@ -74,6 +81,7 @@ class LLMInteractionYesNoScorer(Scorer):
         json_list_columns: tuple[str, ...] = (),
         extra_body: dict | None = None,
         prompt_style: str = "batch",
+        prompt_family: str = "simulator",
     ) -> None:
         if candidate_description_columns is None:
             candidate_description_columns = item_description_columns
@@ -91,6 +99,7 @@ class LLMInteractionYesNoScorer(Scorer):
             raise ValueError(
                 f"prompt_style must be 'batch' or 'itemwise', got {prompt_style!r}"
             )
+        resolved_prompt_family = validate_history_prompt_family(prompt_family)
 
         self.client = client
         self.model = model
@@ -106,7 +115,14 @@ class LLMInteractionYesNoScorer(Scorer):
         self.json_list_columns = tuple(json_list_columns)
         self.extra_body = extra_body
         self.prompt_style = prompt_style
+        self.prompt_family: HistoryPromptFamily = resolved_prompt_family
         self.history_by_user_: dict[Any, list[str]] | None = None
+
+    @property
+    def prompt_metadata(self) -> dict[str, object]:
+        """Return prompt provenance suitable for an experiment manifest."""
+
+        return history_prompt_metadata(self.prompt_family)
 
     def fit(
         self,
@@ -237,17 +253,27 @@ class LLMInteractionYesNoScorer(Scorer):
             )
             for label, row in zip(labels, candidates.itertuples(index=False), strict=True)
         ]
-        user_prompt = INTERACTION_YES_NO_USER_PROMPT_TEMPLATE.format(
-            history="\n".join(history)
+        prompt_values = {
+            "history": "\n".join(history)
             if history
             else "- No interaction history available.",
-            candidates="\n".join(candidate_lines),
-            output_labels="\n".join(f"{label}:" for label in labels),
+            "candidates": "\n".join(candidate_lines),
+            "output_labels": "\n".join(f"{label}:" for label in labels),
+        }
+        simulator_user_prompt = INTERACTION_YES_NO_USER_PROMPT_TEMPLATE.format(
+            **prompt_values
         )
-        return [
-            {"role": "system", "content": INTERACTION_YES_NO_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
+        openp5_style_user_prompt = (
+            OPENP5_STYLE_INTERACTION_YES_NO_USER_PROMPT_TEMPLATE.format(
+                **prompt_values
+            )
+        )
+        return history_prompt_messages(
+            prompt_family=self.prompt_family,
+            simulator_system_prompt=INTERACTION_YES_NO_SYSTEM_PROMPT,
+            simulator_user_prompt=simulator_user_prompt,
+            openp5_style_user_prompt=openp5_style_user_prompt,
+        )
 
     def _build_itemwise_messages(
         self,
@@ -260,16 +286,26 @@ class LLMInteractionYesNoScorer(Scorer):
             row=candidate,
             columns=self.candidate_description_columns,
         )
-        user_prompt = POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE.format(
-            history="\n".join(history)
+        prompt_values = {
+            "history": "\n".join(history)
             if history
             else "- No interaction history available.",
-            candidate=candidate_fields,
+            "candidate": candidate_fields,
+        }
+        simulator_user_prompt = POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE.format(
+            **prompt_values
         )
-        return [
-            {"role": "system", "content": POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
+        openp5_style_user_prompt = (
+            OPENP5_STYLE_POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE.format(
+                **prompt_values
+            )
+        )
+        return history_prompt_messages(
+            prompt_family=self.prompt_family,
+            simulator_system_prompt=POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT,
+            simulator_user_prompt=simulator_user_prompt,
+            openp5_style_user_prompt=openp5_style_user_prompt,
+        )
 
     def _format_item_description(
         self,
@@ -353,18 +389,28 @@ class LLMPreferenceYesNoScorer(LLMInteractionYesNoScorer):
             )
             for label, row in zip(labels, candidates.itertuples(index=False), strict=True)
         ]
-        user_prompt = PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE.format(
-            history="\n".join(history)
+        prompt_values = {
+            "history": "\n".join(history)
             if history
             else "- No feedback history available.",
-            target_description=self.target_description,
-            candidates="\n".join(candidate_lines),
-            output_labels="\n".join(f"{label}:" for label in labels),
+            "target_description": self.target_description,
+            "candidates": "\n".join(candidate_lines),
+            "output_labels": "\n".join(f"{label}:" for label in labels),
+        }
+        simulator_user_prompt = PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE.format(
+            **prompt_values
         )
-        return [
-            {"role": "system", "content": PREFERENCE_YES_NO_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
+        openp5_style_user_prompt = (
+            OPENP5_STYLE_PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE.format(
+                **prompt_values
+            )
+        )
+        return history_prompt_messages(
+            prompt_family=self.prompt_family,
+            simulator_system_prompt=PREFERENCE_YES_NO_SYSTEM_PROMPT,
+            simulator_user_prompt=simulator_user_prompt,
+            openp5_style_user_prompt=openp5_style_user_prompt,
+        )
 
 
 def parse_yes_no_response(text: str, *, labels: Sequence[str]) -> dict[str, float]:

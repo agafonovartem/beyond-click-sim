@@ -69,6 +69,18 @@ from runners.in_distribution.interaction_prediction.methods.llm_listwise_ranking
     run_qwen36_27b_with_item_stats_full as run_listwise_qwen36_27b_with_item_stats_full,
     run_qwen36_27b_with_item_stats_smoke as run_listwise_qwen36_27b_with_item_stats_smoke,
 )
+from runners.in_distribution.interaction_prediction.methods.openp5_style import (
+    run_listwise_litellm_qwen3_8b_with_item_stats_full as run_openp5_listwise_qwen3_8b_full,
+    run_listwise_litellm_qwen3_8b_with_item_stats_smoke as run_openp5_listwise_qwen3_8b_smoke,
+    run_listwise_litellm_qwen36_27b_with_item_stats_full as run_openp5_listwise_qwen36_27b_full,
+    run_listwise_litellm_qwen36_27b_with_item_stats_smoke as run_openp5_listwise_qwen36_27b_smoke,
+    run_listwise_ollama_qwen3_30b_a3b_smoke5,
+    run_yes_no_litellm_qwen3_8b_with_item_stats_full as run_openp5_yes_no_qwen3_8b_full,
+    run_yes_no_litellm_qwen3_8b_with_item_stats_smoke as run_openp5_yes_no_qwen3_8b_smoke,
+    run_yes_no_litellm_qwen36_27b_with_item_stats_full as run_openp5_yes_no_qwen36_27b_full,
+    run_yes_no_litellm_qwen36_27b_with_item_stats_smoke as run_openp5_yes_no_qwen36_27b_smoke,
+    run_yes_no_ollama_qwen3_30b_a3b_smoke5,
+)
 from runners.in_distribution.interaction_prediction.methods.popularity import (
     run as run_popularity,
     run_ranking as run_popularity_ranking,
@@ -203,6 +215,36 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     ),
     "llm_listwise_ranking_litellm_qwen36_27b_with_item_stats_full": (
         run_listwise_qwen36_27b_with_item_stats_full
+    ),
+    "llm_yes_no_openp5_style_ollama_qwen3_30b_a3b_smoke5": (
+        run_yes_no_ollama_qwen3_30b_a3b_smoke5
+    ),
+    "llm_listwise_ranking_openp5_style_ollama_qwen3_30b_a3b_smoke5": (
+        run_listwise_ollama_qwen3_30b_a3b_smoke5
+    ),
+    "llm_yes_no_openp5_style_litellm_qwen3_8b_with_item_stats_smoke": (
+        run_openp5_yes_no_qwen3_8b_smoke
+    ),
+    "llm_yes_no_openp5_style_litellm_qwen3_8b_with_item_stats_full": (
+        run_openp5_yes_no_qwen3_8b_full
+    ),
+    "llm_yes_no_openp5_style_litellm_qwen36_27b_with_item_stats_smoke": (
+        run_openp5_yes_no_qwen36_27b_smoke
+    ),
+    "llm_yes_no_openp5_style_litellm_qwen36_27b_with_item_stats_full": (
+        run_openp5_yes_no_qwen36_27b_full
+    ),
+    "llm_listwise_ranking_openp5_style_litellm_qwen3_8b_with_item_stats_smoke": (
+        run_openp5_listwise_qwen3_8b_smoke
+    ),
+    "llm_listwise_ranking_openp5_style_litellm_qwen3_8b_with_item_stats_full": (
+        run_openp5_listwise_qwen3_8b_full
+    ),
+    "llm_listwise_ranking_openp5_style_litellm_qwen36_27b_with_item_stats_smoke": (
+        run_openp5_listwise_qwen36_27b_smoke
+    ),
+    "llm_listwise_ranking_openp5_style_litellm_qwen36_27b_with_item_stats_full": (
+        run_openp5_listwise_qwen36_27b_full
     ),
     "llm_yes_no_openai_vk_gpt54_mini_smoke": run_gpt54_mini_smoke,
     "llm_yes_no_openai_vk_gpt54_mini_full": run_gpt54_mini_full,

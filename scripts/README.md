@@ -157,6 +157,26 @@ statistics; Agent4Rec uses no item summaries. The launcher records each
 task/phase exit code in `queue_status.tsv` and continues to later batches after
 an isolated failure.
 
+### OpenP5-style ranker prompt matrix
+
+The OpenP5-style launcher runs only the neutral ranker prompt. It does not
+repeat the existing simulator/History runs. It uses the same current paper
+tasks as those controls: interaction exposes train-only item statistics, while
+preference uses the observed-only candidate protocol without added item
+statistics.
+
+```bash
+scripts/run_openp5_style_qwen_matrix.sh qwen3_8b smoke
+scripts/run_openp5_style_qwen_matrix.sh qwen3_8b full
+scripts/run_openp5_style_qwen_matrix.sh qwen36_27b smoke
+scripts/run_openp5_style_qwen_matrix.sh qwen36_27b full
+```
+
+The full launcher covers MovieLens-1M and Steam, yes/no and listwise methods,
+seeds `0,1,2`, interaction ratios `m={1,3,9,19}`, and preference ratios
+`m={1,2,3,9}`. Results and `queue_status.tsv` are written below
+`outputs/in_distribution/openp5_style_ranker/` by default.
+
 ### Optional: one unified endpoint across all pods
 
 If your code should hit a single URL instead of picking between 4, start the

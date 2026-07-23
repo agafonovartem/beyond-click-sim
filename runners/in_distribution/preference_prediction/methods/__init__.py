@@ -48,6 +48,18 @@ from runners.in_distribution.preference_prediction.methods.llm_listwise_ranking 
     run_qwen36_27b_full as run_listwise_qwen36_27b_full,
     run_qwen36_27b_smoke as run_listwise_qwen36_27b_smoke,
 )
+from runners.in_distribution.preference_prediction.methods.openp5_style import (
+    run_listwise_litellm_qwen3_8b_full as run_openp5_listwise_qwen3_8b_full,
+    run_listwise_litellm_qwen3_8b_smoke as run_openp5_listwise_qwen3_8b_smoke,
+    run_listwise_litellm_qwen36_27b_full as run_openp5_listwise_qwen36_27b_full,
+    run_listwise_litellm_qwen36_27b_smoke as run_openp5_listwise_qwen36_27b_smoke,
+    run_listwise_ollama_qwen3_30b_a3b_smoke5,
+    run_yes_no_litellm_qwen3_8b_full as run_openp5_yes_no_qwen3_8b_full,
+    run_yes_no_litellm_qwen3_8b_smoke as run_openp5_yes_no_qwen3_8b_smoke,
+    run_yes_no_litellm_qwen36_27b_full as run_openp5_yes_no_qwen36_27b_full,
+    run_yes_no_litellm_qwen36_27b_smoke as run_openp5_yes_no_qwen36_27b_smoke,
+    run_yes_no_ollama_qwen3_30b_a3b_smoke5,
+)
 
 
 MethodRunner = Callable[[Task, Path], dict[str, object]]
@@ -142,5 +154,35 @@ METHOD_RUNNERS: dict[str, MethodRunner] = {
     ),
     "llm_preference_listwise_ranking_litellm_qwen36_27b_full": (
         run_listwise_qwen36_27b_full
+    ),
+    "llm_preference_yes_no_openp5_style_ollama_qwen3_30b_a3b_smoke5": (
+        run_yes_no_ollama_qwen3_30b_a3b_smoke5
+    ),
+    "llm_preference_listwise_ranking_openp5_style_ollama_qwen3_30b_a3b_smoke5": (
+        run_listwise_ollama_qwen3_30b_a3b_smoke5
+    ),
+    "llm_preference_yes_no_openp5_style_litellm_qwen3_8b_smoke": (
+        run_openp5_yes_no_qwen3_8b_smoke
+    ),
+    "llm_preference_yes_no_openp5_style_litellm_qwen3_8b_full": (
+        run_openp5_yes_no_qwen3_8b_full
+    ),
+    "llm_preference_yes_no_openp5_style_litellm_qwen36_27b_smoke": (
+        run_openp5_yes_no_qwen36_27b_smoke
+    ),
+    "llm_preference_yes_no_openp5_style_litellm_qwen36_27b_full": (
+        run_openp5_yes_no_qwen36_27b_full
+    ),
+    "llm_preference_listwise_ranking_openp5_style_litellm_qwen3_8b_smoke": (
+        run_openp5_listwise_qwen3_8b_smoke
+    ),
+    "llm_preference_listwise_ranking_openp5_style_litellm_qwen3_8b_full": (
+        run_openp5_listwise_qwen3_8b_full
+    ),
+    "llm_preference_listwise_ranking_openp5_style_litellm_qwen36_27b_smoke": (
+        run_openp5_listwise_qwen36_27b_smoke
+    ),
+    "llm_preference_listwise_ranking_openp5_style_litellm_qwen36_27b_full": (
+        run_openp5_listwise_qwen36_27b_full
     ),
 }

@@ -512,6 +512,7 @@ def run_method(
     use_item_stats: bool = False,
     summary_visibility: SummaryVisibility = "none",
     extra_body: dict | None = None,
+    prompt_family: str = "simulator",
 ) -> dict[str, object]:
     """Run an LLM discrete numeric scorer for regression prediction."""
 
@@ -575,6 +576,7 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
+        prompt_family=prompt_family,
     ).fit(X_train, y_train)
 
     scores, errors = _score_rows(
@@ -621,6 +623,7 @@ def run_method(
         "uses_item_stats": use_item_stats,
         "summary_visibility": summary_visibility,
         "item_summaries": item_summary_metadata,
+        "prompt": scorer.prompt_metadata,
         "target": {
             "name": target_config["target_name"],
             "description": target_config["target_description"],
