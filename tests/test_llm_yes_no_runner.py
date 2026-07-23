@@ -16,7 +16,13 @@ if str(REPO_ROOT) not in sys.path:
 
 from runners.in_distribution.interaction_prediction.methods import llm_yes_no  # noqa: E402
 from runners.in_distribution.interaction_prediction.methods import (  # noqa: E402
+    llm_listwise_ranking,
+)
+from runners.in_distribution.interaction_prediction.methods import (  # noqa: E402
     METHOD_RUNNERS,
+)
+from runners.in_distribution.preference_prediction.methods import (  # noqa: E402
+    llm_yes_no as preference_llm_yes_no,
 )
 
 
@@ -44,6 +50,17 @@ class FakeClient:
         completions = FakeChatCompletions(responses)
         self.chat = SimpleNamespace(completions=completions)
         self.completions = completions
+
+
+def test_serving_metadata_records_all_configured_vllm_ports(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("BEYOND_CLICK_SIM_VLLM_REPLICAS", "8")
+
+    for module in (llm_yes_no, llm_listwise_ranking, preference_llm_yes_no):
+        metadata = module._serving_metadata()
+        assert metadata["vllm_replicas"] == 8
+        assert metadata["vllm_ports"] == list(range(8000, 8008))
 
 
 def test_litellm_qwen_item_stats_wrappers_are_registered_and_configured(

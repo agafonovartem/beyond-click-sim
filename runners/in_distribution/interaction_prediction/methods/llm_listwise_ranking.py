@@ -214,6 +214,9 @@ def run_method(
 
 
 def _serving_metadata() -> dict[str, object]:
+    vllm_replicas = int(
+        os.environ.get("BEYOND_CLICK_SIM_VLLM_REPLICAS", "4")
+    )
     return {
         "backend": "litellm_proxy_over_vllm",
         "litellm_base_url": os.environ.get(
@@ -232,10 +235,8 @@ def _serving_metadata() -> dict[str, object]:
             "BEYOND_CLICK_SIM_VLLM_VERSION",
             "unknown",
         ),
-        "vllm_replicas": int(
-            os.environ.get("BEYOND_CLICK_SIM_VLLM_REPLICAS", "4")
-        ),
-        "vllm_ports": [8000, 8001, 8002, 8003],
+        "vllm_replicas": vllm_replicas,
+        "vllm_ports": list(range(8000, 8000 + vllm_replicas)),
         "tensor_parallel_size_per_replica": 1,
         "max_model_len": int(
             os.environ.get("BEYOND_CLICK_SIM_VLLM_MAX_MODEL_LEN", "4096")
