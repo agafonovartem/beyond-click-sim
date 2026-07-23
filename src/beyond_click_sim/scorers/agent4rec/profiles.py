@@ -4,7 +4,6 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-import fcntl
 import hashlib
 import json
 from pathlib import Path
@@ -707,6 +706,11 @@ class Agent4RecProfileGenerator:
     @staticmethod
     @contextmanager
     def _taste_cache_lock(path: Path) -> Iterator[None]:
+        # Imported lazily: fcntl is Unix-only, and importing it at module scope
+        # made the whole scorers package unimportable on Windows even for code
+        # paths (e.g. classical scorers, tests) that never take this lock.
+        import fcntl
+
         resolved_path = path.resolve()
         with _TASTE_CACHE_THREAD_LOCKS_GUARD:
             thread_lock = _TASTE_CACHE_THREAD_LOCKS.setdefault(
