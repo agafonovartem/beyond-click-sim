@@ -135,6 +135,80 @@ def test_preference_llm_runner_records_target_and_scores_rows(
     }
 
 
+def test_preference_llm_runner_formats_steam_fields_and_target(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client = _FakeClient("C1: yes\nC2: no")
+    monkeypatch.setattr(grouped_llm_yes_no, "make_llm_client", lambda _: client)
+    task = Task(
+        name="steam_preference_toy",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["h1"],
+                "item_title": ["Portal"],
+                "item_genres_json": ['["Action", "Adventure"]'],
+                "item_tags_json": ['["Puzzle", "Singleplayer"]'],
+                "playtime_forever": [240],
+                "target": [1],
+            }
+        ),
+        val=pd.DataFrame(columns=["user_id", "item_id", "target"]),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": ["i1", "i2"],
+                "candidate_group": ["g1", "g1"],
+                "item_title": ["Portal 2", "Dota 2"],
+                "item_genres_json": [
+                    '["Action", "Adventure"]',
+                    '["Strategy"]',
+                ],
+                "item_tags_json": [
+                    '["Puzzle", "Co-op"]',
+                    '["MOBA", "Multiplayer"]',
+                ],
+                "target": [1, 0],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            feature_columns=("item_title", "item_genres_json", "item_tags_json"),
+            history_context_columns=("playtime_forever",),
+        ),
+        manifest={
+            "dataset": "steam",
+            "dataset_version": "v1",
+            "target_source_column": "target_played_120",
+            "splitter": {"seed": 0},
+        },
+    )
+
+    preference_llm_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="steam-preference-test",
+        max_candidate_groups=None,
+        max_workers=1,
+    )
+
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "play the candidate game for at least 120 minutes in total" in prompt
+    assert (
+        "H1. game title: Portal; genres: Action, Adventure; "
+        "tags: Puzzle, Singleplayer; user playtime minutes: 240"
+    ) in prompt
+    assert (
+        "C1. game title: Portal 2; genres: Action, Adventure; "
+        "tags: Puzzle, Co-op"
+    ) in prompt
+    assert "item_genres_json" not in prompt
+    assert "item_tags_json" not in prompt
+    assert "playtime_forever" not in prompt
+
+
 def test_preference_llm_runner_uses_canonical_summaries_in_both_prompts(
     tmp_path: Path,
     monkeypatch,

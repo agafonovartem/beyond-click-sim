@@ -7,10 +7,7 @@ import pandas as pd
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMPreferenceListwiseRankingScorer
 from beyond_click_sim.tasks import Task
-from runners.in_distribution.llm_item_stats import (
-    item_rating_column_labels,
-    maybe_add_item_rating_prompt_columns,
-)
+from runners.in_distribution.llm_item_stats import maybe_add_item_rating_prompt_columns
 from runners.in_distribution.preference_prediction.methods import (
     _grouped_llm_yes_no,
 )
@@ -157,7 +154,7 @@ def run_method(
         base_prompt_columns,
         use_item_stats=use_item_stats,
     )
-    column_labels = item_rating_column_labels(
+    column_labels = _grouped_llm_yes_no.prompt_column_labels(
         dataset_name,
         use_item_stats=use_item_stats,
     )

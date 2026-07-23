@@ -486,8 +486,8 @@ def test_agent4rec_yes_no_runner_supports_steam_traits_only(
 ) -> None:
     client = FakeClient(
         [
-            "ID: C1; GAME: Portal 2; WATCH: yes; REASON: puzzle games fit\n"
-            "ID: C2; GAME: Dota 2; WATCH: no; REASON: not aligned"
+            "ID: C1; GAME: Portal 2; INTERACT: yes; REASON: puzzle games fit\n"
+            "ID: C2; GAME: Dota 2; INTERACT: no; REASON: not aligned"
         ]
     )
     monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: client)
@@ -563,6 +563,10 @@ def test_agent4rec_yes_no_runner_supports_steam_traits_only(
     assert profile_manifest["include_conformity"] is False
     assert "conformity" not in profile_manifest["trait_thresholds"]
     assert manifest["scorer"]["prompt"]["entity_field"] == "GAME"
+    assert manifest["scorer"]["decision_field"] == "INTERACT"
+    assert manifest["decision_rule"]["parser_contract"] == (
+        "agent4rec_labeled_id_game_interact_reason"
+    )
     assert manifest["scorer"]["json_list_columns"] == [
         "item_genres_json",
         "item_tags_json",
@@ -581,7 +585,11 @@ def test_agent4rec_yes_no_runner_supports_steam_traits_only(
         "<- tags:MOBA, Multiplayer ->"
     ) in user_prompt
     assert '["Action", "Adventure"]' not in user_prompt
-    assert "Use this format: ID: [candidate id]; GAME: [game name]; WATCH:" in user_prompt
+    assert (
+        "Use this format: ID: [candidate id]; GAME: [game name]; "
+        "INTERACT: [yes or no]"
+    ) in user_prompt
+    assert "WATCH:" not in user_prompt
     assert "Judge each game using your available profile" in user_prompt
     assert "Judge each movie using your available profile" not in user_prompt
 
@@ -591,7 +599,7 @@ def test_agent4rec_yes_no_runner_supports_steam_taste_profiles(
     monkeypatch,
 ) -> None:
     scoring_client = FakeClient(
-        ["ID: C1; GAME: Portal 2; WATCH: yes; REASON: puzzle taste"]
+        ["ID: C1; GAME: Portal 2; INTERACT: yes; REASON: puzzle taste"]
     )
     taste_client = FakeClient(
         [
@@ -673,6 +681,8 @@ def test_agent4rec_yes_no_runner_supports_steam_taste_profiles(
     assert "You only choose games which align with your taste" in scoring_prompt
     assert "You only watch movies which align with your taste" not in scoring_prompt
     assert "If you don't want to choose a game" in scoring_prompt
+    assert "INTERACT: no" in scoring_prompt
+    assert "WATCH:" not in scoring_prompt
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     taste_manifest = manifest["scorer"]["profile_generator"]["taste"]
     assert taste_manifest["prompt_kind"] == "playtime"

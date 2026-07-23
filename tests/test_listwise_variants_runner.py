@@ -103,6 +103,56 @@ def _task(*, preference: bool) -> Task:
     )
 
 
+def _steam_preference_task() -> Task:
+    def candidates(prefix: str) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": [f"{prefix}1", f"{prefix}2"],
+                "candidate_group": [f"{prefix}g1", f"{prefix}g1"],
+                "item_title": ["Portal 2", "Dota 2"],
+                "item_genres_json": [
+                    '["Action", "Adventure"]',
+                    '["Strategy"]',
+                ],
+                "item_tags_json": [
+                    '["Puzzle", "Co-op"]',
+                    '["MOBA", "Multiplayer"]',
+                ],
+                "target": [1, 0],
+            }
+        )
+
+    return Task(
+        name="steam-preference-toy",
+        train=pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "item_id": ["h1"],
+                "item_title": ["Portal"],
+                "item_genres_json": ['["Action", "Adventure"]'],
+                "item_tags_json": ['["Puzzle", "Singleplayer"]'],
+                "playtime_forever": [240],
+                "target": [1],
+            }
+        ),
+        val=candidates("v"),
+        test=candidates("t"),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            feature_columns=("item_title", "item_genres_json", "item_tags_json"),
+            history_context_columns=("playtime_forever",),
+        ),
+        manifest={
+            "dataset": "steam",
+            "dataset_version": "v1",
+            "target_source_column": "target_played_120",
+            "splitter": {"seed": 0},
+        },
+    )
+
+
 def test_preference_history_listwise_runner_uses_target_and_threshold(
     tmp_path: Path,
     monkeypatch,
@@ -131,6 +181,43 @@ def test_preference_history_listwise_runner_uses_target_and_threshold(
     prompt = client.completions.calls[0]["messages"][1]["content"]
     assert "Positive-preference target:" in prompt
     assert "rate the candidate movie at least 4 out of 5" in prompt
+
+
+def test_preference_history_listwise_runner_formats_steam_fields(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client = FakeClient(["C1\nC2", "C1\nC2"])
+    monkeypatch.setattr(preference_llm_listwise, "make_llm_client", lambda _: client)
+    monkeypatch.setattr(preference_llm_listwise, "repo_root", lambda: REPO_ROOT)
+
+    preference_llm_listwise.run_method(
+        _steam_preference_task(),
+        tmp_path,
+        method_name="steam-preference-listwise-test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_workers=1,
+        max_llm_attempts=1,
+        extra_body={},
+        serving_metadata={},
+        source_metadata={},
+    )
+
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "play the candidate game for at least 120 minutes in total" in prompt
+    assert (
+        "H1. game title: Portal; genres: Action, Adventure; "
+        "tags: Puzzle, Singleplayer; user playtime minutes: 240"
+    ) in prompt
+    assert (
+        "C1. game title: Portal 2; genres: Action, Adventure; "
+        "tags: Puzzle, Co-op"
+    ) in prompt
+    assert "item_genres_json" not in prompt
+    assert "item_tags_json" not in prompt
+    assert "playtime_forever" not in prompt
 
 
 def test_interaction_agent4rec_listwise_runner_uses_profiles_and_threshold(

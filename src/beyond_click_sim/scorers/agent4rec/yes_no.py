@@ -52,6 +52,7 @@ class Agent4RecYesNoScorer(Scorer):
         entity_field: str = "MOVIE",
         entity_name: str = "movie",
         entity_plural: str = "movies",
+        decision_field: str = "WATCH",
         prompt_style: str = "batch",
     ) -> None:
         if candidate_description_columns is None:
@@ -63,6 +64,11 @@ class Agent4RecYesNoScorer(Scorer):
         if prompt_style not in ("batch", "itemwise"):
             raise ValueError(
                 f"prompt_style must be 'batch' or 'itemwise', got {prompt_style!r}"
+            )
+        decision_field = decision_field.strip().upper()
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", decision_field):
+            raise ValueError(
+                "decision_field must be a non-empty uppercase-style identifier"
             )
 
         self.client = client
@@ -87,6 +93,7 @@ class Agent4RecYesNoScorer(Scorer):
         self.entity_field = entity_field
         self.entity_name = entity_name
         self.entity_plural = entity_plural
+        self.decision_field = decision_field
         self.prompt_style = prompt_style
         self.profile_by_user_: dict[Any, Agent4RecUserProfile] | None = None
         self.history_by_user_: dict[Any, UserHistory] | None = None
@@ -334,6 +341,7 @@ class Agent4RecYesNoScorer(Scorer):
             entity_field=self.entity_field,
             entity_name=self.entity_name,
             entity_plural=self.entity_plural,
+            decision_field=self.decision_field,
         )
 
     def _parse_response(
@@ -342,7 +350,11 @@ class Agent4RecYesNoScorer(Scorer):
         *,
         labels: Sequence[str],
     ) -> dict[str, float]:
-        return parse_agent4rec_watch_response(text, labels=labels)
+        return parse_agent4rec_interaction_response(
+            text,
+            labels=labels,
+            decision_field=self.decision_field,
+        )
 
     def _format_system_prompt(
         self,
@@ -457,11 +469,31 @@ def parse_agent4rec_watch_response(
 ) -> dict[str, float]:
     """Parse Agent4Rec `ID/{MOVIE|GAME|ITEM}/WATCH/REASON` responses by label."""
 
-    return _parse_agent4rec_binary_response(
+    return parse_agent4rec_interaction_response(
         text,
         labels=labels,
         decision_field="WATCH",
-        decision_name="watch",
+    )
+
+
+def parse_agent4rec_interaction_response(
+    text: str,
+    *,
+    labels: Sequence[str],
+    decision_field: str,
+) -> dict[str, float]:
+    """Parse a dataset-specific Agent4Rec interaction decision field."""
+
+    normalized_field = decision_field.strip().upper()
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", normalized_field):
+        raise ValueError(
+            "decision_field must be a non-empty uppercase-style identifier"
+        )
+    return _parse_agent4rec_binary_response(
+        text,
+        labels=labels,
+        decision_field=normalized_field,
+        decision_name=normalized_field.lower(),
     )
 
 

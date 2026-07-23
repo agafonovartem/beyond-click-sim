@@ -220,9 +220,12 @@ def test_llm_listwise_ranking_runner_formats_steam_json_lists(
     )
 
     user_prompt = client.completions.calls[0]["messages"][1]["content"]
-    assert "item_genres_json: Action, Adventure" in user_prompt
-    assert "item_tags_json: Puzzle, Singleplayer" in user_prompt
-    assert 'item_genres_json: ["Action", "Adventure"]' not in user_prompt
+    assert "game title: Portal" in user_prompt
+    assert "genres: Action, Adventure" in user_prompt
+    assert "tags: Puzzle, Singleplayer" in user_prompt
+    assert "user playtime minutes: 120" in user_prompt
+    assert "item_genres_json" not in user_prompt
+    assert "item_tags_json" not in user_prompt
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["scorer"]["json_list_columns"] == [

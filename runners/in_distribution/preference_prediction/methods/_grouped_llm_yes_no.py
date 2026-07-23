@@ -98,6 +98,32 @@ DATASET_JSON_LIST_COLUMNS = {
     "ml-1m": (),
     "steam": ("item_genres_json", "item_tags_json"),
 }
+DATASET_COLUMN_LABELS = {
+    "ml-1m": {},
+    "steam": {
+        "item_title": "game title",
+        "item_genres_json": "genres",
+        "item_tags_json": "tags",
+        "playtime_forever": "user playtime minutes",
+    },
+}
+
+
+def prompt_column_labels(
+    dataset_name: str,
+    *,
+    use_item_stats: bool,
+) -> dict[str, str]:
+    """Return human-readable dataset and optional item-stat prompt labels."""
+
+    return {
+        **DATASET_COLUMN_LABELS[dataset_name],
+        **item_rating_column_labels(
+            dataset_name,
+            use_item_stats=use_item_stats,
+        ),
+    }
+
 
 def run_method(
     task: Task,
@@ -136,7 +162,7 @@ def run_method(
         history_item_summaries=resolved_summary_visibility["history"],
         candidate_item_summaries=resolved_summary_visibility["candidate"],
     )
-    column_labels = item_rating_column_labels(
+    column_labels = prompt_column_labels(
         dataset_name,
         use_item_stats=use_item_stats,
     )

@@ -19,12 +19,10 @@ from runners.in_distribution.interaction_prediction.methods.llm_yes_no import (
     DATASET_JSON_LIST_COLUMNS,
     DATASET_PROMPT_COLUMNS,
     QWEN_EXTRA_BODY,
+    prompt_column_labels,
 )
 from runners.in_distribution.interaction_prediction.task_builders import repo_root
-from runners.in_distribution.llm_item_stats import (
-    item_rating_column_labels,
-    maybe_add_item_rating_prompt_columns,
-)
+from runners.in_distribution.llm_item_stats import maybe_add_item_rating_prompt_columns
 
 
 LITELLM_CLIENT_NAME = "litellm_local"
@@ -143,7 +141,7 @@ def run_method(
         DATASET_PROMPT_COLUMNS[dataset_name],
         use_item_stats=use_item_stats,
     )
-    column_labels = item_rating_column_labels(
+    column_labels = prompt_column_labels(
         dataset_name,
         use_item_stats=use_item_stats,
     )

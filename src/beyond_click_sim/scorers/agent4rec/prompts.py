@@ -119,8 +119,8 @@ AGENT4REC_FORCED_ITEMS_USER_PROMPT_TEMPLATE = """##recommended list##
 {candidates}
 Please judge all {entity_plural} in the ##recommended list## and explain why.
 {profile_instruction}
-Use this format: ID: [candidate id]; {entity_field}: [{entity_name} name]; WATCH: [yes or no]; REASON: [brief reason]
-You must judge all the {entity_plural}. If you don't want to {negative_action} a {entity_name}, use WATCH: no; REASON: [brief reason]
+Use this format: ID: [candidate id]; {entity_field}: [{entity_name} name]; {decision_field}: [yes or no]; REASON: [brief reason]
+You must judge all the {entity_plural}. If you don't want to {negative_action} a {entity_name}, use {decision_field}: no; REASON: [brief reason]
 Each response should be on one line. Do not include any additional information or explanations and stay grounded in reality."""
 
 
@@ -131,6 +131,7 @@ def agent4rec_user_prompt(
     entity_field: str = "MOVIE",
     entity_name: str = "movie",
     entity_plural: str = "movies",
+    decision_field: str = "WATCH",
 ) -> str:
     """Build the Agent4Rec forced-items user prompt for available profile parts."""
 
@@ -161,6 +162,7 @@ def agent4rec_user_prompt(
         entity_field=entity_field,
         entity_name=entity_name,
         entity_plural=entity_plural,
+        decision_field=decision_field,
         profile_instruction=profile_instruction,
         negative_action="watch" if use_original_movie_wording else "choose",
     )

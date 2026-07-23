@@ -145,6 +145,14 @@ DATASET_PROMPT_KWARGS = {
         "entity_plural": "games",
     },
 }
+DATASET_INTERACTION_DECISION_FIELDS = {
+    "ml-1m": "WATCH",
+    "steam": "INTERACT",
+}
+DATASET_INTERACTION_PARSER_CONTRACTS = {
+    "ml-1m": "agent4rec_labeled_id_movie_watch_reason",
+    "steam": "agent4rec_labeled_id_game_interact_reason",
+}
 DATASET_SUPPORTS_TASTE = {
     "ml-1m": True,
     "steam": True,
@@ -546,7 +554,7 @@ def run_method(
     scorer_kwargs: dict[str, object] | None = None,
     candidate_description_columns: tuple[str, ...] | None = None,
     column_labels: dict[str, str] | None = None,
-    parser_contract: str = "agent4rec_labeled_id_movie_watch_reason",
+    parser_contract: str | None = None,
     serving_metadata: dict[str, object] | None = None,
     source_metadata: dict[str, object] | None = None,
     summary_usage: Agent4RecSummaryUsage = "candidate",
@@ -564,6 +572,9 @@ def run_method(
         candidate_description_columns = DATASET_CANDIDATE_COLUMNS[dataset_name]
     if column_labels is None:
         column_labels = DATASET_COLUMN_LABELS[dataset_name]
+    decision_field = DATASET_INTERACTION_DECISION_FIELDS[dataset_name]
+    if parser_contract is None:
+        parser_contract = DATASET_INTERACTION_PARSER_CONTRACTS[dataset_name]
     candidate_group_column = task.schema.candidate_group_column
     if candidate_group_column is None:
         raise ValueError("Agent4Rec yes/no method requires candidate_group_column")
@@ -656,6 +667,7 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
+        decision_field=decision_field,
         **({} if scorer_kwargs is None else scorer_kwargs),
         **DATASET_PROMPT_KWARGS[dataset_name],
     ).fit(X_train, y_train, profile_user_ids=profile_user_ids)
@@ -741,6 +753,7 @@ def run_method(
             "profile_generator": scorer.profile_generator.manifest(),
             "extra_body": extra_body,
             "prompt": DATASET_PROMPT_KWARGS[dataset_name],
+            "decision_field": decision_field,
             "scorer_kwargs": scorer_kwargs,
             "serving": serving_metadata,
             "summary_usage": summary_usage,
