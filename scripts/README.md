@@ -136,6 +136,27 @@ fails, it isolates the problem to that specific pod (see Troubleshooting below).
 Each of `localhost:8080-8083` is now an OpenAI-compatible endpoint for
 `Qwen/Qwen3.6-27B`, load-balanced (least-busy) across that pod's 4 GPUs.
 
+### Steam in-distribution matrix
+
+When one Qwen model and its local LiteLLM proxy are already running inside a
+GPU pod, the following launcher runs the matched Steam interaction/preference
+matrix and writes every artifact under the repository `outputs/` directory:
+
+```bash
+scripts/run_steam_qwen_matrix.sh qwen3_8b smoke
+scripts/run_steam_qwen_matrix.sh qwen3_8b full
+scripts/run_steam_qwen_matrix.sh qwen36_27b smoke
+scripts/run_steam_qwen_matrix.sh qwen36_27b full
+```
+
+The interaction grid uses `m={1,3,9,19}`; preference uses
+`m={1,2,3,9}`; both use seeds `0,1,2`. Each grid contains History yes/no,
+History listwise, Agent4Rec `traits+taste` yes/no, and Agent4Rec
+`traits+taste` listwise. History interaction exposes train-only item
+statistics; Agent4Rec uses no item summaries. The launcher records each
+task/phase exit code in `queue_status.tsv` and continues to later batches after
+an isolated failure.
+
 ### Optional: one unified endpoint across all pods
 
 If your code should hit a single URL instead of picking between 4, start the
