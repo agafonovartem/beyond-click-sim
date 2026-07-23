@@ -259,6 +259,10 @@ def test_cold_start_llm_qwen_smoke_and_full_wrappers(tmp_path: Path, monkeypatch
     llm_yes_no.run_qwen36_27b_full(task, tmp_path)
     llm_yes_no.run_qwen36_27b_itemwise_smoke(task, tmp_path)
     llm_yes_no.run_qwen36_27b_itemwise_full(task, tmp_path)
+    llm_yes_no.run_qwen36_35b_a3b_smoke(task, tmp_path)
+    llm_yes_no.run_qwen36_35b_a3b_full(task, tmp_path)
+    llm_yes_no.run_qwen36_35b_a3b_itemwise_smoke(task, tmp_path)
+    llm_yes_no.run_qwen36_35b_a3b_itemwise_full(task, tmp_path)
 
     assert calls == [
         {
@@ -292,6 +296,42 @@ def test_cold_start_llm_qwen_smoke_and_full_wrappers(tmp_path: Path, monkeypatch
             "method_name": "llm_yes_no_vllm_qwen36_27b_itemwise_full",
             "client_name": "vllm_local",
             "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": None,
+            "max_workers": llm_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "scoring": "itemwise",
+        },
+        {
+            "method_name": "llm_yes_no_vllm_qwen36_35b_a3b_smoke",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-35B-A3B",
+            "max_candidate_groups": 25,
+            "max_workers": llm_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "scoring": "batch",
+        },
+        {
+            "method_name": "llm_yes_no_vllm_qwen36_35b_a3b_full",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-35B-A3B",
+            "max_candidate_groups": None,
+            "max_workers": llm_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "scoring": "batch",
+        },
+        {
+            "method_name": "llm_yes_no_vllm_qwen36_35b_a3b_itemwise_smoke",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-35B-A3B",
+            "max_candidate_groups": 25,
+            "max_workers": llm_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "scoring": "itemwise",
+        },
+        {
+            "method_name": "llm_yes_no_vllm_qwen36_35b_a3b_itemwise_full",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-35B-A3B",
             "max_candidate_groups": None,
             "max_workers": llm_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},

@@ -9,6 +9,9 @@ invoking them yourself.
 for an LLM agent to follow. This file covers the same ground for a human running
 commands directly.)
 
+For recurring cold-start experiment execution (upload/setup/queue/download across
+`agent-exp-0..7`), use `COLD_START_POD_QUEUE_RUNBOOK.md`.
+
 ## 0. Prerequisites
 
 ```bash

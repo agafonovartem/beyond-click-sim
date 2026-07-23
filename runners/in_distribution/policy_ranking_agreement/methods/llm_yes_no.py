@@ -50,7 +50,7 @@ VLLM_CLIENT = "vllm_local"
 VLLM_MODEL_LLAMA33_70B = "llama-3.3-70b-instruct"
 VLLM_MODEL_QWEN3_8B = "qwen3-8b"
 VLLM_MODEL_QWEN36_27B = "Qwen/Qwen3.6-27B"
-VLLM_MODEL_QWEN36_35B_A3B = "qwen3.6-35b-a3b"
+VLLM_MODEL_QWEN36_35B_A3B = "Qwen/Qwen3.6-35B-A3B"
 
 QWEN_EXTRA_BODY: dict = {"chat_template_kwargs": {"enable_thinking": False}}
 

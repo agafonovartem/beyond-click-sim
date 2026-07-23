@@ -60,6 +60,9 @@ VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
 VLLM_QWEN36_27B_METHOD_NAME = "agent4rec_yes_no_vllm_qwen36_27b"
 VLLM_QWEN36_27B_CLIENT = "vllm_local"
 VLLM_QWEN36_27B_MODEL = "Qwen/Qwen3.6-27B"
+VLLM_QWEN36_35B_A3B_METHOD_NAME = "agent4rec_yes_no_vllm_qwen36_35b_a3b"
+VLLM_QWEN36_35B_A3B_CLIENT = "vllm_local"
+VLLM_QWEN36_35B_A3B_MODEL = "Qwen/Qwen3.6-35B-A3B"
 QWEN_EXTRA_BODY: dict = {"chat_template_kwargs": {"enable_thinking": False}}
 OPENAI_CLIENT = "openai"
 GPT4O_MINI_TASTE_MODEL = "gpt-4o-mini"
@@ -465,6 +468,294 @@ def run_qwen36_27b_itemwise_item_stats_traits_taste_gpt4o_mini_full(
         ),
         client_name=VLLM_QWEN36_27B_CLIENT,
         model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_35b_a3b_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_35b_a3b_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_35b_a3b_traits_taste_gpt4o_mini_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_traits_taste_gpt4o_mini_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_35b_a3b_traits_taste_gpt4o_mini_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_traits_taste_gpt4o_mini_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_traits_taste_gpt4o_mini_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_traits_taste_gpt4o_mini_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_traits_taste_gpt4o_mini_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_traits_taste_gpt4o_mini_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_35b_a3b_item_stats_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_item_stats_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_35b_a3b_item_stats_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_item_stats_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_item_stats_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_item_stats_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_item_stats_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_item_stats_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_35b_a3b_item_stats_traits_taste_gpt4o_mini_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_item_stats_traits_taste_gpt4o_mini_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_35b_a3b_item_stats_traits_taste_gpt4o_mini_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_item_stats_traits_taste_gpt4o_mini_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="batch",
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_item_stats_traits_taste_gpt4o_mini_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=(
+            f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_item_stats_traits_taste_gpt4o_mini_smoke"
+        ),
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        use_item_stats=True,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage=canonical_agent4rec_summary_usage(task),
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_item_stats_traits_taste_gpt4o_mini_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=(
+            f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_item_stats_traits_taste_gpt4o_mini_full"
+        ),
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,

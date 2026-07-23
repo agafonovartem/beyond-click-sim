@@ -616,6 +616,8 @@ def test_cold_start_agent4rec_qwen_smoke_and_full_wrappers(
 
     agent4rec_yes_no.run_qwen36_27b_smoke(task, tmp_path)
     agent4rec_yes_no.run_qwen36_27b_full(task, tmp_path)
+    agent4rec_yes_no.run_qwen36_35b_a3b_smoke(task, tmp_path)
+    agent4rec_yes_no.run_qwen36_35b_a3b_full(task, tmp_path)
 
     assert calls == [
         {
@@ -632,6 +634,26 @@ def test_cold_start_agent4rec_qwen_smoke_and_full_wrappers(
             "method_name": "agent4rec_yes_no_vllm_qwen36_27b_full",
             "client_name": "vllm_local",
             "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": None,
+            "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
+            "scoring": "batch",
+        },
+        {
+            "method_name": "agent4rec_yes_no_vllm_qwen36_35b_a3b_smoke",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-35B-A3B",
+            "max_candidate_groups": 25,
+            "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_usage": "candidate",
+            "scoring": "batch",
+        },
+        {
+            "method_name": "agent4rec_yes_no_vllm_qwen36_35b_a3b_full",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-35B-A3B",
             "max_candidate_groups": None,
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},

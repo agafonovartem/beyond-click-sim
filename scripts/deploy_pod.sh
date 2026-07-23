@@ -52,7 +52,7 @@ kubectl cp "$SCRIPT_DIR/model_complete_check.sh" "$POD:/home/jovyan/model_comple
 
 # Rewrite the litellm backend model id to match the selected MODEL_NAME.
 LITELLM_CONFIG_TMP="$(mktemp)"
-sed "s|Qwen/Qwen3\\.6-27B|$MODEL_NAME|g" "$SCRIPT_DIR/litellm_config.yaml" > "$LITELLM_CONFIG_TMP"
+sed "s|Qwen/Qwen3\\.6-35B-A3B|$MODEL_NAME|g" "$SCRIPT_DIR/litellm_config.yaml" > "$LITELLM_CONFIG_TMP"
 kubectl cp "$LITELLM_CONFIG_TMP" "$POD:/home/jovyan/litellm_config.yaml"
 rm -f "$LITELLM_CONFIG_TMP"
 
