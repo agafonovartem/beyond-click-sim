@@ -43,6 +43,20 @@ from runners.in_distribution.interaction_prediction.methods.popularity import (
     run as run_popularity,
     run_ranking as run_popularity_ranking,
 )
+from runners.in_distribution.interaction_prediction.methods.item_knn import (
+    run as run_item_knn,
+    run_ranking as run_item_knn_ranking,
+)
+from runners.in_distribution.interaction_prediction.methods.matrix_factorization import (
+    run_als,
+    run_als_ranking,
+    run_bpr,
+    run_bpr_ranking,
+)
+from runners.in_distribution.interaction_prediction.methods.lightgcn import (
+    run as run_lightgcn,
+    run_ranking as run_lightgcn_ranking,
+)
 
 
 MethodRunner = Callable[[Task, Path], dict[str, object]]
@@ -50,6 +64,14 @@ MethodRunner = Callable[[Task, Path], dict[str, object]]
 METHOD_RUNNERS: dict[str, MethodRunner] = {
     "popularity_f1_threshold": run_popularity,
     "popularity_ranking": run_popularity_ranking,
+    "item_knn_f1_threshold": run_item_knn,
+    "item_knn_ranking": run_item_knn_ranking,
+    "als_f1_threshold": run_als,
+    "als_ranking": run_als_ranking,
+    "bpr_f1_threshold": run_bpr,
+    "bpr_ranking": run_bpr_ranking,
+    "lightgcn_f1_threshold": run_lightgcn,
+    "lightgcn_ranking": run_lightgcn_ranking,
     "agent4rec_yes_no_ollama_llama31_8b_smoke": run_agent4rec_llama31_8b_smoke,
     "agent4rec_yes_no_ollama_llama31_8b_full": run_agent4rec_llama31_8b_full,
     "agent4rec_yes_no_vllm_llama33_70b_smoke": run_agent4rec_llama33_70b_smoke,
