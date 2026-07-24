@@ -11,6 +11,8 @@ from beyond_click_sim.scorers import (
     LLMPreferenceListwiseRankingScorer,
     LLMPreferenceYesNoScorer,
     LLMRegressor,
+    LLMTargetResponseListwiseRankingScorer,
+    LLMTargetResponseProbabilityScorer,
 )
 from beyond_click_sim.scorers.constant import select_user_history_positions
 from beyond_click_sim.scorers.llm import (
@@ -34,7 +36,12 @@ class FakeChatCompletions:
                 SimpleNamespace(
                     message=SimpleNamespace(content=response),
                 )
-            ]
+            ],
+            usage=SimpleNamespace(
+                prompt_tokens=10,
+                completion_tokens=4,
+                total_tokens=14,
+            ),
         )
 
 
@@ -262,6 +269,135 @@ def test_llm_preference_listwise_ranking_scorer_uses_target_prompt() -> None:
     assert "User feedback history:" in messages[1]["content"]
     assert "rate the movie at least 4 out of 5" in messages[1]["content"]
     assert "most likely to least likely to meet" in messages[1]["content"]
+
+
+def test_llm_target_response_listwise_scorer_uses_exact_click_target() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "description": ["游戏攻略", "婚礼致辞"],
+            "history_click": ["yes", "no"],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1"],
+            "candidate_group": ["g1", "g1", "g1"],
+            "description": ["游戏技巧", "音乐现场", "婚礼祝福"],
+        }
+    )
+    client = FakeClient(["C1\nC2\nC3"])
+
+    scorer = LLMTargetResponseListwiseRankingScorer(
+        client=client,
+        model="fake-model",
+        history_description_columns=("description", "history_click"),
+        candidate_description_columns=("description",),
+        target_description="The user clicks the video after it is exposed.",
+        max_tokens=None,
+        temperature=None,
+        request_kwargs={
+            "max_completion_tokens": 16,
+            "reasoning_effort": "none",
+        },
+    ).fit(X_train, pd.Series([1, 0]))
+
+    assert scorer.score(X_test).tolist() == [2.0, 1.0, 0.0]
+    messages = client.completions.calls[0]["messages"]
+    assert "positive preference" not in messages[0]["content"]
+    assert "Response target:" in messages[1]["content"]
+    assert "clicks the video after it is exposed" in messages[1]["content"]
+    assert "valid-play" not in messages[1]["content"]
+    assert "history_click: yes" in messages[1]["content"]
+    assert "max_tokens" not in client.completions.calls[0]
+    assert "temperature" not in client.completions.calls[0]
+    assert client.completions.calls[0]["max_completion_tokens"] == 16
+    assert client.completions.calls[0]["reasoning_effort"] == "none"
+    assert scorer.request_count_ == 1
+    assert scorer.usage_ == {
+        "prompt_tokens": 10,
+        "completion_tokens": 4,
+        "total_tokens": 14,
+    }
+
+
+def test_llm_target_response_probability_scorer_returns_group_probabilities() -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1"],
+            "description": ["游戏攻略", "婚礼致辞"],
+            "history_click": [1, 0],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1"],
+            "candidate_group": ["g1", "g1", "g1"],
+            "description": ["游戏技巧", "音乐现场", "婚礼祝福"],
+        },
+        index=[3, 8, 11],
+    )
+    client = FakeClient(['{"C1":0.8,"C2":0.25,"C3":0.1}'])
+
+    scorer = LLMTargetResponseProbabilityScorer(
+        client=client,
+        model="fake-model",
+        history_description_columns=("description", "history_click"),
+        candidate_description_columns=("description",),
+        target_description="The user clicks the video after it is exposed.",
+        max_tokens=48,
+        temperature=0.0,
+    ).fit(X_train, pd.Series([1, 0]))
+
+    scores = scorer.score(X_test)
+
+    assert scores.index.tolist() == [3, 8, 11]
+    assert scores.tolist() == [0.8, 0.25, 0.1]
+    prompt = "\n".join(
+        message["content"]
+        for message in client.completions.calls[0]["messages"]
+    )
+    assert "probability" in prompt
+    assert "C1, C2, C3" in prompt
+    assert scorer.request_count_ == 1
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        '{"C1":0.8,"C2":0.2,"C2":0.1}',
+        '{"C1":0.8,"C2":1.1,"C3":0.1}',
+        '{"C1":0.8,"C2":"0.2","C3":0.1}',
+        "```json\n{\"C1\":0.8,\"C2\":0.2,\"C3\":0.1}\n```",
+    ],
+)
+def test_llm_target_response_probability_scorer_rejects_invalid_output(
+    response: str,
+) -> None:
+    X_train = pd.DataFrame(
+        {
+            "user_id": ["u1"],
+            "description": ["历史视频"],
+            "history_click": [1],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1"],
+            "candidate_group": ["g1", "g1", "g1"],
+            "description": ["A", "B", "C"],
+        }
+    )
+    scorer = LLMTargetResponseProbabilityScorer(
+        client=FakeClient([response]),
+        model="fake-model",
+        history_description_columns=("description", "history_click"),
+        candidate_description_columns=("description",),
+        target_description="click",
+    ).fit(X_train, pd.Series([1]))
+
+    with pytest.raises(ValueError):
+        scorer.score(X_test)
 
 
 def test_llm_regressor_passes_extra_body() -> None:

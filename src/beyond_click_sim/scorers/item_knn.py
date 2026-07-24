@@ -11,6 +11,127 @@ from sklearn.preprocessing import normalize
 from beyond_click_sim.scorers.base import Scorer
 
 
+class ItemKNNScorer(Scorer):
+    """Score explicit candidates with positive-only item-based KNN.
+
+    ``fit`` builds binary item-user cosine similarities from positive source
+    interactions and stores each source user's positive item profile.  This is
+    the explicit-candidate counterpart of :class:`ItemKNNPolicy`: candidate
+    scores are the sum (or mean) of top-neighbor similarities contributed by
+    the user's clicked source items.
+
+    Coverage is strict.  A candidate user must have at least one positive
+    source interaction and a candidate item must have positive source support.
+    A score of zero is therefore meaningful: both nodes are warm, but none of
+    the user's profile items contributes a retained neighbor edge.
+    """
+
+    name = "item_knn"
+
+    def __init__(
+        self,
+        n_neighbors: int = 20,
+        aggregation: str = "sum",
+        item_column: str = "item_id",
+        user_column: str = "user_id",
+        cold_score_policy: str = "error",
+    ) -> None:
+        if n_neighbors < 1:
+            raise ValueError("n_neighbors must be positive")
+        if aggregation not in ("mean", "sum"):
+            raise ValueError(
+                f"aggregation must be 'mean' or 'sum', got {aggregation!r}"
+            )
+        if cold_score_policy not in {"error", "zero"}:
+            raise ValueError("cold_score_policy must be 'error' or 'zero'")
+        self.n_neighbors = n_neighbors
+        self.aggregation = aggregation
+        self.item_column = item_column
+        self.user_column = user_column
+        self.cold_score_policy = cold_score_policy
+        self._backend_: ColdItemKNNScorer | None = None
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> Self:
+        self._require_columns(X)
+        if len(X) != len(y):
+            raise ValueError("X and y must have the same length")
+        if y.isna().any():
+            raise ValueError("ItemKNNScorer targets must not contain missing values")
+        unique_targets = set(y.unique().tolist())
+        if not unique_targets.issubset({0, 1, False, True}):
+            raise ValueError(
+                "ItemKNNScorer targets must be binary values in {0, 1}"
+            )
+
+        positive_mask = y.astype(bool).to_numpy()
+        positives = (
+            X.loc[positive_mask, [self.user_column, self.item_column]]
+            .drop_duplicates()
+            .reset_index(drop=True)
+        )
+        if positives.empty:
+            raise ValueError(
+                "ItemKNNScorer requires at least one positive interaction"
+            )
+
+        backend = ColdItemKNNScorer(
+            n_neighbors=self.n_neighbors,
+            aggregation=self.aggregation,
+            item_column=self.item_column,
+            user_column=self.user_column,
+        )
+        # The cold-start scorer already implements the same neighbor graph and
+        # profile aggregation as ItemKNNPolicy.  Here both stages come from the
+        # same positive-only source log.
+        backend.fit_train(
+            positives,
+            pd.Series(1, index=positives.index, dtype=int),
+        )
+        backend.fit(
+            positives,
+            pd.Series(1, index=positives.index, dtype=int),
+        )
+        self._backend_ = backend
+        return self
+
+    def score(self, X: pd.DataFrame) -> pd.Series:
+        if self._backend_ is None:
+            raise RuntimeError("ItemKNNScorer is not fitted")
+        self._require_columns(X)
+
+        known_users = set(self._backend_._user_profiles_)
+        known_items = set(self._backend_._item_idx_)
+        unknown_users = int((~X[self.user_column].isin(known_users)).sum())
+        unknown_items = int((~X[self.item_column].isin(known_items)).sum())
+        if (unknown_users or unknown_items) and self.cold_score_policy == "error":
+            raise ValueError(
+                "ItemKNNScorer cannot score cold rows: "
+                f"unknown_users={unknown_users}, unknown_items={unknown_items}"
+            )
+        self.coverage_diagnostics_ = {
+            "rows": int(len(X)),
+            "unknown_user_rows": unknown_users,
+            "unknown_item_rows": unknown_items,
+            "fallback_rows": int(
+                (
+                    ~X[self.user_column].isin(known_users)
+                    | ~X[self.item_column].isin(known_items)
+                ).sum()
+            ),
+            "cold_score_policy": self.cold_score_policy,
+        }
+        return self._backend_.score(X)
+
+    def _require_columns(self, X: pd.DataFrame) -> None:
+        missing = [
+            column
+            for column in (self.user_column, self.item_column)
+            if column not in X.columns
+        ]
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
+
+
 class ColdItemKNNScorer(Scorer):
     """Item-KNN scorer for the cold-start alignment task.
 

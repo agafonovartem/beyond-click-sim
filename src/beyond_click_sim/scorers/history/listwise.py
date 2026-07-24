@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 import re
+from threading import Lock, local
 from typing import Any
 
 import pandas as pd
@@ -16,6 +17,8 @@ from beyond_click_sim.scorers.history.prompts import (
     INTERACTION_LISTWISE_RANKING_USER_PROMPT_TEMPLATE,
     PREFERENCE_LISTWISE_RANKING_SYSTEM_PROMPT,
     PREFERENCE_LISTWISE_RANKING_USER_PROMPT_TEMPLATE,
+    TARGET_RESPONSE_LISTWISE_RANKING_SYSTEM_PROMPT,
+    TARGET_RESPONSE_LISTWISE_RANKING_USER_PROMPT_TEMPLATE,
 )
 from beyond_click_sim.scorers.history.selection import select_history_by_user
 
@@ -41,11 +44,12 @@ class LLMInteractionListwiseRankingScorer(Scorer):
         user_column: str = "user_id",
         candidate_group_column: str = "candidate_group",
         max_history_items: int | None = 30,
-        temperature: float = 0.0,
-        max_tokens: int = 256,
+        temperature: float | None = 0.0,
+        max_tokens: int | None = 256,
         column_labels: dict[str, str] | None = None,
         json_list_columns: tuple[str, ...] = (),
         extra_body: dict | None = None,
+        request_kwargs: dict[str, Any] | None = None,
     ) -> None:
         if not history_description_columns:
             raise ValueError("history_description_columns must be non-empty")
@@ -66,7 +70,25 @@ class LLMInteractionListwiseRankingScorer(Scorer):
         self.column_labels = {} if column_labels is None else dict(column_labels)
         self.json_list_columns = tuple(json_list_columns)
         self.extra_body = extra_body
+        self.request_kwargs = (
+            {} if request_kwargs is None else dict(request_kwargs)
+        )
+        reserved_request_keys = {"model", "messages"}
+        conflicts = reserved_request_keys & set(self.request_kwargs)
+        if conflicts:
+            raise ValueError(
+                "request_kwargs cannot override required request keys: "
+                f"{sorted(conflicts)}"
+            )
         self.history_by_user_: dict[Any, list[str]] | None = None
+        self.usage_: dict[str, int] = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+        self.request_count_: int = 0
+        self._usage_lock = Lock()
+        self._request_local = local()
 
     def fit(
         self,
@@ -131,13 +153,19 @@ class LLMInteractionListwiseRankingScorer(Scorer):
                 candidates=group,
                 labels=labels,
             )
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                **({"extra_body": self.extra_body} if self.extra_body else {}),
-            )
+            request: dict[str, Any] = {
+                "model": self.model,
+                "messages": messages,
+            }
+            if self.temperature is not None:
+                request["temperature"] = self.temperature
+            if self.max_tokens is not None:
+                request["max_tokens"] = self.max_tokens
+            request.update(self.request_kwargs)
+            if self.extra_body:
+                request["extra_body"] = self.extra_body
+            response = self.client.chat.completions.create(**request)
+            self._record_usage(getattr(response, "usage", None))
             ranked_labels = parse_ranked_labels_response(
                 _chat_completion_text(response),
                 labels=labels,
@@ -200,11 +228,47 @@ class LLMInteractionListwiseRankingScorer(Scorer):
         description = "; ".join(parts) if parts else "no item description"
         return f"{label}. {description}"
 
+    def _record_usage(self, usage: Any) -> None:
+        prompt_tokens = _usage_value(usage, "prompt_tokens")
+        completion_tokens = _usage_value(usage, "completion_tokens")
+        total_tokens = _usage_value(usage, "total_tokens")
+        if total_tokens == 0:
+            total_tokens = prompt_tokens + completion_tokens
+        # Preserve the usage of this exact request in the calling thread. This
+        # lets long-running experiment runners atomically checkpoint per-group
+        # usage without racing against aggregate counters from other workers.
+        self._request_local.last_usage = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+        }
+        with self._usage_lock:
+            self.request_count_ += 1
+            self.usage_["prompt_tokens"] += prompt_tokens
+            self.usage_["completion_tokens"] += completion_tokens
+            self.usage_["total_tokens"] += total_tokens
+
+    def last_request_usage(self) -> dict[str, int] | None:
+        """Return usage for the latest request made by the current thread."""
+
+        usage = getattr(self._request_local, "last_usage", None)
+        return None if usage is None else dict(usage)
+
     @staticmethod
     def _require_columns(frame: pd.DataFrame, columns: list[str]) -> None:
         missing = [column for column in columns if column not in frame.columns]
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
+
+
+def _usage_value(usage: Any, field: str) -> int:
+    if usage is None:
+        return 0
+    if isinstance(usage, dict):
+        value = usage.get(field, 0)
+    else:
+        value = getattr(usage, field, 0)
+    return int(value or 0)
 
 
 class LLMPreferenceListwiseRankingScorer(LLMInteractionListwiseRankingScorer):
@@ -245,6 +309,58 @@ class LLMPreferenceListwiseRankingScorer(LLMInteractionListwiseRankingScorer):
         )
         return [
             {"role": "system", "content": PREFERENCE_LISTWISE_RANKING_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+
+class LLMTargetResponseListwiseRankingScorer(
+    LLMInteractionListwiseRankingScorer
+):
+    """Listwise scorer for an explicit behavioral response target.
+
+    Unlike the preference-specific variant, this scorer makes no claim that the
+    response is a positive preference. It is suitable for exposed-response
+    outcomes such as ``clicked after exposure``.
+    """
+
+    name = "llm_target_response_listwise_ranking"
+
+    def __init__(self, *, target_description: str, **kwargs: Any) -> None:
+        if not target_description.strip():
+            raise ValueError("target_description must be non-empty")
+        super().__init__(**kwargs)
+        self.target_description = target_description
+
+    def _build_messages(
+        self,
+        *,
+        user_id: Any,
+        candidates: pd.DataFrame,
+        labels: Sequence[str],
+    ) -> list[dict[str, str]]:
+        history = self.history_by_user_.get(user_id, []) if self.history_by_user_ else []
+        candidate_lines = [
+            self._format_item_description(
+                row=row,
+                label=label,
+                columns=self.candidate_description_columns,
+            )
+            for label, row in zip(labels, candidates.itertuples(index=False), strict=True)
+        ]
+        user_prompt = TARGET_RESPONSE_LISTWISE_RANKING_USER_PROMPT_TEMPLATE.format(
+            history="\n".join(history)
+            if history
+            else "- No response history available.",
+            target_description=self.target_description,
+            candidates="\n".join(candidate_lines),
+            output_labels=", ".join(labels),
+            candidate_count=len(labels),
+        )
+        return [
+            {
+                "role": "system",
+                "content": TARGET_RESPONSE_LISTWISE_RANKING_SYSTEM_PROMPT,
+            },
             {"role": "user", "content": user_prompt},
         ]
 

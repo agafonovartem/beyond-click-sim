@@ -32,13 +32,14 @@ The paper scope is broader than one click-prediction benchmark:
 - **Offline-constructed OOD shifts** - evaluate cold-start, temporal, semantic, feature-based, or domain-like shifts.
 - **Behavioral extrapolation** - study effects such as choice overload, anchoring, social proof, repeated exposure, fatigue, novelty seeking, trust degradation, and session exit.
 
-Current code primarily supports the first in-distribution interaction-prediction benchmark and a small MovieLens-1M rating-regression protocol.
+Current code supports the in-distribution interaction/rating protocols and a
+KuaiRand standard-versus-random exposure-policy shift benchmark.
 
 ## What is inside
 
 | Area | Purpose |
 | --- | --- |
-| `src/beyond_click_sim/data/` | Canonical dataset descriptors, manifests, and MovieLens/Steam adapters. |
+| `src/beyond_click_sim/data/` | Canonical dataset descriptors, manifests, and MovieLens/Steam/KuaiRand adapters. |
 | `src/beyond_click_sim/tasks/` | Filters, splitters, candidate samplers, and task builders. |
 | `src/beyond_click_sim/scorers/` | Response scorers, including popularity and LLM yes/no scorers. |
 | `src/beyond_click_sim/evaluation/` | Metric and decision-rule helpers. |
@@ -145,12 +146,26 @@ uv run python -m beyond_click_sim.data.canonicalize steam \
   --out-dir data/canonical/steam/v1
 ```
 
+Materialize KuaiRand-Pure with the official caption/category supplement:
+
+```bash
+uv run python -m beyond_click_sim.data.canonicalize kuairand \
+  --raw-dir /path/to/KuaiRand-Pure \
+  --out-dir data/canonical/kuairand-pure/v1
+```
+
+The adapter preserves every released exposure row and keeps the full caption,
+with full cover text as a fallback, plus the released category hierarchy.
+Global video-behavior aggregate features are deliberately excluded: their
+temporal support is unsuitable for a leakage-controlled policy-shift task.
+
 Supported canonical datasets:
 
 | Dataset | Adapter | Standard targets |
 | --- | --- | --- |
 | MovieLens-1M | `MovieLens1MAdapter` | interaction, rating >= 4, raw rating |
 | Steam | `SteamAdapter` | ownership interaction, playtime >= 120 minutes, raw playtime |
+| KuaiRand-Pure | `KuaiRandPureAdapter` | click, long view |
 
 ## Run experiments
 
@@ -195,6 +210,25 @@ uv run python -m runners.in_distribution.cold_start.run \
   --methods popularity_f1_threshold,popularity_ranking,item_knn_cold_start,item_knn_cold_start_ranking,llm_yes_no_vllm_qwen36_27b_full \
   --output-dir outputs/in_distribution/cold_start
 ```
+
+Run the KuaiRand exposure-policy shift benchmark:
+
+```bash
+uv run python -m runners.ood.kuairand_policy_shift.run \
+  --protocol natural \
+  --methods global_mean,user_ctr,user_ctr_laplace,item_ctr,exposure_logistic_bias,item_knn,bpr,text_affinity_caption_categories,text_affinity_categories_only \
+  --task-seeds 0,1,2 \
+  --history-controls observed
+```
+
+The benchmark predicts click probabilities for all natural target exposures:
+user-macro log-loss and Brier score are primary, while conditional NDCG@5 and
+Hit@1 are secondary ranking diagnostics. The exact 2×2 policy protocol,
+caption-aware LLM preflight/resume commands, and validity caveats are
+documented in
+[`runners/ood/kuairand_policy_shift/README.md`](runners/ood/kuairand_policy_shift/README.md).
+The completed 400-user GPT-5.4-mini run is summarized in
+[`runners/ood/kuairand_policy_shift/RESULTS_20260724.md`](runners/ood/kuairand_policy_shift/RESULTS_20260724.md).
 
 The default interaction tasks use the reduced `eval_users1000_cg5` protocol:
 classic scorers are trained on the full train split, while validation/test

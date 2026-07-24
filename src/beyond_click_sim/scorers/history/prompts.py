@@ -105,6 +105,64 @@ Do not include rank numbers, punctuation, explanations, or analysis.
 The first character of your response must be C."""
 
 
+TARGET_RESPONSE_LISTWISE_RANKING_SYSTEM_PROMPT = """You are simulating a user's response in a recommender system.
+Given the user's observed response history, an explicit response target, and candidate items, rank all candidates from most likely to least likely to produce the target response.
+Use only the provided history, target definition, and candidate information.
+The history is context only: never include history items in the ranking.
+Do not explain or show your reasoning.
+Return only the candidate labels in ranked order, one label per line."""
+
+
+TARGET_RESPONSE_LISTWISE_RANKING_USER_PROMPT_TEMPLATE = """User response history:
+{history}
+
+Response target:
+{target_description}
+
+Candidate items:
+{candidates}
+
+Rank every candidate from most likely to least likely to produce the response target for this user.
+
+Required output format:
+The complete set of allowed candidate labels is:
+{output_labels}
+Return exactly one ranked line for each candidate label.
+There are exactly {candidate_count} candidates, so your response must contain exactly {candidate_count} non-empty lines.
+Use each candidate label exactly once.
+Before returning, silently verify that every allowed label appears exactly once. If a label is missing or duplicated, correct the list.
+Do not output item names or history items.
+Do not include rank numbers, punctuation, explanations, or analysis.
+The first character of your response must be C."""
+
+
+TARGET_RESPONSE_PROBABILITY_SYSTEM_PROMPT = """You are predicting a user's response in a recommender system.
+Given the user's observed response history, an explicit response target, and candidate items, estimate the probability that each candidate independently produces the target response.
+Use only the provided history, target definition, and candidate information.
+The history is context only: never score history items.
+Return only one JSON object that maps every candidate label to a numeric probability from 0 to 1.
+Do not explain or show your reasoning."""
+
+
+TARGET_RESPONSE_PROBABILITY_USER_PROMPT_TEMPLATE = """User response history:
+{history}
+
+Response target:
+{target_description}
+
+Candidate items:
+{candidates}
+
+Estimate the response probability for every candidate independently.
+
+Required output format:
+Return exactly one JSON object with these keys and no others:
+{output_labels}
+Use every key exactly once.
+Every value must be a numeric probability from 0 to 1.
+Do not output markdown, explanations, item names, history items, or additional text."""
+
+
 POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT = """You are simulating a user's response to a recommendation.
 Given the user's interaction history and one recommended item, predict whether the user would interact with it.
 Use only the provided history and item information.

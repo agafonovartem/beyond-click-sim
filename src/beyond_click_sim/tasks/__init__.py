@@ -30,6 +30,17 @@ from beyond_click_sim.tasks.item_statistics import (
     PREFIXED_ITEM_RATING_STATS_COLUMNS,
     TrainItemRatingStatistics,
 )
+from beyond_click_sim.tasks.kuairand_policy_shift import (
+    HistoryControl,
+    KuaiRandPolicyShiftCell,
+    KuaiRandPolicyShiftTask,
+    KuaiRandPolicyShiftTaskBuilder,
+    PolicyRegime,
+    PolicyShiftSplit,
+)
+from beyond_click_sim.tasks.kuairand_natural_exposure import (
+    KuaiRandNaturalExposureTaskBuilder,
+)
 from beyond_click_sim.tasks.policies import Policy, PopularityPolicy, RandomPolicy
 from beyond_click_sim.tasks.policy_ranking import PolicyRankingTaskBuilder
 from beyond_click_sim.tasks.preference import PreferencePredictionTaskBuilder
@@ -54,9 +65,16 @@ __all__ = [
     "ColdUserHoldoutSplitter",
     "DatasetFilter",
     "ItemFeatureBuilder",
+    "HistoryControl",
+    "KuaiRandPolicyShiftCell",
+    "KuaiRandPolicyShiftTask",
+    "KuaiRandPolicyShiftTaskBuilder",
+    "KuaiRandNaturalExposureTaskBuilder",
     "MinUserInteractionsFilter",
     "NonInteractionCandidateSampler",
     "Policy",
+    "PolicyRegime",
+    "PolicyShiftSplit",
     "PolicyRankingTaskBuilder",
     "PopularityPolicy",
     "PostSplitUserSampler",
