@@ -818,3 +818,22 @@ Qwen3.6-27B backbone shows only small, task-dependent differences. The neutral
 prompt does not remove the central ID result that popularity is strongest in
 many slices. No full OpenP5-style regression matrix is registered here; the
 current regression integration has only a local smoke method.
+## Cold Start
+
+**Status: superseded — no reportable results yet.**
+
+The committed runs under `outputs/in_distribution/cold_start/` (20260708*,
+task names `ml-1m_cold_start_k{k}_cap20_eval_users1000_cg5_m{m}_seed{s}`,
+including the 2026-07 pod-queue Agent4Rec batch under `outputs/experimental/cold_start/`)
+were produced under the retired eval1000/cg5 protocol, where `seed`
+simultaneously changed the user partition, the evaluated-user subset, the
+temporal evaluation window (`group_offset`), and the negative draw. Cross-seed
+and cross-m aggregation under that design is invalid (verified: at m=1, seed 1
+dropped 376/1000 and seed 2 dropped 537/1000 evaluated users, biased toward
+heavy users). These runs are kept for provenance only and must not be cited in
+the paper.
+
+The redesigned protocol (`cold_like` tasks: fixed target frame,
+`target_like_ge4`, C=5, split_seed/sampling_seed separation, `negu`/`negpop`
+negative strategies) is specified in `cold_start_spec.md`. Final cold-start
+results will be listed here once produced under the new protocol.

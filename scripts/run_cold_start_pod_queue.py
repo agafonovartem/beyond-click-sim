@@ -8,6 +8,7 @@ tmux, and download/unzip results as soon as metrics appear.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shlex
@@ -23,65 +24,73 @@ from pathlib import Path
 
 
 NAMESPACE = "a-ashabokov"
-PODS = [f"agent-exp-{i}" for i in range(8)]
-METHOD = "agent4rec_yes_no_vllm_qwen36_35b_a3b_item_stats_traits_taste_gpt4o_mini_full"
+PODS = [f"agent-exp-policy-ranking-{i}" for i in range(8)]
+METHOD = "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_full"
 REMOTE_REPO = "/home/jovyan/beyond-click-sim"
 REMOTE_ZIP = "/home/jovyan/beyond-click-sim-code.zip"
-REMOTE_OUTPUT = f"{REMOTE_REPO}/outputs/experimental/cold_start"
+REMOTE_OUTPUT = f"{REMOTE_REPO}/outputs/experimental/run_qwen36_35b_a3b_full_listwise_ranking"
+LOCAL_OUTPUT_REL = Path("outputs") / "experimental" / "run_qwen36_35b_a3b_full_listwise_ranking"
 # Precomputed Agent4Rec taste profiles required on-pod for traits+taste methods.
+# The cache is keyed by the split seed only (SPLIT_SEED=0 for the whole
+# cold-start grid), so one file covers every task below.
 TASTE_CACHE_FILES = [
     "ml-1m_v1_seed0_gpt-4o-mini_agent4rec_modify_v1.jsonl",
-    "ml-1m_v1_seed1_gpt-4o-mini_agent4rec_modify_v1.jsonl",
-    "ml-1m_v1_seed2_gpt-4o-mini_agent4rec_modify_v1.jsonl",
 ]
 
-TASKS = [
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m1_seed0",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m2_seed0",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m3_seed0",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m9_seed0",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m19_seed0",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m1_seed1",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m2_seed1",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m3_seed1",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m9_seed1",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m19_seed1",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m1_seed2",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m2_seed2",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m3_seed2",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m9_seed2",
-    "ml-1m_item_stats_cold_start_k1_cap20_eval_users1000_cg5_m19_seed2",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m1_seed0",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m2_seed0",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m3_seed0",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m9_seed0",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m19_seed0",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m1_seed1",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m2_seed1",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m3_seed1",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m9_seed1",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m19_seed1",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m1_seed2",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m2_seed2",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m3_seed2",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m9_seed2",
-    "ml-1m_item_stats_cold_start_k3_cap20_eval_users1000_cg5_m19_seed2",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m1_seed0",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m2_seed0",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m3_seed0",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m9_seed0",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m19_seed0",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m1_seed1",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m2_seed1",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m3_seed1",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m9_seed1",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m19_seed1",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m1_seed2",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m2_seed2",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m3_seed2",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m9_seed2",
-    "ml-1m_item_stats_cold_start_k5_cap20_eval_users1000_cg5_m19_seed2",
-]
+
+def required_metric_files(method: str) -> tuple[str, ...]:
+    if method.startswith(
+        (
+            "llm_preference_listwise_ranking_",
+            "agent4rec_preference_listwise_ranking_",
+        )
+    ):
+        return ("metrics_ranking.json",)
+    return ("metrics.json", "metrics_ranking.json")
+
+
+def method_requires_item_stats_tasks(method: str) -> bool:
+    return method.startswith("agent4rec_")
+
+
+def method_requires_taste_cache(method: str) -> bool:
+    return "_traits_taste_" in method
+
+
+def task_names_for_method(method: str = METHOD) -> list[str]:
+    """Item-stats grid, uniform negatives (the pre-redesign compute scope).
+
+    Names come from the runner registry — single source of truth for the
+    naming scheme. Add "popularity_matched" to STRATEGIES to double the grid
+    with the popularity-matched condition (90 tasks).
+    """
+    repo = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo / "src"))
+    sys.path.insert(0, str(repo))
+    from runners.in_distribution.cold_start.task_builders import (
+        cold_start_task_name,
+    )
+
+    strategies = ["uniform"]  # add "popularity_matched" for the full grid
+    use_item_rating_stats = method_requires_item_stats_tasks(method)
+    return [
+        cold_start_task_name(
+            "ml-1m",
+            k,
+            m,
+            strategy,
+            sampling_seed,
+            use_item_rating_stats=use_item_rating_stats,
+        )
+        for k in (1, 3, 5)
+        for m in (1, 2, 3, 9, 19)
+        for strategy in strategies
+        for sampling_seed in (0, 1, 2)
+    ]
+
+
+TASKS = task_names_for_method(METHOD)
+REQUIRED_METRIC_FILES = required_metric_files(METHOD)
 
 PIP_DEPS = [
     "implicit>=0.7.2",
@@ -113,7 +122,7 @@ def repo_root() -> Path:
 
 
 def local_output_root() -> Path:
-    return repo_root() / "outputs" / "experimental" / "cold_start"
+    return repo_root() / LOCAL_OUTPUT_REL
 
 
 def queue_dir() -> Path:
@@ -177,7 +186,8 @@ def pod_ready(pod: str) -> bool:
 
 def session_name(task: str) -> str:
     # tmux session names: keep short and alphanumeric-ish
-    return f"cs_{task[-40:]}"
+    method_digest = hashlib.sha256(METHOD.encode("utf-8")).hexdigest()[:8]
+    return f"cs_{method_digest}_{task[-30:]}"
 
 
 def discover_llm_base_url(pod: str) -> str:
@@ -242,7 +252,7 @@ def build_zip(zip_path: Path) -> None:
         "node_modules",
     }
     exclude_names = {".env", ".DS_Store"}
-    taste_paths = taste_cache_paths()
+    taste_paths = taste_cache_paths() if method_requires_taste_cache(METHOD) else []
     if zip_path.exists():
         zip_path.unlink()
     log(f"Building zip {zip_path}")
@@ -282,7 +292,9 @@ def build_zip(zip_path: Path) -> None:
 
 
 def upload_dotenv(pod: str) -> None:
-    """Copy local .env for OpenAI taste-cache misses (never pack secrets into the zip)."""
+    """Copy local .env only for taste-profile methods."""
+    if not method_requires_taste_cache(METHOD):
+        return
     env_path = repo_root() / ".env"
     if not env_path.is_file():
         log(f"{pod}: WARNING no local .env; taste cache misses will fail without OPENAI_API_KEY")
@@ -302,6 +314,7 @@ def upload_and_setup_pod(pod: str, zip_path: Path) -> None:
     cache_checks = " and ".join(
         f"Path('outputs/agent4rec_taste_cache/{name}').is_file()" for name in TASTE_CACHE_FILES
     )
+    cache_condition = cache_checks if method_requires_taste_cache(METHOD) else "True"
     setup = f"""
 set -euo pipefail
 rm -rf {REMOTE_REPO}
@@ -311,9 +324,9 @@ unzip -q -o {REMOTE_ZIP}
 /opt/conda/bin/python3 -m venv .venv
 .venv/bin/pip install -q --upgrade pip
 .venv/bin/pip install -q {deps}
-mkdir -p outputs/experimental/cold_start
+mkdir -p {LOCAL_OUTPUT_REL.as_posix()}
 export PYTHONPATH="{REMOTE_REPO}/src:{REMOTE_REPO}"
-.venv/bin/python -c "from runners.in_distribution.cold_start.methods import METHOD_RUNNERS; assert '{METHOD}' in METHOD_RUNNERS; from pathlib import Path; p=Path('data/canonical/ml-1m/v1/interactions.parquet'); assert p.exists(), p; assert {cache_checks}"
+.venv/bin/python -c "from runners.in_distribution.cold_start.methods import METHOD_RUNNERS; assert '{METHOD}' in METHOD_RUNNERS; from pathlib import Path; p=Path('data/canonical/ml-1m/v1/interactions.parquet'); assert p.exists(), p; assert {cache_condition}"
 echo SETUP_OK
 """
     log(f"{pod}: unzip + venv + pip install")
@@ -328,10 +341,12 @@ def ensure_pod_setup(pod: str, zip_path: Path | None = None) -> None:
     cache_checks = " && ".join(
         f"[ -s {REMOTE_REPO}/outputs/agent4rec_taste_cache/{name} ]" for name in TASTE_CACHE_FILES
     )
+    cache_condition = cache_checks if method_requires_taste_cache(METHOD) else "true"
     check = f"""
-if [ -x {REMOTE_REPO}/.venv/bin/python ] && [ -f {REMOTE_REPO}/data/canonical/ml-1m/v1/interactions.parquet ] && {cache_checks}; then
+if [ -x {REMOTE_REPO}/.venv/bin/python ] && [ -f {REMOTE_REPO}/data/canonical/ml-1m/v1/interactions.parquet ] && {cache_condition}; then
   export PYTHONPATH="{REMOTE_REPO}/src:{REMOTE_REPO}"
   if {REMOTE_REPO}/.venv/bin/python -c "from runners.in_distribution.cold_start.methods import METHOD_RUNNERS; assert '{METHOD}' in METHOD_RUNNERS" 2>/dev/null; then
+    mkdir -p {REMOTE_OUTPUT}
     echo READY
     exit 0
   fi
@@ -346,11 +361,15 @@ echo NEED_SETUP
     upload_and_setup_pod(pod, zip_path)
 
 
+def has_required_metric_files(path: Path) -> bool:
+    return all((path / filename).exists() for filename in REQUIRED_METRIC_FILES)
+
+
 def local_task_done(task: str) -> bool:
     root = local_output_root()
     pattern = f"*_{task}_{METHOD}"
     for d in root.glob(pattern):
-        if d.is_dir() and (d / "metrics.json").exists() and (d / "metrics_ranking.json").exists():
+        if d.is_dir() and has_required_metric_files(d):
             return True
     return False
 
@@ -365,13 +384,16 @@ def _assert_safe_name(name: str) -> str:
 def remote_result_dir(pod: str, task: str) -> str | None:
     task = _assert_safe_name(task)
     method = _assert_safe_name(METHOD)
+    required_checks = " && ".join(
+        f'[ -f "$d/{filename}" ]' for filename in REQUIRED_METRIC_FILES
+    )
     # Do not shlex.quote inside the glob — quotes become literal characters.
     cmd = f"""
 set +e
 cd {REMOTE_OUTPUT} 2>/dev/null || exit 0
 for d in *_{task}_{method}; do
   [ -d "$d" ] || continue
-  if [ -f "$d/metrics.json" ] && [ -f "$d/metrics_ranking.json" ]; then
+  if {required_checks}; then
     printf '%s\\n' "$d"
     exit 0
   fi
@@ -401,7 +423,7 @@ def start_task(pod: str, task: str, base_url: str) -> None:
         check=False,
         timeout=30,
     )
-    log_path = f"{REMOTE_OUTPUT}/{task}.log"
+    log_path = f"{REMOTE_OUTPUT}/{task}_{METHOD}.log"
     inner = (
         f"cd {REMOTE_REPO} && "
         f"source .venv/bin/activate && "
@@ -410,7 +432,7 @@ def start_task(pod: str, task: str, base_url: str) -> None:
         f"mkdir -p {REMOTE_OUTPUT} && "
         f"python -m runners.in_distribution.cold_start.run "
         f"--methods {METHOD} "
-        f"--output-dir outputs/experimental/cold_start "
+        f"--output-dir {LOCAL_OUTPUT_REL.as_posix()} "
         f"--resume "
         f"--tasks {shlex.quote(task)} "
         f"> {shlex.quote(log_path)} 2>&1; "
@@ -426,7 +448,6 @@ def start_task(pod: str, task: str, base_url: str) -> None:
 
 
 def download_result(pod: str, task: str, result_dirname: str) -> Path:
-    remote_dir = f"{REMOTE_OUTPUT}/{result_dirname}"
     remote_zip = f"/tmp/{result_dirname}.zip"
     local_zip = queue_dir() / f"{result_dirname}.zip"
     kubectl_exec(
@@ -448,7 +469,7 @@ def download_result(pod: str, task: str, result_dirname: str) -> Path:
     with zipfile.ZipFile(local_zip, "r") as zf:
         zf.extractall(dest_root)
     local_dir = dest_root / result_dirname
-    if not (local_dir / "metrics.json").exists() or not (local_dir / "metrics_ranking.json").exists():
+    if not has_required_metric_files(local_dir):
         raise RuntimeError(f"Downloaded incomplete result for {task}: {local_dir}")
     log(f"{pod}: downloaded {result_dirname} -> {local_dir}")
     return local_dir
@@ -467,11 +488,13 @@ class TaskState:
 
 @dataclass
 class QueueState:
+    method: str = METHOD
     tasks: dict[str, TaskState] = field(default_factory=dict)
     retries: list[dict[str, str]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
+            "method": self.method,
             "tasks": {k: v.__dict__ for k, v in self.tasks.items()},
             "retries": self.retries,
         }
@@ -479,17 +502,28 @@ class QueueState:
     @classmethod
     def load(cls, path: Path) -> QueueState:
         if not path.exists():
-            st = cls()
+            st = cls(method=METHOD)
             for t in TASKS:
                 st.tasks[t] = TaskState(status="done" if local_task_done(t) else "pending")
             return st
         raw = json.loads(path.read_text())
-        st = cls(retries=raw.get("retries", []))
+        if raw.get("method") != METHOD:
+            st = cls(method=METHOD)
+            for t in TASKS:
+                st.tasks[t] = TaskState(
+                    status="done" if local_task_done(t) else "pending"
+                )
+            return st
+        st = cls(method=METHOD, retries=raw.get("retries", []))
         for t in TASKS:
             info = raw.get("tasks", {}).get(t, {})
             ts = TaskState(**{k: info[k] for k in TaskState.__dataclass_fields__ if k in info})
             if local_task_done(t):
                 ts.status = "done"
+            elif ts.status == "done":
+                ts.status = "pending"
+                ts.result_dir = None
+                ts.finished_at = None
             st.tasks[t] = ts
         return st
 

@@ -70,3 +70,56 @@ def test_popularity_ranking_runner_writes_ranking_artifact_only(tmp_path: Path) 
     predictions = pd.read_parquet(tmp_path / "predictions.parquet")
     assert "score" in predictions.columns
     assert "prediction" not in predictions.columns
+    # non-cold-start tasks get no run-metadata columns
+    assert "k" not in predictions.columns
+
+
+def test_popularity_ranking_writes_cold_start_metadata_columns(tmp_path: Path) -> None:
+    task = Task(
+        name="toy-cold",
+        train=pd.DataFrame(
+            {
+                "user_id": ["train-u1", "train-u2", "train-u3"],
+                "item_id": ["i1", "i1", "i2"],
+                "target": [1, 1, 1],
+            }
+        ),
+        val=pd.DataFrame(
+            {
+                "user_id": ["u1", "u1"],
+                "item_id": ["i1", "i3"],
+                "candidate_group": ["val-g1", "val-g1"],
+                "target": [1, 0],
+            }
+        ),
+        test=pd.DataFrame(
+            {
+                "user_id": ["u2", "u2"],
+                "item_id": ["i3", "i1"],
+                "candidate_group": ["test-g1", "test-g1"],
+                "target": [0, 1],
+            }
+        ),
+        schema=TaskSchema(
+            target_column="target",
+            candidate_group_column="candidate_group",
+            feature_columns=("user_id", "item_id"),
+        ),
+        manifest={
+            "dataset": "ml-1m",
+            "k": 3,
+            "sampling_seed": 2,
+            "negative_strategy": "popularity_matched",
+            "sampler": {"class": "PerTargetCandidateSampler", "negative_ratio": 9},
+        },
+    )
+
+    run_ranking(task, tmp_path)
+
+    predictions = pd.read_parquet(tmp_path / "predictions.parquet")
+    assert predictions["k"].unique().tolist() == [3]
+    assert predictions["negative_ratio"].unique().tolist() == [9]
+    assert predictions["sampling_seed"].unique().tolist() == [2]
+    assert predictions["negative_strategy"].unique().tolist() == [
+        "popularity_matched"
+    ]

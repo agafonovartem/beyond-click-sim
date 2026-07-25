@@ -192,6 +192,45 @@ def test_cold_start_llm_runner_itemwise_scores_one_call_per_candidate(
     assert sorted(predictions["score"].tolist()) == [0.0, 1.0]
 
 
+def test_cold_start_llm_runner_writes_run_metadata_columns(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Cold-start manifests carry k/m/sampling_seed/strategy; predictions.parquet
+    must repeat them as columns so concatenated runs cannot silently merge
+    candidate groups that share an id across the grid."""
+
+    client = FakeClient(["yes", "no"])
+    monkeypatch.setattr(llm_yes_no, "make_llm_client", lambda _: client)
+
+    task = _ml1m_cold_task()
+    task.manifest.update(
+        {
+            "k": 3,
+            "sampling_seed": 2,
+            "negative_strategy": "popularity_matched",
+            "sampler": {"class": "PerTargetCandidateSampler", "negative_ratio": 9},
+        }
+    )
+    llm_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="llm_yes_no_cold_start_metadata_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+    )
+
+    predictions = pd.read_parquet(tmp_path / "predictions.parquet")
+    assert predictions["k"].unique().tolist() == [3]
+    assert predictions["negative_ratio"].unique().tolist() == [9]
+    assert predictions["sampling_seed"].unique().tolist() == [2]
+    assert predictions["negative_strategy"].unique().tolist() == [
+        "popularity_matched"
+    ]
+
+
 def test_cold_start_llm_runner_rejects_invalid_scoring(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(llm_yes_no, "make_llm_client", lambda _: FakeClient([]))
     task = _ml1m_cold_task()
@@ -374,3 +413,217 @@ def test_cold_start_llm_runner_fails_fast_and_persists_partial_errors(
     assert not (tmp_path / "manifest.json").exists()
     assert not (tmp_path / "metrics.json").exists()
     assert not (tmp_path / "metrics_ranking.json").exists()
+
+
+def _two_group_cold_task() -> ColdStartTask:
+    """Two candidate groups (g1, g2) of two rows each for user u1."""
+    base = _ml1m_cold_task()
+    test_df = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1", "u1"],
+            "item_id": ["it1", "it2", "it3", "it4"],
+            "candidate_group": ["g1", "g1", "g2", "g2"],
+            "item_title": ["Lion King", "Godfather", "Toy Story", "Heat"],
+            "item_genres": ["Animation", "Crime", "Animation", "Crime"],
+            "sampled": [False, True, False, True],
+            "target": [1, 0, 1, 0],
+        }
+    )
+    return ColdStartTask(
+        name=base.name,
+        train=base.train,
+        val=base.val,
+        test=test_df,
+        online_session_history=base.online_session_history,
+        k=base.k,
+        schema=base.schema,
+        manifest=base.manifest,
+    )
+
+
+def test_cold_start_llm_runner_reports_failure_aware_metric_variants(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """One group parses, one fails: parsed-only metrics exclude the failed
+    group while the failure-aware variants penalize it."""
+
+    # batch mode: one call per group — g1 parses, g2's response is unparseable
+    client = FakeClient(["C1: yes\nC2: no", "maybe"])
+    monkeypatch.setattr(llm_yes_no, "make_llm_client", lambda _: client)
+    task = _two_group_cold_task()
+
+    result = llm_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="llm_yes_no_failure_variants_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        scoring="batch",
+        max_error_rate=0.5,
+        min_groups_before_check=1,
+    )
+
+    assert result["llm_errors"] == 1
+    assert result["scored_rows"] == 2
+    assert result["requested_rows"] == 4
+
+    coverage = result["coverage"]
+    assert coverage["requested_rows"] == 4
+    assert coverage["scored_rows"] == 2
+    assert coverage["failed_rows"] == 2
+    assert coverage["scored_fraction"] == 0.5
+
+    # parsed-only: only g1 rows, predicted [yes, no] against targets [1, 0]
+    assert result["test"]["micro"]["recall"] == 1.0
+    # failure-as-negative: failed rows count as "no" -> the g2 positive is missed
+    assert result["test_failure_as_negative"]["micro"]["recall"] == 0.5
+    assert result["test_failure_as_negative"]["micro"]["precision"] == 1.0
+
+    ranking = json.loads(
+        (tmp_path / "metrics_ranking.json").read_text(encoding="utf-8")
+    )
+    # parsed-only ranking: g1 perfectly ranked
+    assert ranking["test"]["macro_by_group"]["hit_rate@1"] == 1.0
+    # failure-as-zero: g2 contributes zero utility -> macro average drops to 0.5
+    assert ranking["test_failure_as_zero_group"]["macro_by_group"]["hit_rate@1"] == 0.5
+    assert ranking["coverage"]["failed_fraction"] == 0.5
+
+
+# ---------------------------------------------------------------------------
+# Summary visibility
+# ---------------------------------------------------------------------------
+
+
+def _summary_cold_task() -> ColdStartTask:
+    """ColdStartTask whose history and candidate items carry summaries."""
+    base = _ml1m_cold_task()
+    history_df = base.online_session_history.copy()
+    history_df["item_summary"] = "PROFILE SUMMARY MARKER"
+    test_df = base.test.copy()
+    test_df["item_summary"] = [
+        "CANDIDATE SUMMARY MARKER ONE",
+        "CANDIDATE SUMMARY MARKER TWO",
+    ]
+    train_df = base.train.copy()
+    train_df["item_summary"] = "WARM TRAIN SUMMARY"
+    val_df = base.val.copy()
+    if "item_summary" not in val_df.columns:
+        val_df = val_df.assign(item_summary=pd.Series(dtype=object))
+    manifest = dict(base.manifest)
+    manifest["item_enrichment"] = {
+        "movie_summaries": {
+            "enabled": True,
+            "canonical_column": "summary",
+            "task_column": "item_summary",
+            "source_sha256": "fake-sha256",
+        }
+    }
+    return ColdStartTask(
+        name=base.name,
+        train=train_df,
+        val=val_df,
+        test=test_df,
+        online_session_history=history_df,
+        k=base.k,
+        schema=base.schema,
+        manifest=manifest,
+    )
+
+
+def test_cold_start_llm_runner_default_summary_visibility_is_none(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client = FakeClient(["C1: yes\nC2: no"])
+    monkeypatch.setattr(llm_yes_no, "make_llm_client", lambda _: client)
+
+    task = _summary_cold_task()
+    llm_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="llm_yes_no_summary_default_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        scoring="batch",
+    )
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["summary_visibility"] == "none"
+    assert "item_summary" not in (
+        manifest["scorer"]["prompt_columns"]["history_description_columns"]
+    )
+    assert "item_summary" not in (
+        manifest["scorer"]["prompt_columns"]["candidate_description_columns"]
+    )
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "SUMMARY MARKER" not in prompt
+
+
+def test_cold_start_llm_runner_sumboth_shows_profile_and_candidate_summaries(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """summary_visibility='both': history summaries come from the k-item
+    profile (online_session_history), candidate summaries from candidates."""
+
+    client = FakeClient(["C1: yes\nC2: no"])
+    monkeypatch.setattr(llm_yes_no, "make_llm_client", lambda _: client)
+
+    task = _summary_cold_task()
+    llm_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="llm_yes_no_sumboth_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        summary_visibility="both",
+        scoring="batch",
+    )
+
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+    # Profile item summary appears in the history section (H1).
+    assert "H1. item_title: Toy Story" in prompt
+    assert "PROFILE SUMMARY MARKER" in prompt
+    # Candidate summaries appear on the candidate cards.
+    assert "CANDIDATE SUMMARY MARKER ONE" in prompt
+    assert "CANDIDATE SUMMARY MARKER TWO" in prompt
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["summary_visibility"] == "both"
+    assert "item_summary" in (
+        manifest["scorer"]["prompt_columns"]["history_description_columns"]
+    )
+    assert "item_summary" in (
+        manifest["scorer"]["prompt_columns"]["candidate_description_columns"]
+    )
+    assert manifest["scorer"]["item_summaries"]["history_item_summaries"] is True
+    assert manifest["scorer"]["item_summaries"]["candidate_item_summaries"] is True
+
+
+def test_cold_start_llm_runner_summaries_require_canonical_provenance(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The base fixture has no item_summary columns/provenance: requesting
+    summaries must fail cleanly instead of silently degrading."""
+
+    monkeypatch.setattr(llm_yes_no, "make_llm_client", lambda _: FakeClient([]))
+    task = _ml1m_cold_task()
+
+    with pytest.raises(ValueError, match="item_summary"):
+        llm_yes_no.run_method(
+            task,
+            tmp_path,
+            method_name="llm_yes_no_summary_no_provenance_test",
+            client_name="fake",
+            model="fake-model",
+            max_candidate_groups=None,
+            summary_visibility="both",
+            scoring="batch",
+        )

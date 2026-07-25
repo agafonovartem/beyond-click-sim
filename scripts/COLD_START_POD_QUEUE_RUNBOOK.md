@@ -25,16 +25,37 @@ Inside `run_cold_start_pod_queue.py`, defaults are pinned to:
 
 - namespace: `a-ashabokov`
 - pods: `agent-exp-0..7`
-- method: `agent4rec_yes_no_vllm_qwen36_35b_a3b_item_stats_traits_taste_gpt4o_mini_full`
-  (batched Agent4Rec; requires `outputs/agent4rec_taste_cache/ml-1m_v1_seed{0,1,2}_*.jsonl`
-  in the upload zip)
+- method: `agent4rec_yes_no_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_full`
+  (batched Agent4Rec, traits+taste; the default item card already includes
+  "History ratings" — the retired `_item_stats` method segment no longer exists;
+  requires `outputs/agent4rec_taste_cache/ml-1m_v1_seed0_*.jsonl`
+  in the upload zip — the taste cache is keyed by the split seed, which is 0 for
+  the whole cold-start grid, so one file covers all tasks. `_sumboth` method
+  variants use the separate `*_summary.jsonl` cache, regenerated on first run)
 - output root: `outputs/experimental/cold_start`
-- tasks: full 45-task **item_stats** set (required by `*_item_stats_*` Agent4Rec methods):
-  - names: `ml-1m_item_stats_cold_start_k{k}_cap20_eval_users1000_cg5_m{m}_seed{s}`
+- tasks: full 45-task **item_stats** set (required by every Agent4Rec method),
+  generated from the runner registry (`cold_start_task_name`) — no hardcoded names:
+  - names: `ml-1m_item_stats_cold_like_k{k}_c5_eval1000_m{m}_negu_split0_sample{s}`
   - `k in {1,3,5}`
   - `m in {1,2,3,9,19}`
-  - `seed in {0,1,2}`
-  - plain `ml-1m_cold_start_*` tasks lack `item_rating_mean` and will crash these methods
+  - `sampling_seed in {0,1,2}` (drives only the negative draw; see `cold_start_spec.md`)
+  - negative strategy: `negu` (uniform); add `"popularity_matched"` in `_task_names()`
+    for the additional `negpop` condition (90 tasks total)
+  - plain `ml-1m_cold_like_*` tasks lack `item_rating_mean` and will crash these methods
+
+The Agent4Rec direct-listwise alternatives are:
+
+- `agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_{smoke,full}`
+- `agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_{smoke,full}`
+- `agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_{smoke,full}`
+- `agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_candidate_summary_{smoke,full}`
+- `llm_preference_listwise_ranking_vllm_qwen36_{27b|35b_a3b}_{smoke,full}`
+
+They also use the `item_stats` task grid, but completion requires only
+`metrics_ranking.json` (there is no pointwise `metrics.json`). Traits-only methods
+do not package or check a taste cache and do not require `.env`; the traits+taste
+condition uses the existing non-summary GPT-4o-mini cache because candidate
+summaries are not part of taste generation.
 
 If you need a different task list, method, namespace, or pod names, edit the
 constants near the top of `run_cold_start_pod_queue.py`.
@@ -125,7 +146,7 @@ from pathlib import Path
 import json
 from collections import Counter
 
-METHOD = "llm_yes_no_itemwise_vllm_qwen36_27b_full"
+METHOD = "agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_full"
 root = Path("outputs/experimental/cold_start")
 state = json.loads((root / "_queue" / "state.json").read_text())
 print("queue_state", Counter(v["status"] for v in state["tasks"].values()))
@@ -134,7 +155,6 @@ complete = [
     d for d in root.iterdir()
     if d.is_dir()
     and d.name != "_queue"
-    and (d / "metrics.json").exists()
     and (d / "metrics_ranking.json").exists()
 ]
 print("complete_dirs", len(complete))
@@ -159,7 +179,11 @@ python3 scripts/run_cold_start_pod_queue.py \
 ```
 
 The script resumes from `outputs/experimental/cold_start/_queue/state.json` and
-also re-detects already completed local runs.
+also re-detects already completed local runs. State is method-scoped: `state.json`
+records the selected method, and changing `METHOD` starts fresh task statuses
+instead of reusing `done` entries from another scorer. Same-method resume still
+rechecks current-method artifacts, so a stale `done` status without the required
+local metric files becomes pending.
 
 If a pod reloads, the script re-queues unfinished tasks and can re-setup pods if
 `.venv` or dataset files are missing.

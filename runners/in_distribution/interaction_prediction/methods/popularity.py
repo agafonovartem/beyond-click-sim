@@ -16,6 +16,7 @@ from beyond_click_sim.scorers import PopularityScorer
 from beyond_click_sim.tasks import Task
 from runners.in_distribution.interaction_prediction.methods.common import (
     candidate_group_summary,
+    cold_start_metadata,
     current_git_commit,
     prediction_frame,
     ranking_metrics_for_split,
@@ -126,6 +127,7 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
     _record_stage(stage_times, "candidate_group_summary", stage_start)
 
     stage_start = perf_counter()
+    run_metadata = cold_start_metadata(task)
     predictions = pd.concat(
         [
             prediction_frame(
@@ -134,6 +136,7 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
                 y=y_val,
                 scores=val_scores,
                 predictions=val_predictions,
+                metadata=run_metadata,
             ),
             prediction_frame(
                 split="test",
@@ -141,6 +144,7 @@ def run(task: Task, output_dir: Path) -> dict[str, object]:
                 y=y_test,
                 scores=test_scores,
                 predictions=test_predictions,
+                metadata=run_metadata,
             ),
         ],
         ignore_index=True,
@@ -259,6 +263,7 @@ def run_ranking(task: Task, output_dir: Path) -> dict[str, object]:
     _record_stage(stage_times, "candidate_group_summary", stage_start)
 
     stage_start = perf_counter()
+    run_metadata = cold_start_metadata(task)
     predictions = pd.concat(
         [
             score_frame(
@@ -266,12 +271,14 @@ def run_ranking(task: Task, output_dir: Path) -> dict[str, object]:
                 X=X_val,
                 y=y_val,
                 scores=val_scores,
+                metadata=run_metadata,
             ),
             score_frame(
                 split="test",
                 X=X_test,
                 y=y_test,
                 scores=test_scores,
+                metadata=run_metadata,
             ),
         ],
         ignore_index=True,

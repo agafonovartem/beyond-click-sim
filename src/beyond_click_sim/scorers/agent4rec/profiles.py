@@ -106,6 +106,7 @@ class Agent4RecProfileGenerator:
         title_column: str = "item_title",
         summary_column: str | None = None,
         include_conformity: bool = True,
+        activity_counts: Mapping[Any, int] | None = None,
         activity_descriptions: dict[int, str] | None = None,
         conformity_descriptions: dict[int, str] | None = None,
         diversity_descriptions: dict[int, str] | None = None,
@@ -154,6 +155,9 @@ class Agent4RecProfileGenerator:
         self.title_column = title_column
         self.summary_column = summary_column
         self.include_conformity = include_conformity
+        self.activity_counts = (
+            None if activity_counts is None else dict(activity_counts)
+        )
         self.activity_descriptions = (
             AGENT4REC_ACTIVITY_DESCRIPTIONS
             if activity_descriptions is None
@@ -362,6 +366,11 @@ class Agent4RecProfileGenerator:
             "title_column": self.title_column,
             "summary_column": self.summary_column,
             "include_conformity": self.include_conformity,
+            "activity_source": (
+                "fit_frame_row_counts"
+                if self.activity_counts is None
+                else "external_activity_counts"
+            ),
             "diversity_top_mass": AGENT4REC_DIVERSITY_TOP_MASS,
             "trait_thresholds": self.trait_thresholds_,
         }
@@ -390,7 +399,7 @@ class Agent4RecProfileGenerator:
             required_columns.append(self.rating_column)
         self._require_columns(X, required_columns)
 
-        activity_num = X.groupby(self.user_column, sort=False).size()
+        activity_num = self._activity_num(X)
         activity_low = float(activity_num.quantile(0.60))
         activity_high = float(activity_num.quantile(0.90))
 
@@ -446,6 +455,29 @@ class Agent4RecProfileGenerator:
                     high=conformity_high,
                 )
         return traits
+
+    def _activity_num(self, X: pd.DataFrame) -> pd.Series:
+        """Per-user activity numbers for trait binning.
+
+        Defaults to row counts within the fit frame. When `activity_counts`
+        was supplied (e.g. total raw interaction counts from the full dataset,
+        pre-split and pre-truncation), those fixed user properties are used
+        instead — this keeps the activity trait non-degenerate when the fit
+        frame holds only a short per-user profile (cold start with small k).
+        """
+
+        if self.activity_counts is None:
+            return X.groupby(self.user_column, sort=False).size()
+        frame_users = list(dict.fromkeys(X[self.user_column].tolist()))
+        missing = [user_id for user_id in frame_users if user_id not in self.activity_counts]
+        if missing:
+            raise ValueError(
+                f"activity_counts is missing {len(missing)} fit-frame users: "
+                f"{missing[:5]}"
+            )
+        return pd.Series(
+            {user_id: float(self.activity_counts[user_id]) for user_id in frame_users}
+        )
 
     def _agent4rec_diversity_count_by_user(self, X: pd.DataFrame) -> pd.Series:
         """Count dominant genres per user using Agent4Rec-style top-mass logic.

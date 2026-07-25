@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Literal
+
+import pandas as pd
 
 from beyond_click_sim.tasks import Task
 from beyond_click_sim.tasks.item_enrichment import TASK_MOVIE_SUMMARY_COLUMN
@@ -84,11 +87,18 @@ def task_item_summary_metadata(
     history: bool = False,
     profile: bool = False,
     candidate: bool = False,
+    extra_frames: Mapping[str, pd.DataFrame] | None = None,
 ) -> dict[str, object]:
     requested = history or profile or candidate
+    frames: dict[str, pd.DataFrame] = {
+        "train": task.train,
+        "val": task.val,
+        "test": task.test,
+    }
+    if extra_frames:
+        frames.update(extra_frames)
     available = all(
-        ITEM_SUMMARY_COLUMN in frame.columns
-        for frame in (task.train, task.val, task.test)
+        ITEM_SUMMARY_COLUMN in frame.columns for frame in frames.values()
     )
     if requested and not available:
         raise ValueError(
@@ -98,11 +108,7 @@ def task_item_summary_metadata(
     if requested:
         missing_by_split = {
             split_name: int(frame[ITEM_SUMMARY_COLUMN].isna().sum())
-            for split_name, frame in (
-                ("train", task.train),
-                ("val", task.val),
-                ("test", task.test),
-            )
+            for split_name, frame in frames.items()
         }
         if any(missing_by_split.values()):
             raise ValueError(

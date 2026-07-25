@@ -391,23 +391,35 @@ class CappedUserInteractionCandidateSampler(CandidateSampler):
         return f"candidate:user:{user_id}:chunk:{chunk_position}"
 
 
-class TemporalColdStartCandidateSampler(CappedUserInteractionCandidateSampler):
-    """Build capped groups from consecutive post-profile interactions.
+class PerTargetCandidateSampler(CandidateSampler):
+    """Build one candidate group per (user, target item) frame row.
 
-    Unlike :class:`CappedUserInteractionCandidateSampler`, this sampler keeps
-    each user's input interaction order. ``group_offset`` selects a later,
-    non-overlapping window of positive chunks while preserving global chunk
-    indices in candidate-group ids. This lets different experiment seeds
-    evaluate different temporal windows instead of reshuffling the same rows.
+    Each group contains exactly one positive (the target item from a pre-built
+    target frame) and `negative_ratio` never-observed negatives. Target
+    selection is the caller's job: this sampler never chooses, caps, shuffles,
+    or windows targets, so the negative ratio `m` is the only thing that
+    differs between tasks sharing a target frame.
+
+    `strategy="uniform"` draws negatives uniformly from the catalog.
+    `strategy="popularity_matched"` draws each target's negatives from the same
+    warm-train popularity bin as the target (quantile bins over train
+    interaction counts), removing the within-group popularity signal. If the
+    target's own bin lacks enough eligible items, the pool expands to adjacent
+    bins and the group is counted in the `bin_fallback_groups` diagnostic.
+
+    `seed` is the sampling seed: it drives only the negative draw (and the
+    within-group row shuffle), never target selection.
     """
+
+    UNIFORM = "uniform"
+    POPULARITY_MATCHED = "popularity_matched"
+    STRATEGIES = (UNIFORM, POPULARITY_MATCHED)
 
     def __init__(
         self,
         negative_ratio: int,
-        total_items: int = 20,
-        max_eval_users: int | None = None,
-        max_candidate_groups_per_user: int | None = None,
-        group_offset: int = 0,
+        strategy: str = UNIFORM,
+        n_popularity_bins: int = 10,
         seed: int = 0,
         user_column: str = "user_id",
         item_column: str = "item_id",
@@ -415,21 +427,22 @@ class TemporalColdStartCandidateSampler(CappedUserInteractionCandidateSampler):
         sampled_column: str = "sampled",
         candidate_group_column: str = "candidate_group",
     ) -> None:
-        super().__init__(
-            negative_ratio=negative_ratio,
-            total_items=total_items,
-            max_eval_users=max_eval_users,
-            max_candidate_groups_per_user=max_candidate_groups_per_user,
-            seed=seed,
-            user_column=user_column,
-            item_column=item_column,
-            target_column=target_column,
-            sampled_column=sampled_column,
-            candidate_group_column=candidate_group_column,
-        )
-        if group_offset < 0:
-            raise ValueError("group_offset must be non-negative.")
-        self.group_offset = group_offset
+        super().__init__(seed=seed)
+        if strategy not in self.STRATEGIES:
+            raise ValueError(
+                f"strategy must be one of {self.STRATEGIES}, got {strategy!r}."
+            )
+        if n_popularity_bins < 1:
+            raise ValueError("n_popularity_bins must be positive.")
+        self.negative_ratio = negative_ratio
+        self.strategy = strategy
+        self.n_popularity_bins = n_popularity_bins
+        self.user_column = user_column
+        self.item_column = item_column
+        self.target_column = target_column
+        self.sampled_column = sampled_column
+        self.candidate_group_column = candidate_group_column
+        self.diagnostics_: dict[str, int] = {}
 
     def sample(
         self,
@@ -437,22 +450,17 @@ class TemporalColdStartCandidateSampler(CappedUserInteractionCandidateSampler):
         *,
         interactions: pd.DataFrame,
         items: pd.DataFrame,
+        train_interactions: pd.DataFrame | None = None,
         excluded_pairs: set[tuple[Any, Any]] | None = None,
     ) -> pd.DataFrame:
-        """Return capped groups from one ordered temporal window per user."""
+        """Return one candidate group per (user, target) frame row."""
 
         if self.negative_ratio < 1:
             raise ValueError("negative_ratio must be positive.")
-        if self.total_items < self.negative_ratio + 1:
-            raise ValueError("total_items must fit at least one positive group.")
-        if self.max_eval_users is not None and self.max_eval_users < 1:
-            raise ValueError("max_eval_users must be positive when provided.")
-        if (
-            self.max_candidate_groups_per_user is not None
-            and self.max_candidate_groups_per_user < 1
-        ):
+        if self.strategy == self.POPULARITY_MATCHED and train_interactions is None:
             raise ValueError(
-                "max_candidate_groups_per_user must be positive when provided."
+                "train_interactions is required for strategy='popularity_matched' "
+                "(popularity bins are computed from warm train interactions only)."
             )
 
         output_columns = [
@@ -463,6 +471,7 @@ class TemporalColdStartCandidateSampler(CappedUserInteractionCandidateSampler):
             self.candidate_group_column,
         ]
         if positives.empty:
+            self.diagnostics_ = {"groups": 0, "bin_fallback_groups": 0}
             return pd.DataFrame(columns=output_columns)
 
         all_items = items[self.item_column].drop_duplicates().tolist()
@@ -471,77 +480,138 @@ class TemporalColdStartCandidateSampler(CappedUserInteractionCandidateSampler):
             .agg(lambda values: set(values))
             .to_dict()
         )
-        positives_by_user = positives.groupby(self.user_column, sort=False)[
-            self.item_column
-        ].agg(lambda values: list(dict.fromkeys(values)))
-        if self.max_eval_users is not None:
-            selected_users = stable_sample_values(
-                positives_by_user.index,
-                n=self.max_eval_users,
-                seed=self.seed,
+        item_bins = (
+            self._popularity_bins(all_items, train_interactions)
+            if self.strategy == self.POPULARITY_MATCHED
+            else None
+        )
+
+        rows: list[dict[str, Any]] = []
+        bin_fallback_groups = 0
+        for position, positive in positives.reset_index(drop=True).iterrows():
+            user_id = positive[self.user_column]
+            target_item_id = positive[self.item_column]
+            group_id = self._candidate_group_id(
+                user_id=user_id, item_id=target_item_id
             )
-            positives_by_user = positives_by_user.loc[selected_users]
+            group_rng = random.Random(f"{self.seed}:{group_id}")
+            observed_items = observed_by_user.get(user_id, set())
 
-        row_values: dict[str, list[Any]] = {column: [] for column in output_columns}
-        max_positive_items = self.total_items // (self.negative_ratio + 1)
-        for user_id, positive_items in positives_by_user.items():
-            positive_chunks = _chunks(positive_items, max_positive_items)
-            selected_chunks = positive_chunks[self.group_offset :]
-            if self.max_candidate_groups_per_user is not None:
-                selected_chunks = selected_chunks[
-                    : self.max_candidate_groups_per_user
-                ]
-
-            for local_position, selected_positives in enumerate(selected_chunks):
-                chunk_position = self.group_offset + local_position
-                group_id = self._candidate_group_id(
-                    user_id=user_id,
-                    chunk_position=chunk_position,
-                )
-                negative_count = len(selected_positives) * self.negative_ratio
-                observed_items = observed_by_user.get(user_id, set())
-                if len(all_items) - len(observed_items) < negative_count:
-                    raise ValueError(
-                        f"User {user_id!r} has only "
-                        f"{len(all_items) - len(observed_items)} available negative "
-                        f"items, need {negative_count}."
-                    )
-
-                group_rows: list[dict[str, Any]] = []
-                self._append_rows(
-                    group_rows,
-                    user_id=user_id,
-                    item_ids=selected_positives,
-                    target=1,
-                    sampled=False,
-                    group_id=group_id,
-                )
-                group_rng = random.Random(f"{self.seed}:{group_id}")
-                negative_items = self._sample_negative_items(
+            if item_bins is None:
+                negative_items, used_fallback = self._uniform_negatives(
                     rng=group_rng,
                     user_id=user_id,
                     all_items=all_items,
                     observed_items=observed_items,
                     excluded_pairs=excluded_pairs,
-                    negative_count=negative_count,
                 )
-                self._append_rows(
-                    group_rows,
+            else:
+                negative_items, used_fallback = self._bin_matched_negatives(
+                    rng=group_rng,
                     user_id=user_id,
-                    item_ids=negative_items,
-                    target=0,
-                    sampled=True,
-                    group_id=group_id,
+                    target_item_id=target_item_id,
+                    item_bins=item_bins,
+                    observed_items=observed_items,
+                    excluded_pairs=excluded_pairs,
                 )
-                for row in _shuffled_group_rows(
-                    group_rows,
-                    seed=self.seed,
-                    group_id=group_id,
-                ):
-                    for column in output_columns:
-                        row_values[column].append(row[column])
+            bin_fallback_groups += int(used_fallback)
 
-        return pd.DataFrame(row_values, columns=output_columns)
+            group_rows = [
+                {
+                    self.user_column: user_id,
+                    self.item_column: target_item_id,
+                    self.target_column: 1,
+                    self.sampled_column: False,
+                    self.candidate_group_column: group_id,
+                }
+            ]
+            group_rows.extend(
+                {
+                    self.user_column: user_id,
+                    self.item_column: item_id,
+                    self.target_column: 0,
+                    self.sampled_column: True,
+                    self.candidate_group_column: group_id,
+                }
+                for item_id in negative_items
+            )
+            rows.extend(
+                _shuffled_group_rows(group_rows, seed=self.seed, group_id=group_id)
+            )
+
+        self.diagnostics_ = {
+            "groups": int(len(positives)),
+            "bin_fallback_groups": int(bin_fallback_groups),
+        }
+        return pd.DataFrame(rows, columns=output_columns)
+
+    def _uniform_negatives(
+        self,
+        *,
+        rng: random.Random,
+        user_id: Any,
+        all_items: list[Any],
+        observed_items: set[Any],
+        excluded_pairs: set[tuple[Any, Any]] | None,
+    ) -> tuple[list[Any], bool]:
+        negatives = _draw_negatives(
+            rng=rng,
+            user_id=user_id,
+            pool=all_items,
+            observed_items=observed_items,
+            excluded_pairs=excluded_pairs,
+            negative_count=self.negative_ratio,
+        )
+        return negatives, False
+
+    def _bin_matched_negatives(
+        self,
+        *,
+        rng: random.Random,
+        user_id: Any,
+        target_item_id: Any,
+        item_bins: "_ItemPopularityBins",
+        observed_items: set[Any],
+        excluded_pairs: set[tuple[Any, Any]] | None,
+    ) -> tuple[list[Any], bool]:
+        target_bin = item_bins.bin_of(target_item_id)
+        for radius in range(0, item_bins.n_bins):
+            pool = item_bins.items_within(target_bin, radius)
+            eligible = [
+                item_id
+                for item_id in pool
+                if item_id not in observed_items
+                and item_id != target_item_id
+                and not _is_excluded(
+                    excluded_pairs, user_id=user_id, item_id=item_id
+                )
+            ]
+            if len(eligible) >= self.negative_ratio:
+                return rng.sample(eligible, self.negative_ratio), radius > 0
+        raise ValueError(
+            f"User {user_id!r} has only {len(eligible)} eligible items across "
+            f"all popularity bins, need {self.negative_ratio}."
+        )
+
+    def _popularity_bins(
+        self,
+        all_items: list[Any],
+        train_interactions: pd.DataFrame | None,
+    ) -> "_ItemPopularityBins":
+        counts = (
+            train_interactions.groupby(self.item_column, sort=False)
+            .size()
+        )
+        item_counts = pd.Series(
+            [int(counts.get(item_id, 0)) for item_id in all_items],
+            index=pd.Index(all_items, name=self.item_column),
+        )
+        return _ItemPopularityBins(item_counts, n_bins=self.n_popularity_bins)
+
+    def _candidate_group_id(self, *, user_id: Any, item_id: Any) -> str:
+        """One stable group id per (user, target item) pair."""
+
+        return f"candidate:user:{user_id}:item:{item_id}"
 
 
 class CappedObservedPreferenceCandidateSampler(CandidateSampler):
@@ -870,6 +940,92 @@ def _chunks(values: list[Any], size: int) -> list[list[Any]]:
     """Split values into consecutive non-empty chunks."""
 
     return [values[start : start + size] for start in range(0, len(values), size)]
+
+
+class _ItemPopularityBins:
+    """Quantile bins of warm-train interaction counts over the item catalog.
+
+    Items unseen in train have count 0 and land in the lowest bin. Heavy ties
+    at low counts are handled by dropping duplicate bin edges, so the effective
+    number of bins can be smaller than requested.
+    """
+
+    def __init__(self, item_counts: pd.Series, *, n_bins: int) -> None:
+        if item_counts.nunique() < 2:
+            codes = pd.Series(0, index=item_counts.index)
+        else:
+            codes = pd.qcut(
+                item_counts, q=n_bins, labels=False, duplicates="drop"
+            ).astype(int)
+        self._bin_by_item: dict[Any, int] = {
+            item_id: int(code) for item_id, code in codes.items()
+        }
+        self.n_bins = max(self._bin_by_item.values(), default=-1) + 1
+        self._items_by_bin: dict[int, list[Any]] = {}
+        for item_id, bin_code in self._bin_by_item.items():
+            self._items_by_bin.setdefault(bin_code, []).append(item_id)
+        for bin_items in self._items_by_bin.values():
+            bin_items.sort(key=repr)
+
+    def bin_of(self, item_id: Any) -> int:
+        return self._bin_by_item[item_id]
+
+    def items_within(self, center: int, radius: int) -> list[Any]:
+        """All items in bins [center - radius, center + radius], stable order."""
+
+        lo = max(0, center - radius)
+        hi = min(self.n_bins - 1, center + radius)
+        items: list[Any] = []
+        for bin_code in range(lo, hi + 1):
+            items.extend(self._items_by_bin.get(bin_code, []))
+        return items
+
+
+def _draw_negatives(
+    *,
+    rng: random.Random,
+    user_id: Any,
+    pool: list[Any],
+    observed_items: set[Any],
+    excluded_pairs: set[tuple[Any, Any]] | None,
+    negative_count: int,
+) -> list[Any]:
+    """Rejection-sample unseen items from a pool, with a scan fallback."""
+
+    negatives: list[Any] = []
+    selected: set[Any] = set()
+    attempts = 0
+    max_attempts = max(100, negative_count * 100)
+    while len(negatives) < negative_count:
+        attempts += 1
+        if attempts > max_attempts:
+            remaining = negative_count - len(negatives)
+            available = [
+                item_id
+                for item_id in pool
+                if item_id not in observed_items
+                and item_id not in selected
+                and not _is_excluded(
+                    excluded_pairs, user_id=user_id, item_id=item_id
+                )
+            ]
+            if len(available) < remaining:
+                raise ValueError(
+                    f"User {user_id!r} has only {len(available)} available "
+                    f"negative items in the pool, need {remaining} more."
+                )
+            negatives.extend(rng.sample(available, remaining))
+            return negatives
+        item_id = rng.choice(pool)
+        if (
+            item_id in observed_items
+            or item_id in selected
+            or _is_excluded(excluded_pairs, user_id=user_id, item_id=item_id)
+        ):
+            continue
+        negatives.append(item_id)
+        selected.add(item_id)
+    return negatives
 
 
 def _shuffled_group_rows(
