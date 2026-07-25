@@ -25,11 +25,11 @@ from pathlib import Path
 
 NAMESPACE = "a-ashabokov"
 PODS = [f"agent-exp-policy-ranking-{i}" for i in range(8)]
-METHOD = "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_full"
+METHOD = "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_sumboth_full"
 REMOTE_REPO = "/home/jovyan/beyond-click-sim"
 REMOTE_ZIP = "/home/jovyan/beyond-click-sim-code.zip"
-REMOTE_OUTPUT = f"{REMOTE_REPO}/outputs/experimental/run_qwen36_35b_a3b_full_listwise_ranking"
-LOCAL_OUTPUT_REL = Path("outputs") / "experimental" / "run_qwen36_35b_a3b_full_listwise_ranking"
+REMOTE_OUTPUT = f"{REMOTE_REPO}/outputs/experimental/run_qwen36_35b_a3b_sumboth_full_listwise_ranking"
+LOCAL_OUTPUT_REL = Path("outputs") / "experimental" / "run_qwen36_35b_a3b_sumboth_full_listwise_ranking"
 # Precomputed Agent4Rec taste profiles required on-pod for traits+taste methods.
 # The cache is keyed by the split seed only (SPLIT_SEED=0 for the whole
 # cold-start grid), so one file covers every task below.

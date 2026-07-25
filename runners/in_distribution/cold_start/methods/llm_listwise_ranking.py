@@ -25,6 +25,14 @@ from runners.in_distribution.interaction_prediction.methods.common import (
     task_xy,
 )
 from runners.in_distribution.interaction_prediction.task_builders import repo_root
+from runners.in_distribution.item_summaries import (
+    ITEM_SUMMARY_COLUMN,
+    ITEM_SUMMARY_COLUMN_LABEL,
+    SummaryVisibility,
+    maybe_add_item_summary_prompt_columns,
+    resolve_item_summary_visibility,
+    task_item_summary_metadata,
+)
 from runners.in_distribution.llm_error_budget import (
     DEFAULT_MAX_ERROR_RATE,
     DEFAULT_MIN_GROUPS_BEFORE_CHECK,
@@ -74,6 +82,38 @@ def run_qwen36_27b_full(task: ColdStartTask, output_dir: Path) -> dict[str, obje
     )
 
 
+def run_qwen36_27b_sumboth_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_sumboth_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        **_sumboth_kwargs(),
+    )
+
+
+def run_qwen36_27b_sumboth_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_sumboth_full",
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        **_sumboth_kwargs(),
+    )
+
+
 def run_qwen36_35b_a3b_smoke(
     task: ColdStartTask, output_dir: Path
 ) -> dict[str, object]:
@@ -86,6 +126,22 @@ def run_qwen36_35b_a3b_smoke(
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen36_35b_a3b_sumboth_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_sumboth_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        **_sumboth_kwargs(),
     )
 
 
@@ -104,6 +160,26 @@ def run_qwen36_35b_a3b_full(
     )
 
 
+def run_qwen36_35b_a3b_sumboth_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_sumboth_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        **_sumboth_kwargs(),
+    )
+
+
+def _sumboth_kwargs() -> dict[str, object]:
+    return {"summary_visibility": "both"}
+
+
 def run_method(
     task: ColdStartTask,
     output_dir: Path,
@@ -118,6 +194,7 @@ def run_method(
     max_llm_attempts: int = MAX_LLM_ATTEMPTS,
     max_workers: int = 1,
     extra_body: dict | None = None,
+    summary_visibility: SummaryVisibility = "none",
     max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
     min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
 ) -> dict[str, object]:
@@ -137,7 +214,19 @@ def run_method(
         base_prompt_columns,
         use_item_stats=False,
     )
+    resolved_summary_visibility = resolve_item_summary_visibility(summary_visibility)
+    prompt_columns = maybe_add_item_summary_prompt_columns(
+        dataset_name,
+        prompt_columns,
+        history_item_summaries=resolved_summary_visibility["history"],
+        candidate_item_summaries=resolved_summary_visibility["candidate"],
+    )
     column_labels = item_rating_column_labels(dataset_name, use_item_stats=False)
+    if resolved_summary_visibility["any"]:
+        column_labels = {
+            **column_labels,
+            ITEM_SUMMARY_COLUMN: ITEM_SUMMARY_COLUMN_LABEL,
+        }
     candidate_group_column = task.schema.candidate_group_column
     if candidate_group_column is None:
         raise ValueError("LLM listwise ranking method requires candidate_group_column")
@@ -162,6 +251,12 @@ def run_method(
         [X_val["user_id"], X_test["user_id"]],
         ignore_index=True,
     ).drop_duplicates()
+    item_summary_metadata = task_item_summary_metadata(
+        task,
+        history=resolved_summary_visibility["history"],
+        candidate=resolved_summary_visibility["candidate"],
+        extra_frames={"online_session_history": task.online_session_history},
+    )
 
     scorer = LLMPreferenceListwiseRankingScorer(
         client=make_llm_client(client_name),
@@ -206,6 +301,8 @@ def run_method(
             "column_labels": column_labels,
             "json_list_columns": [],
             "extra_body": extra_body,
+            "summary_visibility": summary_visibility,
+            "item_summaries": item_summary_metadata,
         },
         repo_root=repo_root(),
     )

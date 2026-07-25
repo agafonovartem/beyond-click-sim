@@ -279,7 +279,7 @@ def test_taste_uses_history_only_and_non_summary_cache(
     )
     observed_cache_args: dict[str, object] = {}
 
-    def fake_cache_path(task: ColdStartTask, **kwargs: object) -> Path:
+    def fake_cache_path(_task: ColdStartTask, **kwargs: object) -> Path:
         observed_cache_args.update(kwargs)
         return tmp_path / "taste_cache.json"
 
@@ -311,6 +311,57 @@ def test_taste_uses_history_only_and_non_summary_cache(
     assert "Canonical summary for v" not in taste_prompt
     system_prompt = ranking_client.completions.calls[0]["messages"][0]["content"]
     assert "Likes dramas" in system_prompt
+
+
+def test_taste_sumboth_uses_history_summaries_in_cache_key(
+    tmp_path: Path, monkeypatch
+) -> None:
+    taste_client = FakeClient(
+        [
+            "TASTE: Likes dramas.\n"
+            "REASON: Rated a drama highly.\n"
+            "HIGH RATINGS: dramas\n"
+            "LOW RATINGS: comedies"
+        ]
+    )
+    ranking_client = FakeClient(["1. C1\n2. C2"] * 3)
+    monkeypatch.setattr(
+        agent4rec_listwise_ranking,
+        "make_llm_client",
+        lambda name: taste_client if name == "taste" else ranking_client,
+    )
+    observed_cache_args: dict[str, object] = {}
+
+    def fake_cache_path(_task: ColdStartTask, **kwargs: object) -> Path:
+        observed_cache_args.update(kwargs)
+        return tmp_path / "taste_cache_summary.json"
+
+    monkeypatch.setattr(
+        agent4rec_listwise_ranking,
+        "agent4rec_taste_cache_path",
+        fake_cache_path,
+    )
+
+    agent4rec_listwise_ranking.run_method(
+        _cold_task(),
+        tmp_path / "run",
+        method_name="agent4rec_listwise_taste_sumboth_test",
+        client_name="ranking",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_workers=1,
+        max_llm_attempts=1,
+        profile_components=("traits", "taste"),
+        taste_client_name="taste",
+        taste_model="fake-taste-model",
+        taste_max_attempts=1,
+        summary_usage="both",
+    )
+
+    assert observed_cache_args["use_history_item_summaries"] is True
+    taste_prompt = taste_client.completions.calls[0]["messages"][1]["content"]
+    assert "History Positive" in taste_prompt
+    assert "A remembered dramatic film." in taste_prompt
 
 
 def test_taste_failure_aborts_before_ranking_and_is_not_group_error(
@@ -355,7 +406,7 @@ def test_wrappers_and_registry_cover_methods(monkeypatch, tmp_path: Path) -> Non
     calls: list[dict[str, object]] = []
 
     def fake_run_method(
-        task: ColdStartTask, output_dir: Path, **kwargs: object
+        _task: ColdStartTask, _output_dir: Path, **kwargs: object
     ) -> dict[str, object]:
         calls.append(kwargs)
         return {}
@@ -366,8 +417,14 @@ def test_wrappers_and_registry_cover_methods(monkeypatch, tmp_path: Path) -> Non
     agent4rec_listwise_ranking.run_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full(
         task, tmp_path
     )
+    agent4rec_listwise_ranking.run_qwen36_27b_traits_taste_gpt4o_mini_sumboth_full(
+        task, tmp_path
+    )
     agent4rec_listwise_ranking.run_qwen36_35b_a3b_traits_smoke(task, tmp_path)
     agent4rec_listwise_ranking.run_qwen36_35b_a3b_traits_taste_gpt4o_mini_candidate_summary_full(
+        task, tmp_path
+    )
+    agent4rec_listwise_ranking.run_qwen36_35b_a3b_traits_taste_gpt4o_mini_sumboth_full(
         task, tmp_path
     )
     assert calls[0]["max_candidate_groups"] == 25
@@ -376,19 +433,26 @@ def test_wrappers_and_registry_cover_methods(monkeypatch, tmp_path: Path) -> Non
     assert calls[1]["max_candidate_groups"] is None
     assert calls[1]["profile_components"] == ("traits", "taste")
     assert calls[1]["summary_usage"] == "candidate"
-    assert calls[2]["model"] == "Qwen/Qwen3.6-35B-A3B"
-    assert calls[2]["profile_components"] == ("traits",)
+    assert calls[2]["summary_usage"] == "both"
     assert calls[3]["model"] == "Qwen/Qwen3.6-35B-A3B"
-    assert calls[3]["profile_components"] == ("traits", "taste")
+    assert calls[3]["profile_components"] == ("traits",)
+    assert calls[4]["model"] == "Qwen/Qwen3.6-35B-A3B"
+    assert calls[4]["profile_components"] == ("traits", "taste")
+    assert calls[4]["summary_usage"] == "candidate"
+    assert calls[5]["summary_usage"] == "both"
 
     expected = {
         "agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_smoke",
         "agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_full",
         "agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_smoke",
         "agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_taste_gpt4o_mini_candidate_summary_full",
+        "agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_taste_gpt4o_mini_sumboth_smoke",
+        "agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_taste_gpt4o_mini_sumboth_full",
         "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_smoke",
         "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_full",
         "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_candidate_summary_smoke",
         "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_candidate_summary_full",
+        "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_sumboth_smoke",
+        "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_sumboth_full",
     }
     assert expected <= METHOD_RUNNERS.keys()

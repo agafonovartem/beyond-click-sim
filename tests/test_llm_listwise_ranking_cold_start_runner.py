@@ -112,6 +112,34 @@ def _cold_task() -> ColdStartTask:
     )
 
 
+def _summary_cold_task() -> ColdStartTask:
+    task = _cold_task()
+    task.online_session_history = task.online_session_history.assign(
+        item_summary="PROFILE SUMMARY MARKER"
+    )
+    task.train = task.train.assign(item_summary="WARM TRAIN SUMMARY")
+    task.val = task.val.assign(
+        item_summary=["CANDIDATE SUMMARY MARKER VAL ONE", "CANDIDATE SUMMARY MARKER VAL TWO"]
+    )
+    task.test = task.test.assign(
+        item_summary=[
+            "CANDIDATE SUMMARY MARKER TEST ONE",
+            "CANDIDATE SUMMARY MARKER TEST TWO",
+            "CANDIDATE SUMMARY MARKER TEST THREE",
+            "CANDIDATE SUMMARY MARKER TEST FOUR",
+        ]
+    )
+    task.manifest["item_enrichment"] = {
+        "movie_summaries": {
+            "enabled": True,
+            "canonical_column": "summary",
+            "task_column": "item_summary",
+            "source_sha256": "test-sha",
+        }
+    }
+    return task
+
+
 def test_cold_start_listwise_runner_writes_ranking_only_artifacts(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -166,6 +194,42 @@ def test_cold_start_listwise_runner_writes_ranking_only_artifacts(
         manifest["decision_rule"]["ranking"]["score_mapping"]
         == "score = n_candidates - rank"
     )
+
+
+def test_cold_start_listwise_runner_sumboth_shows_profile_and_candidate_summaries(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client = FakeClient(["1. C2\n2. C1", "1. C1\n2. C2", "1. C2\n2. C1"])
+    monkeypatch.setattr(llm_listwise_ranking, "make_llm_client", lambda _: client)
+    task = _summary_cold_task()
+
+    llm_listwise_ranking.run_method(
+        task,
+        tmp_path,
+        method_name="llm_preference_listwise_ranking_sumboth_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        summary_visibility="both",
+    )
+
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "PROFILE SUMMARY MARKER" in prompt
+    assert "CANDIDATE SUMMARY MARKER VAL ONE" in prompt
+    assert "CANDIDATE SUMMARY MARKER VAL TWO" in prompt
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["summary_visibility"] == "both"
+    assert "item_summary" in (
+        manifest["scorer"]["prompt_columns"]["history_description_columns"]
+    )
+    assert "item_summary" in (
+        manifest["scorer"]["prompt_columns"]["candidate_description_columns"]
+    )
+    assert manifest["scorer"]["item_summaries"]["history_item_summaries"] is True
+    assert manifest["scorer"]["item_summaries"]["candidate_item_summaries"] is True
 
 
 def test_cold_start_listwise_runner_logs_split_errors_and_failure_metrics(
@@ -248,8 +312,12 @@ def test_cold_start_listwise_wrappers_and_registry(monkeypatch, tmp_path: Path) 
 
     llm_listwise_ranking.run_qwen36_27b_smoke(task, tmp_path)
     llm_listwise_ranking.run_qwen36_27b_full(task, tmp_path)
+    llm_listwise_ranking.run_qwen36_27b_sumboth_smoke(task, tmp_path)
+    llm_listwise_ranking.run_qwen36_27b_sumboth_full(task, tmp_path)
     llm_listwise_ranking.run_qwen36_35b_a3b_smoke(task, tmp_path)
     llm_listwise_ranking.run_qwen36_35b_a3b_full(task, tmp_path)
+    llm_listwise_ranking.run_qwen36_35b_a3b_sumboth_smoke(task, tmp_path)
+    llm_listwise_ranking.run_qwen36_35b_a3b_sumboth_full(task, tmp_path)
 
     assert calls == [
         {
@@ -269,6 +337,24 @@ def test_cold_start_listwise_wrappers_and_registry(monkeypatch, tmp_path: Path) 
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
         {
+            "method_name": "llm_preference_listwise_ranking_vllm_qwen36_27b_sumboth_smoke",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": 25,
+            "max_workers": llm_listwise_ranking.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_visibility": "both",
+        },
+        {
+            "method_name": "llm_preference_listwise_ranking_vllm_qwen36_27b_sumboth_full",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-27B",
+            "max_candidate_groups": None,
+            "max_workers": llm_listwise_ranking.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_visibility": "both",
+        },
+        {
             "method_name": "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_smoke",
             "client_name": "vllm_local",
             "model": "Qwen/Qwen3.6-35B-A3B",
@@ -284,6 +370,24 @@ def test_cold_start_listwise_wrappers_and_registry(monkeypatch, tmp_path: Path) 
             "max_workers": llm_listwise_ranking.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         },
+        {
+            "method_name": "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_sumboth_smoke",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-35B-A3B",
+            "max_candidate_groups": 25,
+            "max_workers": llm_listwise_ranking.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_visibility": "both",
+        },
+        {
+            "method_name": "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_sumboth_full",
+            "client_name": "vllm_local",
+            "model": "Qwen/Qwen3.6-35B-A3B",
+            "max_candidate_groups": None,
+            "max_workers": llm_listwise_ranking.VLLM_MAX_WORKERS,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            "summary_visibility": "both",
+        },
     ]
 
     assert (
@@ -294,3 +398,19 @@ def test_cold_start_listwise_wrappers_and_registry(monkeypatch, tmp_path: Path) 
         "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_smoke" in METHOD_RUNNERS
     )
     assert "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_full" in METHOD_RUNNERS
+    assert (
+        "llm_preference_listwise_ranking_vllm_qwen36_27b_sumboth_smoke"
+        in METHOD_RUNNERS
+    )
+    assert (
+        "llm_preference_listwise_ranking_vllm_qwen36_27b_sumboth_full"
+        in METHOD_RUNNERS
+    )
+    assert (
+        "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_sumboth_smoke"
+        in METHOD_RUNNERS
+    )
+    assert (
+        "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_sumboth_full"
+        in METHOD_RUNNERS
+    )
