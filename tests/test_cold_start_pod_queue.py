@@ -33,6 +33,9 @@ def test_method_task_variant_rules() -> None:
     assert not pod_queue.method_requires_item_stats_tasks(
         "llm_preference_listwise_ranking_vllm_qwen36_27b_full"
     )
+    assert pod_queue.method_requires_item_stats_tasks(
+        "llm_preference_listwise_ranking_vllm_qwen36_27b_item_stats_sumboth_full"
+    )
     assert pod_queue.method_requires_taste_cache(
         "agent4rec_yes_no_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_full"
     )
@@ -48,12 +51,31 @@ def test_method_task_variant_rules() -> None:
     )
 
 
+def test_session_names_are_unique_across_cold_start_grid() -> None:
+    names = [pod_queue.session_name(task) for task in pod_queue.TASKS]
+    assert len(names) == len(set(names))
+    assert all(name.startswith("cs_") for name in names)
+
+
+def test_task_from_result_dirname_parses_timestamped_dirs() -> None:
+    task = pod_queue.TASKS[0]
+    dirname = f"20260726T114014Z_{task}_{pod_queue.METHOD}"
+    assert pod_queue.task_from_result_dirname(dirname) == task
+    assert pod_queue.task_from_result_dirname("not_a_result") is None
+
+
 def test_task_name_grid_switches_between_plain_and_item_stats() -> None:
     listwise_tasks = pod_queue.task_names_for_method(
         "llm_preference_listwise_ranking_vllm_qwen36_27b_full"
     )
     assert listwise_tasks
     assert all("item_stats" not in task_name for task_name in listwise_tasks)
+
+    item_stats_llm_tasks = pod_queue.task_names_for_method(
+        "llm_preference_listwise_ranking_vllm_qwen36_27b_item_stats_sumboth_full"
+    )
+    assert item_stats_llm_tasks
+    assert all("item_stats" in task_name for task_name in item_stats_llm_tasks)
 
     agent_tasks = pod_queue.task_names_for_method(
         "agent4rec_yes_no_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_full"
@@ -121,4 +143,4 @@ def test_queue_state_is_method_scoped_and_rechecks_done_artifacts(
     run_dir = tmp_path / "outputs" / f"run_{task}_{method}"
     run_dir.mkdir(parents=True)
     (run_dir / "metrics_ranking.json").write_text("{}", encoding="utf-8")
-    assert pod_queue.QueueState.load(state_path).tasks[task].status == "done"
+    assert pod_queue.QueueState.load(state_path).tasks[task].status == "downloaded"

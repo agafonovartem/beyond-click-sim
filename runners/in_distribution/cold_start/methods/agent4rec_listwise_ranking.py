@@ -79,6 +79,12 @@ VLLM_QWEN36_35B_A3B_TRAITS_TASTE_SUMBOTH_METHOD_NAME = (
     "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_"
     "traits_taste_gpt4o_mini_sumboth"
 )
+VLLM_QWEN3_8B_CLIENT = "vllm_local"
+VLLM_QWEN3_8B_MODEL = "Qwen/Qwen3-8B"
+VLLM_QWEN3_8B_METHOD_BASE = "agent4rec_preference_listwise_ranking_vllm_qwen3_8b"
+VLLM_LLAMA33_70B_CLIENT = "vllm_local"
+VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
+VLLM_LLAMA33_70B_METHOD_BASE = "agent4rec_preference_listwise_ranking_vllm_llama33_70b"
 
 
 def run_qwen36_27b_traits_smoke(
@@ -261,6 +267,115 @@ def run_qwen36_35b_a3b_traits_taste_gpt4o_mini_sumboth_full(
     )
 
 
+def run_qwen3_8b_traits_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return _run_traits_full(
+        task,
+        output_dir,
+        method_base=VLLM_QWEN3_8B_METHOD_BASE,
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return _run_traits_taste_candidate_summary(
+        task,
+        output_dir,
+        method_base=f"{VLLM_QWEN3_8B_METHOD_BASE}_traits_taste_gpt4o_mini_candidate_summary",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_candidate_groups=None,
+        suffix="full",
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_qwen3_8b_traits_taste_gpt4o_mini_sumboth_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return _run_traits_taste_sumboth(
+        task,
+        output_dir,
+        method_base=f"{VLLM_QWEN3_8B_METHOD_BASE}_traits_taste_gpt4o_mini_sumboth",
+        client_name=VLLM_QWEN3_8B_CLIENT,
+        model=VLLM_QWEN3_8B_MODEL,
+        max_candidate_groups=None,
+        suffix="full",
+        extra_body=QWEN_EXTRA_BODY,
+    )
+
+
+def run_llama33_70b_traits_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return _run_traits_full(
+        task,
+        output_dir,
+        method_base=VLLM_LLAMA33_70B_METHOD_BASE,
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        extra_body=None,
+    )
+
+
+def run_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return _run_traits_taste_candidate_summary(
+        task,
+        output_dir,
+        method_base=f"{VLLM_LLAMA33_70B_METHOD_BASE}_traits_taste_gpt4o_mini_candidate_summary",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=None,
+        suffix="full",
+        extra_body=None,
+    )
+
+
+def run_llama33_70b_traits_taste_gpt4o_mini_sumboth_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return _run_traits_taste_sumboth(
+        task,
+        output_dir,
+        method_base=f"{VLLM_LLAMA33_70B_METHOD_BASE}_traits_taste_gpt4o_mini_sumboth",
+        client_name=VLLM_LLAMA33_70B_CLIENT,
+        model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=None,
+        suffix="full",
+        extra_body=None,
+    )
+
+
+def _run_traits_full(
+    task: ColdStartTask,
+    output_dir: Path,
+    *,
+    method_base: str,
+    client_name: str,
+    model: str,
+    extra_body: dict | None,
+) -> dict[str, object]:
+    return run_method(
+        task,
+        output_dir,
+        method_name=f"{method_base}_traits_full",
+        client_name=client_name,
+        model=model,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=extra_body,
+        profile_components=("traits",),
+        summary_usage=canonical_agent4rec_summary_usage(task),
+    )
+
+
 def _run_traits_taste_candidate_summary(
     task: ColdStartTask,
     output_dir: Path,
@@ -270,6 +385,7 @@ def _run_traits_taste_candidate_summary(
     model: str,
     max_candidate_groups: int | None,
     suffix: str,
+    extra_body: dict | None = QWEN_EXTRA_BODY,
 ) -> dict[str, object]:
     return run_method(
         task,
@@ -279,7 +395,7 @@ def _run_traits_taste_candidate_summary(
         model=model,
         max_candidate_groups=max_candidate_groups,
         max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
+        extra_body=extra_body,
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
@@ -296,6 +412,7 @@ def _run_traits_taste_sumboth(
     model: str,
     max_candidate_groups: int | None,
     suffix: str,
+    extra_body: dict | None = QWEN_EXTRA_BODY,
 ) -> dict[str, object]:
     return run_method(
         task,
@@ -305,7 +422,7 @@ def _run_traits_taste_sumboth(
         model=model,
         max_candidate_groups=max_candidate_groups,
         max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
+        extra_body=extra_body,
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,

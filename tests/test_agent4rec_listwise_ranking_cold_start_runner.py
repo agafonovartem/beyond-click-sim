@@ -35,9 +35,7 @@ class FakeChatCompletions:
             raise AssertionError("Fake LLM response queue is empty")
         return SimpleNamespace(
             choices=[
-                SimpleNamespace(
-                    message=SimpleNamespace(content=self.responses.pop(0))
-                )
+                SimpleNamespace(message=SimpleNamespace(content=self.responses.pop(0)))
             ]
         )
 
@@ -145,9 +143,7 @@ def test_traits_runner_uses_history_profiles_and_ranking_only_artifacts(
     tmp_path: Path, monkeypatch
 ) -> None:
     client = FakeClient(["1. C1\n2. C2"] * 3)
-    monkeypatch.setattr(
-        agent4rec_listwise_ranking, "make_llm_client", lambda _: client
-    )
+    monkeypatch.setattr(agent4rec_listwise_ranking, "make_llm_client", lambda _: client)
 
     result = agent4rec_listwise_ranking.run_method(
         _cold_task(),
@@ -203,9 +199,7 @@ def test_traits_runner_logs_split_failures_and_enforces_error_budget(
     tmp_path: Path, monkeypatch
 ) -> None:
     client = FakeClient(["1. C1\n2. C2", "invalid ranking"])
-    monkeypatch.setattr(
-        agent4rec_listwise_ranking, "make_llm_client", lambda _: client
-    )
+    monkeypatch.setattr(agent4rec_listwise_ranking, "make_llm_client", lambda _: client)
 
     with pytest.raises(LLMErrorRateExceededError):
         agent4rec_listwise_ranking.run_method(
@@ -235,9 +229,7 @@ def test_smoke_limit_applies_independently_to_val_and_test(
     tmp_path: Path, monkeypatch
 ) -> None:
     client = FakeClient(["1. C1\n2. C2"] * 50)
-    monkeypatch.setattr(
-        agent4rec_listwise_ranking, "make_llm_client", lambda _: client
-    )
+    monkeypatch.setattr(agent4rec_listwise_ranking, "make_llm_client", lambda _: client)
 
     agent4rec_listwise_ranking.run_method(
         _cold_task(val_groups=26, test_groups=27),
@@ -427,6 +419,20 @@ def test_wrappers_and_registry_cover_methods(monkeypatch, tmp_path: Path) -> Non
     agent4rec_listwise_ranking.run_qwen36_35b_a3b_traits_taste_gpt4o_mini_sumboth_full(
         task, tmp_path
     )
+    agent4rec_listwise_ranking.run_qwen3_8b_traits_full(task, tmp_path)
+    agent4rec_listwise_ranking.run_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_full(
+        task, tmp_path
+    )
+    agent4rec_listwise_ranking.run_qwen3_8b_traits_taste_gpt4o_mini_sumboth_full(
+        task, tmp_path
+    )
+    agent4rec_listwise_ranking.run_llama33_70b_traits_full(task, tmp_path)
+    agent4rec_listwise_ranking.run_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full(
+        task, tmp_path
+    )
+    agent4rec_listwise_ranking.run_llama33_70b_traits_taste_gpt4o_mini_sumboth_full(
+        task, tmp_path
+    )
     assert calls[0]["max_candidate_groups"] == 25
     assert calls[0]["profile_components"] == ("traits",)
     assert calls[0]["model"] == "Qwen/Qwen3.6-27B"
@@ -440,6 +446,16 @@ def test_wrappers_and_registry_cover_methods(monkeypatch, tmp_path: Path) -> Non
     assert calls[4]["profile_components"] == ("traits", "taste")
     assert calls[4]["summary_usage"] == "candidate"
     assert calls[5]["summary_usage"] == "both"
+    assert calls[6]["model"] == "Qwen/Qwen3-8B"
+    assert calls[6]["extra_body"] == {
+        "chat_template_kwargs": {"enable_thinking": False}
+    }
+    assert calls[7]["summary_usage"] == "candidate"
+    assert calls[8]["summary_usage"] == "both"
+    assert calls[9]["model"] == "llama-3.3-70b-instruct"
+    assert calls[9]["extra_body"] is None
+    assert calls[10]["summary_usage"] == "candidate"
+    assert calls[11]["summary_usage"] == "both"
 
     expected = {
         "agent4rec_preference_listwise_ranking_vllm_qwen36_27b_traits_smoke",
@@ -454,5 +470,11 @@ def test_wrappers_and_registry_cover_methods(monkeypatch, tmp_path: Path) -> Non
         "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_candidate_summary_full",
         "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_sumboth_smoke",
         "agent4rec_preference_listwise_ranking_vllm_qwen36_35b_a3b_traits_taste_gpt4o_mini_sumboth_full",
+        "agent4rec_preference_listwise_ranking_vllm_qwen3_8b_traits_full",
+        "agent4rec_preference_listwise_ranking_vllm_qwen3_8b_traits_taste_gpt4o_mini_candidate_summary_full",
+        "agent4rec_preference_listwise_ranking_vllm_qwen3_8b_traits_taste_gpt4o_mini_sumboth_full",
+        "agent4rec_preference_listwise_ranking_vllm_llama33_70b_traits_full",
+        "agent4rec_preference_listwise_ranking_vllm_llama33_70b_traits_taste_gpt4o_mini_candidate_summary_full",
+        "agent4rec_preference_listwise_ranking_vllm_llama33_70b_traits_taste_gpt4o_mini_sumboth_full",
     }
     assert expected <= METHOD_RUNNERS.keys()

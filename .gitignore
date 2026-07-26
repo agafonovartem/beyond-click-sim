@@ -12,6 +12,7 @@ __pycache__/
 *.parquet
 .vscode/
 *.vsix
+logs/
 
 # Generated outputs are large. Track only compact run provenance/metric JSONs.
 /outputs/*

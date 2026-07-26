@@ -8,7 +8,11 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from beyond_click_sim.tasks import TaskSchema
+from beyond_click_sim.tasks import (
+    PREFIXED_ITEM_RATING_COUNT_COLUMN,
+    PREFIXED_ITEM_RATING_MEAN_COLUMN,
+    TaskSchema,
+)
 from beyond_click_sim.tasks.cold_start import ColdStartTask
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -119,7 +123,10 @@ def _summary_cold_task() -> ColdStartTask:
     )
     task.train = task.train.assign(item_summary="WARM TRAIN SUMMARY")
     task.val = task.val.assign(
-        item_summary=["CANDIDATE SUMMARY MARKER VAL ONE", "CANDIDATE SUMMARY MARKER VAL TWO"]
+        item_summary=[
+            "CANDIDATE SUMMARY MARKER VAL ONE",
+            "CANDIDATE SUMMARY MARKER VAL TWO",
+        ]
     )
     task.test = task.test.assign(
         item_summary=[
@@ -162,7 +169,9 @@ def test_cold_start_listwise_runner_writes_ranking_only_artifacts(
     first_prompt = client.completions.calls[0]["messages"][1]["content"]
     assert "History Movie" in first_prompt
     assert "Warm Train Only" not in first_prompt
-    assert "The user would rate the candidate movie at least 4 out of 5." in first_prompt
+    assert (
+        "The user would rate the candidate movie at least 4 out of 5." in first_prompt
+    )
 
     assert not (tmp_path / "metrics.json").exists()
     assert (tmp_path / "metrics_ranking.json").exists()
@@ -174,7 +183,14 @@ def test_cold_start_listwise_runner_writes_ranking_only_artifacts(
     assert result["test"]["macro_by_group"]["ndcg@10"] >= 0.0
 
     predictions = pd.read_parquet(tmp_path / "predictions.parquet")
-    assert predictions["split"].tolist() == ["val", "val", "test", "test", "test", "test"]
+    assert predictions["split"].tolist() == [
+        "val",
+        "val",
+        "test",
+        "test",
+        "test",
+        "test",
+    ]
     assert predictions["score"].tolist() == [0.0, 1.0, 1.0, 0.0, 0.0, 1.0]
     assert "prediction" not in predictions.columns
     assert predictions["k"].unique().tolist() == [3]
@@ -189,11 +205,51 @@ def test_cold_start_listwise_runner_writes_ranking_only_artifacts(
     assert manifest["scorer"]["target_description"] == (
         "The user would rate the candidate movie at least 4 out of 5."
     )
-    assert manifest["decision_rule"]["ranking"]["kind"] == "complete_listwise_rank_parser"
+    assert (
+        manifest["decision_rule"]["ranking"]["kind"] == "complete_listwise_rank_parser"
+    )
     assert (
         manifest["decision_rule"]["ranking"]["score_mapping"]
         == "score = n_candidates - rank"
     )
+
+
+def test_cold_start_listwise_runner_exposes_item_stats(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client = FakeClient(["C1\nC2", "C1\nC2", "C1\nC2"])
+    monkeypatch.setattr(llm_listwise_ranking, "make_llm_client", lambda _: client)
+    task = _cold_task()
+    for frame_name in ("train", "val", "test", "online_session_history"):
+        frame = getattr(task, frame_name)
+        setattr(
+            task,
+            frame_name,
+            frame.assign(
+                **{
+                    PREFIXED_ITEM_RATING_MEAN_COLUMN: 4.25,
+                    PREFIXED_ITEM_RATING_COUNT_COLUMN: 120,
+                }
+            ),
+        )
+
+    llm_listwise_ranking.run_method(
+        task,
+        tmp_path,
+        method_name="llm_preference_listwise_ranking_item_stats_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        use_item_stats=True,
+    )
+
+    first_prompt = client.completions.calls[0]["messages"][1]["content"]
+    assert "average rating: 4.25" in first_prompt
+    assert "number of prior reviews: 120" in first_prompt
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["scorer"]["uses_item_stats"] is True
 
 
 def test_cold_start_listwise_runner_sumboth_shows_profile_and_candidate_summaries(
@@ -222,11 +278,13 @@ def test_cold_start_listwise_runner_sumboth_shows_profile_and_candidate_summarie
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["scorer"]["summary_visibility"] == "both"
-    assert "item_summary" in (
-        manifest["scorer"]["prompt_columns"]["history_description_columns"]
+    assert (
+        "item_summary"
+        in (manifest["scorer"]["prompt_columns"]["history_description_columns"])
     )
-    assert "item_summary" in (
-        manifest["scorer"]["prompt_columns"]["candidate_description_columns"]
+    assert (
+        "item_summary"
+        in (manifest["scorer"]["prompt_columns"]["candidate_description_columns"])
     )
     assert manifest["scorer"]["item_summaries"]["history_item_summaries"] is True
     assert manifest["scorer"]["item_summaries"]["candidate_item_summaries"] is True
@@ -261,7 +319,9 @@ def test_cold_start_listwise_runner_logs_split_errors_and_failure_metrics(
 
     errors = [
         json.loads(line)
-        for line in (tmp_path / "llm_errors.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in (tmp_path / "llm_errors.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
     ]
     assert len(errors) == 1
     assert errors[0]["split"] == "test"
@@ -291,7 +351,9 @@ def test_cold_start_listwise_runner_aborts_on_error_budget_and_persists_errors(
 
     errors = [
         json.loads(line)
-        for line in (tmp_path / "llm_errors.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in (tmp_path / "llm_errors.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
     ]
     assert len(errors) == 1
     assert errors[0]["split"] == "val"
@@ -390,21 +452,16 @@ def test_cold_start_listwise_wrappers_and_registry(monkeypatch, tmp_path: Path) 
         },
     ]
 
-    assert (
-        "llm_preference_listwise_ranking_vllm_qwen36_27b_smoke" in METHOD_RUNNERS
-    )
+    assert "llm_preference_listwise_ranking_vllm_qwen36_27b_smoke" in METHOD_RUNNERS
     assert "llm_preference_listwise_ranking_vllm_qwen36_27b_full" in METHOD_RUNNERS
-    assert (
-        "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_smoke" in METHOD_RUNNERS
-    )
+    assert "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_smoke" in METHOD_RUNNERS
     assert "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_full" in METHOD_RUNNERS
     assert (
         "llm_preference_listwise_ranking_vllm_qwen36_27b_sumboth_smoke"
         in METHOD_RUNNERS
     )
     assert (
-        "llm_preference_listwise_ranking_vllm_qwen36_27b_sumboth_full"
-        in METHOD_RUNNERS
+        "llm_preference_listwise_ranking_vllm_qwen36_27b_sumboth_full" in METHOD_RUNNERS
     )
     assert (
         "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_sumboth_smoke"
@@ -414,3 +471,115 @@ def test_cold_start_listwise_wrappers_and_registry(monkeypatch, tmp_path: Path) 
         "llm_preference_listwise_ranking_vllm_qwen36_35b_a3b_sumboth_full"
         in METHOD_RUNNERS
     )
+
+
+def test_cold_start_listwise_ablation_wrappers_and_registry(
+    monkeypatch, tmp_path: Path
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def _fake_run_method(*_args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_listwise_ranking, "run_method", _fake_run_method)
+    task = SimpleNamespace()
+    variants = [
+        ("item_stats", True, "none"),
+        ("sumhistory", False, "history"),
+        ("sumcandidate", False, "candidate"),
+        ("item_stats_sumhistory", True, "history"),
+        ("item_stats_sumcandidate", True, "candidate"),
+        ("item_stats_sumboth", True, "both"),
+    ]
+    models = [
+        (
+            "qwen36_27b",
+            "Qwen/Qwen3.6-27B",
+        ),
+        (
+            "qwen36_35b_a3b",
+            "Qwen/Qwen3.6-35B-A3B",
+        ),
+    ]
+
+    for model_slug, model_name in models:
+        for variant, use_item_stats, summary_visibility in variants:
+            wrapper = getattr(
+                llm_listwise_ranking,
+                f"run_{model_slug}_{variant}_full",
+            )
+            wrapper(task, tmp_path)
+            method_name = (
+                f"llm_preference_listwise_ranking_vllm_{model_slug}_{variant}_full"
+            )
+            assert calls[-1] == {
+                "method_name": method_name,
+                "client_name": "vllm_local",
+                "model": model_name,
+                "max_candidate_groups": None,
+                "max_workers": llm_listwise_ranking.VLLM_MAX_WORKERS,
+                "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+                "use_item_stats": use_item_stats,
+                "summary_visibility": summary_visibility,
+            }
+            assert method_name in METHOD_RUNNERS
+
+    assert len(calls) == 12
+
+
+def test_additional_backbones_cover_full_listwise_ablation_grid(
+    monkeypatch, tmp_path: Path
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def _fake_run_method(*_args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(llm_listwise_ranking, "run_method", _fake_run_method)
+    task = SimpleNamespace()
+    variants = [
+        (None, False, "none"),
+        ("item_stats", True, "none"),
+        ("sumhistory", False, "history"),
+        ("sumcandidate", False, "candidate"),
+        ("sumboth", False, "both"),
+        ("item_stats_sumhistory", True, "history"),
+        ("item_stats_sumcandidate", True, "candidate"),
+        ("item_stats_sumboth", True, "both"),
+    ]
+    models = [
+        (
+            "qwen3_8b",
+            "Qwen/Qwen3-8B",
+            {"chat_template_kwargs": {"enable_thinking": False}},
+        ),
+        ("llama33_70b", "llama-3.3-70b-instruct", None),
+    ]
+
+    for model_slug, model_name, extra_body in models:
+        for variant, use_item_stats, summary_visibility in variants:
+            wrapper_suffix = f"_{variant}" if variant is not None else ""
+            wrapper = getattr(
+                llm_listwise_ranking,
+                f"run_{model_slug}{wrapper_suffix}_full",
+            )
+            wrapper(task, tmp_path)
+            method_name = (
+                f"llm_preference_listwise_ranking_vllm_{model_slug}"
+                f"{wrapper_suffix}_full"
+            )
+            assert calls[-1] == {
+                "method_name": method_name,
+                "client_name": "vllm_local",
+                "model": model_name,
+                "max_candidate_groups": None,
+                "max_workers": llm_listwise_ranking.VLLM_MAX_WORKERS,
+                "extra_body": extra_body,
+                "use_item_stats": use_item_stats,
+                "summary_visibility": summary_visibility,
+            }
+            assert method_name in METHOD_RUNNERS
+
+    assert len(calls) == 16
