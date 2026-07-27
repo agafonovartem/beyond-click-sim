@@ -2,23 +2,26 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 import hashlib
-import inspect
 from pathlib import Path
 
 from beyond_click_sim.data.canonical import CanonicalDataset
 from beyond_click_sim.tasks import (
-    KuaiRandNaturalExposureTaskBuilder,
-    KuaiRandPolicyShiftTask,
-    KuaiRandPolicyShiftTaskBuilder,
+    KuaiRandStandardToRandomTask,
+    KuaiRandStandardToRandomTaskBuilder,
+    TargetPool,
 )
 
 
-VERSION = "v1"
 DATASET_NAME = "kuairand-pure"
-DEFAULT_SOURCE_SEED = 42
-DEFAULT_CANDIDATE_SEEDS = (42, 43, 44)
-DEFAULT_COHORT_SEED = 20260724
-DEFAULT_NATURAL_CANDIDATE_SEEDS = (0, 1, 2)
+DATASET_VERSION = "v1"
+DEFAULT_CANDIDATE_SEEDS = (0, 1, 2)
+DEFAULT_COHORT_SEED = 0
+DEFAULT_HISTORY_SIZE = 20
+DEFAULT_CANDIDATE_SIZE = 10
+DEFAULT_VALIDATION_USERS = 200
+DEFAULT_TEST_USERS = 500
+DEFAULT_MIN_SOURCE_EXPOSURES = 20
+DEFAULT_MIN_SOURCE_USERS = 5
 
 
 def repo_root() -> Path:
@@ -33,27 +36,30 @@ def repo_root() -> Path:
     raise RuntimeError("Could not find beyond-click-sim repo root")
 
 
-def data_root() -> Path:
-    """Locate the shared canonical-data directory."""
+def workspace_data_root() -> Path:
+    """Locate the shared research-workspace data directory."""
 
     for path in [repo_root(), *repo_root().parents]:
-        candidate = path / "data" / "canonical"
-        if candidate.exists():
+        candidate = path / "data"
+        if (candidate / "canonical").exists():
             return candidate
-    # Returning the conventional path gives a useful missing-file error even
-    # before the first canonicalization run.
-    return repo_root().parents[1] / "data" / "canonical"
+    return repo_root().parents[2] / "data"
 
 
-def load_canonical_dataset(root: Path | None = None) -> CanonicalDataset:
+def load_canonical_dataset(
+    root: Path | None = None,
+) -> CanonicalDataset:
     canonical_root = (
-        data_root() / DATASET_NAME / VERSION
+        workspace_data_root()
+        / "canonical"
+        / DATASET_NAME
+        / DATASET_VERSION
         if root is None
         else root.expanduser().resolve()
     )
     return CanonicalDataset(
         name=DATASET_NAME,
-        version=VERSION,
+        version=DATASET_VERSION,
         root=canonical_root,
         users_path=canonical_root / "users.parquet",
         items_path=canonical_root / "items.parquet",
@@ -62,87 +68,56 @@ def load_canonical_dataset(root: Path | None = None) -> CanonicalDataset:
     )
 
 
-def build_policy_shift_task(
-    *,
-    candidate_seed: int,
-    source_seed: int = DEFAULT_SOURCE_SEED,
-    min_positive_source_users_per_policy: int = 1,
-    dataset: CanonicalDataset | None = None,
-) -> KuaiRandPolicyShiftTask:
-    """Build one task seed while remaining compatible with the seed API.
-
-    Early versions of the specialized builder exposed one ``seed``. The final
-    protocol separates source-history sampling from candidate sampling. This
-    small compatibility shim lets the runner work during that migration and
-    records the effective seed interface in the task manifest.
-    """
-
-    builder_parameters = inspect.signature(
-        KuaiRandPolicyShiftTaskBuilder
-    ).parameters
-    name = (
-        "kuairand_tab1_policy_shift_c3"
-        f"_posdeg{min_positive_source_users_per_policy}"
-        f"_source{source_seed}_candidate{candidate_seed}"
+def default_translation_dir() -> Path:
+    return (
+        workspace_data_root()
+        / "processed"
+        / "kuairand"
+        / "semantic_translation_gpt55"
     )
-    if {"source_seed", "candidate_seed"}.issubset(builder_parameters):
-        builder = KuaiRandPolicyShiftTaskBuilder(
-            name=name,
-            source_seed=source_seed,
-            candidate_seed=candidate_seed,
-            min_positive_source_users_per_policy=(
-                min_positive_source_users_per_policy
-            ),
-        )
-    else:
-        if source_seed != candidate_seed and source_seed != DEFAULT_SOURCE_SEED:
-            raise ValueError(
-                "This task-builder version has a single seed; source_seed must "
-                f"remain {DEFAULT_SOURCE_SEED}"
-            )
-        builder = KuaiRandPolicyShiftTaskBuilder(
-            name=name,
-            seed=candidate_seed,
-        )
-        if min_positive_source_users_per_policy != 1:
-            raise ValueError(
-                "This task-builder version cannot set "
-                "min_positive_source_users_per_policy"
-            )
-    task = builder.build(dataset or load_canonical_dataset())
-    task.manifest.setdefault("runner_seed_interface", {})
-    task.manifest["runner_seed_interface"].update(
-        {
-            "requested_source_seed": source_seed,
-            "requested_candidate_seed": candidate_seed,
-            "requested_min_positive_source_users_per_policy": (
-                min_positive_source_users_per_policy
-            ),
-            "builder_has_separate_source_candidate_seeds": {
-                "source_seed",
-                "candidate_seed",
-            }.issubset(builder_parameters),
-        }
-    )
-    return task
 
 
-def build_natural_policy_shift_task(
+def build_tasks(
     *,
-    candidate_seed: int,
+    candidate_seeds: Iterable[int] = DEFAULT_CANDIDATE_SEEDS,
+    target_pool: TargetPool = "common_warm",
     dataset: CanonicalDataset | None = None,
-) -> KuaiRandPolicyShiftTask:
-    """Build the locked H=5, m=5 label-blind natural-exposure task."""
+    translation_dir: Path | None = None,
+) -> dict[int, KuaiRandStandardToRandomTask]:
+    """Build every candidate seed and validate their shared source/cohorts."""
 
-    return KuaiRandNaturalExposureTaskBuilder(
-        candidate_seed=candidate_seed,
-    ).build(dataset or load_canonical_dataset())
+    seeds = list(dict.fromkeys(int(seed) for seed in candidate_seeds))
+    if not seeds:
+        raise ValueError("candidate_seeds must not be empty")
+    canonical = dataset or load_canonical_dataset()
+    semantics_root = (
+        default_translation_dir()
+        if translation_dir is None
+        else translation_dir.expanduser().resolve()
+    )
+    tasks = {
+        seed: KuaiRandStandardToRandomTaskBuilder(
+            translation_dir=semantics_root,
+            target_pool=target_pool,
+            candidate_seed=seed,
+            cohort_seed=DEFAULT_COHORT_SEED,
+            history_size=DEFAULT_HISTORY_SIZE,
+            candidate_size=DEFAULT_CANDIDATE_SIZE,
+            validation_users=DEFAULT_VALIDATION_USERS,
+            test_users=DEFAULT_TEST_USERS,
+            min_source_exposures=DEFAULT_MIN_SOURCE_EXPOSURES,
+            min_source_users=DEFAULT_MIN_SOURCE_USERS,
+        ).build(canonical)
+        for seed in seeds
+    }
+    _validate_tasks(tasks)
+    return tasks
 
 
 def shared_test_users(
-    tasks_by_seed: dict[int, KuaiRandPolicyShiftTask],
+    tasks_by_seed: dict[int, KuaiRandStandardToRandomTask],
 ) -> list[object]:
-    """Return users evaluable under both target policies for every seed."""
+    """Return users present under both target regimes for every seed."""
 
     if not tasks_by_seed:
         raise ValueError("tasks_by_seed must not be empty")
@@ -154,19 +129,19 @@ def shared_test_users(
     return sorted(shared or set(), key=repr)
 
 
-def select_user_cohort(
+def select_test_users(
     users: Iterable[object],
     *,
     max_users: int | None,
-    cohort_seed: int = DEFAULT_COHORT_SEED,
+    seed: int = 0,
 ) -> list[object]:
-    """Select an outcome-blind stable prefix shared by every task seed."""
+    """Select a deterministic, outcome-blind subset for smoke runs."""
 
     unique = set(users)
     ordered = sorted(
         unique,
         key=lambda user_id: (
-            _stable_int(cohort_seed, "kuairand-policy-shift-cohort", user_id),
+            _stable_int(seed, "runner-test-subset", user_id),
             repr(user_id),
         ),
     )
@@ -177,9 +152,38 @@ def select_user_cohort(
     return ordered[:max_users]
 
 
+def _validate_tasks(
+    tasks_by_seed: dict[int, KuaiRandStandardToRandomTask],
+) -> None:
+    source_hashes = {
+        task.manifest["hashes"]["frames"]["training_source"]
+        for task in tasks_by_seed.values()
+    }
+    visible_hashes = {
+        task.manifest["hashes"]["frames"]["visible_history"]
+        for task in tasks_by_seed.values()
+    }
+    validation_cohorts = {
+        task.manifest["cohorts"]["validation"]["user_ids_sha256"]
+        for task in tasks_by_seed.values()
+    }
+    test_cohorts = {
+        task.manifest["cohorts"]["test"]["user_ids_sha256"]
+        for task in tasks_by_seed.values()
+    }
+    if len(source_hashes) != 1:
+        raise ValueError("Candidate seeds produced different source frames")
+    if len(visible_hashes) != 1:
+        raise ValueError("Candidate seeds produced different visible histories")
+    if len(validation_cohorts) != 1 or len(test_cohorts) != 1:
+        raise ValueError("Candidate seeds produced different user cohorts")
+    if len(shared_test_users(tasks_by_seed)) != DEFAULT_TEST_USERS:
+        raise ValueError("Candidate seeds do not share the fixed 500-user test cohort")
+
+
 def _stable_int(seed: int, namespace: str, value: object) -> int:
     payload = f"{seed}\0{namespace}\0{value!r}".encode("utf-8")
     return int.from_bytes(
         hashlib.blake2b(payload, digest_size=16).digest(),
-        byteorder="big",
+        "big",
     )

@@ -187,20 +187,3 @@ between these methods therefore cannot be attributed cleanly to Agent4Rec-style 
 **Fix:** compare Agent4Rec against matched baselines: same temperature/token budget, same visible
 item-card fields (including an `llm_yes_no_with_item_stats` baseline), and, if needed, a no-history
 LLM variant. Record the controlled comparison axis explicitly in the manifest.
-
-## 10. KuaiRand policy histories have different native source volumes
-
-The natural KuaiRand policy-shift task keeps the complete released source graphs after restricting
-evaluation users to the same five visible rows per policy. The non-evaluation-user component is
-substantially larger for random than standard exposures. This is faithful to the two released
-regimes, but a matched-versus-transferred difference for ItemCTR, logistic bias, ItemKNN, or BPR
-can reflect both policy shift and unequal source evidence volume.
-
-This does not invalidate the system-robustness question — deployment logs under two policies really
-can differ in size — but it prevents interpreting the whole contrast as the causal effect of the
-policy flag alone.
-
-**Fix:** retain the native-graph run as the primary ecological robustness result and add a
-predeclared balanced-source sensitivity analysis that matches row budget and relevant user/item
-degree summaries without using target labels. Report both rather than silently replacing the
-released regimes.

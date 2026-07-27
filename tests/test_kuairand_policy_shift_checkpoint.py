@@ -14,6 +14,7 @@ from runners.ood.kuairand_policy_shift.checkpoint import (
     CheckpointCorruptionError,
     GroupCheckpointStore,
     build_group_checkpoint_key,
+    build_legacy_group_checkpoint_key,
 )
 
 
@@ -41,6 +42,11 @@ def _key(**overrides: object) -> str:
             "max_completion_tokens": 16,
             "reasoning_effort": "none",
         },
+        "client_provider": "openai_vk_proxy",
+        "scorer_format_version": "target-response-listwise-ranking-v1",
+        "parser_format_version": (
+            "complete-unique-candidate-label-ranking-v1"
+        ),
     }
     values.update(overrides)
     return build_group_checkpoint_key(**values)  # type: ignore[arg-type]
@@ -63,6 +69,11 @@ def test_group_checkpoint_key_is_canonical_and_content_addressed() -> None:
     assert first == reordered
     assert len(first) == 64
     assert _key(model="gpt-5.4") != first
+    assert _key(client_provider="openai_direct") != first
+    assert _key(scorer_format_version="target-response-listwise-ranking-v2") != first
+    assert _key(
+        parser_format_version="complete-unique-candidate-label-ranking-v2"
+    ) != first
     assert _key(user_id=18) != first
     assert _key(candidate_item_ids=[101, 303, 202]) != first
     assert _key(
@@ -84,6 +95,38 @@ def test_group_checkpoint_key_is_canonical_and_content_addressed() -> None:
             {"role": "user", "content": "changed prompt"},
         ]
     ) != first
+
+
+def test_legacy_key_is_stable_and_distinct_from_identity_v2() -> None:
+    legacy = build_legacy_group_checkpoint_key(
+        task_identity={
+            "dataset": "kuairand-pure",
+            "source_seed": 42,
+            "candidate_seed": 43,
+        },
+        cell={
+            "history_policy": "standard",
+            "target_policy": "random",
+            "history_control": "observed",
+        },
+        user_id=17,
+        candidate_group="test_random_u17_c3",
+        candidate_item_ids=[101, 202, 303],
+        prompt_messages=[
+            {"role": "system", "content": "Rank the candidates."},
+            {"role": "user", "content": "C1: 猫\nC2: 音乐\nC3: 新闻"},
+        ],
+        model="gpt-5.4-mini",
+        request_config={
+            "max_completion_tokens": 16,
+            "reasoning_effort": "none",
+        },
+    )
+
+    assert legacy != _key()
+    assert legacy == (
+        "7fc29fbd80b6147a11a181408cffa184814f2200e100b1880db56718a6cb89bf"
+    )
 
 
 def test_atomic_group_checkpoint_round_trip_and_cache_miss(tmp_path) -> None:

@@ -23,7 +23,10 @@ import tempfile
 from typing import Any, Mapping, Sequence
 
 
+# The on-disk record stays at v1 so already-paid checkpoints remain readable.
+# Identity v2 only changes how a request key is constructed.
 CHECKPOINT_FORMAT_VERSION = 1
+CHECKPOINT_IDENTITY_VERSION = 2
 
 
 class CheckpointCorruptionError(ValueError):
@@ -51,12 +54,61 @@ def build_group_checkpoint_key(
     prompt_messages: Sequence[Mapping[str, Any]],
     model: str,
     request_config: Mapping[str, Any],
+    client_provider: str,
+    scorer_format_version: str,
+    parser_format_version: str,
 ) -> str:
     """Return a content-addressed key for one listwise inference request.
 
     Raw item IDs are included even though the prompt uses opaque candidate
     labels.  This prevents accidental reuse when two candidate groups happen to
     have identical public text.
+    """
+
+    _require_nonempty_identity_value("client_provider", client_provider)
+    _require_nonempty_identity_value(
+        "scorer_format_version",
+        scorer_format_version,
+    )
+    _require_nonempty_identity_value(
+        "parser_format_version",
+        parser_format_version,
+    )
+    payload = {
+        "identity_version": CHECKPOINT_IDENTITY_VERSION,
+        "task_identity": task_identity,
+        "cell": cell,
+        "user_id": user_id,
+        "candidate_group": candidate_group,
+        "candidate_item_ids": list(candidate_item_ids),
+        "prompt_messages": list(prompt_messages),
+        "model": model,
+        "request_config": request_config,
+        "client_provider": client_provider,
+        "scorer_format_version": scorer_format_version,
+        "parser_format_version": parser_format_version,
+    }
+    return _payload_sha256(payload)
+
+
+def build_legacy_group_checkpoint_key(
+    *,
+    task_identity: Mapping[str, Any] | str,
+    cell: Mapping[str, Any],
+    user_id: Any,
+    candidate_group: Any,
+    candidate_item_ids: Sequence[Any],
+    prompt_messages: Sequence[Mapping[str, Any]],
+    model: str,
+    request_config: Mapping[str, Any],
+) -> str:
+    """Reconstruct the exact pre-identity-v2 key for paid-run migration.
+
+    Callers must only attempt this fallback for a scorer/provider/parser
+    combination explicitly known to match the legacy implementation. The
+    legacy payload still binds the task, cell, user, ordered item IDs, exact
+    prompt, model, and request configuration, so an old record cannot migrate
+    across any of those request-defining boundaries.
     """
 
     payload = {
@@ -70,8 +122,7 @@ def build_group_checkpoint_key(
         "model": model,
         "request_config": request_config,
     }
-    encoded = _canonical_json(payload).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return _payload_sha256(payload)
 
 
 class GroupCheckpointStore:
@@ -267,6 +318,16 @@ def _canonical_json(value: Any) -> str:
         separators=(",", ":"),
         sort_keys=True,
     )
+
+
+def _payload_sha256(payload: Mapping[str, Any]) -> str:
+    encoded = _canonical_json(payload).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _require_nonempty_identity_value(name: str, value: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be a non-empty string")
 
 
 def _json_safe(value: Any) -> Any:

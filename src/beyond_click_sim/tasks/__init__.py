@@ -30,16 +30,14 @@ from beyond_click_sim.tasks.item_statistics import (
     PREFIXED_ITEM_RATING_STATS_COLUMNS,
     TrainItemRatingStatistics,
 )
-from beyond_click_sim.tasks.kuairand_policy_shift import (
+from beyond_click_sim.tasks.kuairand_standard_to_random import (
+    EvaluationSplit,
     HistoryControl,
-    KuaiRandPolicyShiftCell,
-    KuaiRandPolicyShiftTask,
-    KuaiRandPolicyShiftTaskBuilder,
-    PolicyRegime,
-    PolicyShiftSplit,
-)
-from beyond_click_sim.tasks.kuairand_natural_exposure import (
-    KuaiRandNaturalExposureTaskBuilder,
+    KuaiRandStandardToRandomCell,
+    KuaiRandStandardToRandomTask,
+    KuaiRandStandardToRandomTaskBuilder,
+    TargetPolicy,
+    TargetPool,
 )
 from beyond_click_sim.tasks.policies import Policy, PopularityPolicy, RandomPolicy
 from beyond_click_sim.tasks.policy_ranking import PolicyRankingTaskBuilder
@@ -66,15 +64,13 @@ __all__ = [
     "DatasetFilter",
     "ItemFeatureBuilder",
     "HistoryControl",
-    "KuaiRandPolicyShiftCell",
-    "KuaiRandPolicyShiftTask",
-    "KuaiRandPolicyShiftTaskBuilder",
-    "KuaiRandNaturalExposureTaskBuilder",
+    "KuaiRandStandardToRandomCell",
+    "KuaiRandStandardToRandomTask",
+    "KuaiRandStandardToRandomTaskBuilder",
     "MinUserInteractionsFilter",
     "NonInteractionCandidateSampler",
     "Policy",
-    "PolicyRegime",
-    "PolicyShiftSplit",
+    "EvaluationSplit",
     "PolicyRankingTaskBuilder",
     "PopularityPolicy",
     "PostSplitUserSampler",
@@ -94,6 +90,8 @@ __all__ = [
     "TaskSchema",
     "TaskSplit",
     "TemporalColdStartCandidateSampler",
+    "TargetPolicy",
+    "TargetPool",
     "TrainItemRatingStatistics",
     "split_xy",
 ]

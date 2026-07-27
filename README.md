@@ -215,20 +215,21 @@ Run the KuaiRand exposure-policy shift benchmark:
 
 ```bash
 uv run python -m runners.ood.kuairand_policy_shift.run \
-  --protocol natural \
-  --methods global_mean,user_ctr,user_ctr_laplace,item_ctr,exposure_logistic_bias,item_knn,bpr,text_affinity_caption_categories,text_affinity_categories_only \
-  --task-seeds 0,1,2 \
-  --history-controls observed
+  --methods popularity,llm_openai_vk_gpt54_mini_listwise_english \
+  --candidate-seeds 0,1,2 \
+  --output-dir outputs/ood/kuairand_policy_shift_v2
 ```
 
-The benchmark predicts click probabilities for all natural target exposures:
-user-macro log-loss and Brier score are primary, while conditional NDCG@5 and
-Hit@1 are secondary ranking diagnostics. The exact 2×2 policy protocol,
-caption-aware LLM preflight/resume commands, and validity caveats are
+Without `--execute-llm`, the runner builds the tasks, runs source popularity,
+and writes the complete GPT-5.4-mini prompt/cost preflight without API calls.
+The experiment ranks natural logged exposures using pre-intervention standard
+history. NDCG@5 and HR@1 on mixed-label groups are primary; NDCG@10 and HR@5
+are secondary. The exact standard-to-random protocol, English-metadata
+visibility, preflight/resume commands, and validity caveats are
 documented in
 [`runners/ood/kuairand_policy_shift/README.md`](runners/ood/kuairand_policy_shift/README.md).
-The completed 400-user GPT-5.4-mini run is summarized in
-[`runners/ood/kuairand_policy_shift/RESULTS_20260724.md`](runners/ood/kuairand_policy_shift/RESULTS_20260724.md).
+The completed 500-user Pop/GPT-5.4-mini run is summarized in
+[`runners/ood/kuairand_policy_shift/RESULTS_20260727.md`](runners/ood/kuairand_policy_shift/RESULTS_20260727.md).
 
 The default interaction tasks use the reduced `eval_users1000_cg5` protocol:
 classic scorers are trained on the full train split, while validation/test
