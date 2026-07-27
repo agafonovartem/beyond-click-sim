@@ -89,21 +89,49 @@ only:
 ```text
 source exposure count >= 20
 distinct source users >= 5
+distinct positive-response source users >= 1
 ```
 
-Both gates are label-blind. They do not use source clicks or target outcomes.
-They prevent a content-aware LLM advantage from being misreported as
-policy-shift generalization when the collaborative methods actually face item
-cold start.
+The first two structural gates are label-blind. The final compatibility gate
+uses only source outcomes, never validation/test outcomes, and is required
+because the existing BPR and ItemKNN scorers construct their item vocabularies
+from positive source interactions only. It removes three of the 4,098
+exposure-warm items and does not change the current 200/500 cohort feasibility.
+Without it, those strict scorers can fail even though an item has many source
+exposures.
+
+Together the gates prevent a content-aware LLM advantage from being
+misreported as policy-shift generalization when the collaborative methods
+actually face item cold start.
 
 Under the English-semantic item filter, the source contains 820,534 raw
 standard tab-1 rows, 25,114 users, and 7,158 items. The common-warm gate retains
 4,098 items. The distinct source-history table contains 815,034 user-item
 pairs, and 13,528 users have at least 20 such rows.
 
-An unrestricted semantic target pool may be reported separately as
-`full-pool system robustness`; it must not be mixed with the primary
-behavioral-transport result.
+An unrestricted semantic target pool is a separately named secondary
+`full-pool system robustness` result. It preserves natural target items and
+uses explicitly configured cold fallbacks for classical methods. Its manifest
+must report both exposure-cold and positive-graph-cold row fractions.
+
+The predeclared source-item exposure-degree strata for that secondary result
+are:
+
+```text
+0
+1--4
+5--19
+20--99
+100+
+```
+
+Positive-source-user degree is reported alongside exposure degree because
+BPR/ItemKNN support follows the positive graph. The full-pool result must not
+be mixed with the primary common-warm behavioral-transport result. In the
+current feasibility sample, approximately 4.6% of random-target rows are
+absent from the standard exposure graph and approximately 12% are absent from
+the positive-only graph; a single generic "cold item" number would hide this
+difference.
 
 ## Pair novelty
 
@@ -156,20 +184,64 @@ For each seed this yields:
 The same user cohort is used for the standard and random target columns within
 a split. The exact candidate rows differ by policy and candidate seed.
 
+## Primary LLM task
+
+The headline LLM condition uses the existing
+`LLMTargetResponseListwiseRankingScorer`, not the preference prompt and not the
+probability JSON scorer. One API request contains:
+
+- the user's 20 standard-source history videos and their observed responses;
+- the ten target candidates;
+- translated caption, cover text, and category fields;
+- the explicit response target: positive interaction after exposure.
+
+The unchanged repository prompt asks the model to return all candidate labels
+from most likely to least likely to produce that response:
+
+```text
+C7
+C2
+C10
+C1
+C5
+C4
+C8
+C3
+C9
+C6
+```
+
+Every label must occur exactly once. The returned order is converted to ordinal
+ranking scores. It is one request per user, target policy, split, and candidate
+seed.
+
+The probability scorer is not part of the headline ranking result. It may be
+run later as a separately labelled calibration experiment; listwise ranks must
+never be treated as click probabilities.
+
 ## Metrics and zero-positive groups
 
 Primary ranking metrics:
 
+- NDCG@5;
+- HR@1.
+
+Secondary ranking metrics:
+
 - NDCG@10;
-- HR@10;
-- optionally NDCG@5 and HR@1 as stricter secondary cutoffs.
+- HR@5.
+
+HR@10 is not reported because every retained group contains exactly ten
+candidates; conditional on at least one positive it would always equal one
+regardless of the ranking.
 
 Following the common KuaiRand convention, groups with zero positives have
 undefined IDCG and are excluded only when computing ranking metrics. They
 remain in the saved task and in pointwise metrics. No cohort or candidate
 selection conditions on the labels.
 
-Primary probability metrics for probability-producing methods:
+Optional probability metrics, reported only for separately run
+probability-producing methods:
 
 - user-macro log-loss;
 - user-macro Brier score.
@@ -185,7 +257,8 @@ and fraction of zero-positive, all-positive, and mixed-label groups.
 
 In the fixed feasibility sample, random-target zero-positive rates are
 approximately 24--35% across split/seed cells; enough groups remain for ranking
-evaluation, and every row remains usable for log-loss and Brier score.
+evaluation. Every row remains usable for log-loss and Brier score only in the
+optional probability experiment.
 
 ## Initial methods
 
@@ -202,6 +275,11 @@ The LLM receives only its 20-row textual user history. `No history` is retained
 as a cheap candidate/content-prior control. Agent4Rec is a later, separate
 simulator baseline; it does not replace no-history because the two answer
 different questions.
+
+Correct-history and no-history LLM conditions are run on all 500 test users,
+both target policies, and all three candidate seeds. Controls are not reduced
+to a 200-user subset. Validation users are used for protocol/model selection,
+not substituted for the fixed test cohort.
 
 The permuted-feedback grounding control is an optional ablation and is omitted
 from the first full run.
