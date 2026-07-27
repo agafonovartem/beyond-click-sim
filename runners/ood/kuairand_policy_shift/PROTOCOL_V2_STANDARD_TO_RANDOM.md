@@ -3,7 +3,8 @@
 ## Status
 
 This protocol supersedes the earlier forced-c3 and full-history-square
-protocols. It was fixed after inspecting dataset availability and label
+protocols. This is the final pre-implementation specification agreed for the
+next KuaiRand run. It was fixed after inspecting dataset availability and label
 prevalence, but before running any model under this construction. It is
 therefore an exploratory, model-blind protocol rather than a preregistration.
 
@@ -111,8 +112,19 @@ pairs, and 13,528 users have at least 20 such rows.
 
 An unrestricted semantic target pool is a separately named secondary
 `full-pool system robustness` result. It preserves natural target items and
-uses explicitly configured cold fallbacks for classical methods. Its manifest
-must report both exposure-cold and positive-graph-cold row fractions.
+uses explicitly configured cold behavior for classical methods:
+
+- ItemCTR uses its predeclared Beta-smoothed source prior and falls back to the
+  smoothed global source rate when an item has no source exposure;
+- ItemKNN and BPR use their existing explicit `cold_score_policy="zero"`
+  behavior rather than crashing;
+- every method records the number and fraction of fallback rows.
+
+Zero has different score semantics for ItemKNN and BPR, so their unrestricted
+full-pool aggregates are robustness diagnostics, not the primary fair
+comparison. The primary common-warm table remains the basis for behavioral
+transport claims. The full-pool manifest must report both exposure-cold and
+positive-graph-cold row fractions.
 
 The predeclared source-item exposure-degree strata for that secondary result
 are:
@@ -135,10 +147,20 @@ difference.
 
 ## Pair novelty
 
-For a target window beginning at date \(t\), candidate pair \((u,i)\) is kept
-only if it does not appear in any released interaction before \(t\), across
-all tabs and both exposure regimes. This prevents a target label from being
-recoverable from a repeated earlier exposure.
+Candidate row \((u,i,t)\) is kept only if it is the first released exposure of
+that user-item pair before its exact timestamp. The first-exposure lookup uses
+all released interactions across all tabs and both exposure regimes.
+
+Consequently:
+
+- validation candidates cannot repeat source or April 22 exposures;
+- test candidates cannot repeat source, April 22, or validation exposures;
+- an exposure cannot repeat an earlier row from the same target window;
+- if the same pair appears under both policies in a target window, only its
+  chronologically first exposure can remain eligible.
+
+This prevents the target from being recoverable from an earlier response and
+avoids mixing first-exposure prediction with familiarity/re-exposure effects.
 
 Pair novelty does not replace the item-warm gate: target users and target items
 are warm, while the exact evaluated user-item edge is new.
