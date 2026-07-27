@@ -1,5 +1,12 @@
 # KuaiRand natural-exposure policy-shift protocol
 
+> **Historical protocol.** This document describes the earlier two-policy
+> history square and must not be used for the next experiment. The replacement
+> protocol trains only on pre-intervention standard exposures and is specified
+> in `PROTOCOL_V2_STANDARD_TO_RANDOM.md`. The existing
+> `KuaiRandNaturalExposureTaskBuilder` still implements this historical
+> protocol until the v2 task is added.
+
 ## Status
 
 This protocol replaces the exploratory forced-c3 construction for future
