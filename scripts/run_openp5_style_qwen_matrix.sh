@@ -84,6 +84,8 @@ PYTHON="${PYTHON:-/llm_storage/venvs/bcs-runner-py311/bin/python}"
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${REPO_ROOT}/outputs/in_distribution/openp5_style_ranker/${RUN_ID}_${MODEL_SLUG}_${MODE}}"
 STATUS_FILE="${OUTPUT_ROOT}/queue_status.tsv"
+COMPLETED_MARKER="${OUTPUT_ROOT}/COMPLETED"
+RESUME="${RESUME:-1}"
 
 export BEYOND_CLICK_SIM_LITELLM_LOCAL_BASE_URL="${BEYOND_CLICK_SIM_LITELLM_LOCAL_BASE_URL:-http://127.0.0.1:8080/v1}"
 export BEYOND_CLICK_SIM_LITELLM_VERSION="${BEYOND_CLICK_SIM_LITELLM_VERSION:-1.91.0}"
@@ -94,11 +96,40 @@ export BEYOND_CLICK_SIM_VLLM_MAX_MODEL_LEN="${BEYOND_CLICK_SIM_VLLM_MAX_MODEL_LE
 export BEYOND_CLICK_SIM_VLLM_GPU_MEMORY_UTILIZATION="${BEYOND_CLICK_SIM_VLLM_GPU_MEMORY_UTILIZATION:-0.90}"
 
 mkdir -p "${OUTPUT_ROOT}"
-printf "protocol\ttask\texit_code\tstarted_at\tfinished_at\n" >"${STATUS_FILE}"
+if [[ "${RESUME}" == "1" && -s "${STATUS_FILE}" ]]; then
+  expected_header=$'protocol\ttask\texit_code\tstarted_at\tfinished_at'
+  actual_header="$(head -n 1 "${STATUS_FILE}")"
+  if [[ "${actual_header}" != "${expected_header}" ]]; then
+    echo "Unexpected queue status header in ${STATUS_FILE}" >&2
+    exit 2
+  fi
+else
+  printf "protocol\ttask\texit_code\tstarted_at\tfinished_at\n" >"${STATUS_FILE}"
+  rm -f "${COMPLETED_MARKER}"
+fi
 
 join_by_comma() {
   local IFS=,
   echo "$*"
+}
+
+sync_path() {
+  local path="$1"
+
+  if ! sync -f "${path}" 2>/dev/null; then
+    sync
+  fi
+}
+
+batch_completed() {
+  local protocol="$1"
+  local task="$2"
+
+  [[ "${RESUME}" == "1" ]] || return 1
+  awk -F '\t' -v protocol="${protocol}" -v task="${task}" '
+    NR > 1 && $1 == protocol && $2 == task { exit_code = $3 }
+    END { exit !(exit_code == "0") }
+  ' "${STATUS_FILE}"
 }
 
 run_batch() {
@@ -110,6 +141,11 @@ run_batch() {
   local started_at
   local finished_at
   local exit_code
+
+  if batch_completed "${protocol}" "${task}"; then
+    echo "Skipping completed batch: protocol=${protocol}, task=${task}"
+    return 0
+  fi
 
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   set +e
@@ -127,6 +163,7 @@ run_batch() {
     "${started_at}" \
     "${finished_at}" \
     >>"${STATUS_FILE}"
+  sync_path "${STATUS_FILE}"
   return 0
 }
 
@@ -148,9 +185,21 @@ for task in "${PREFERENCE_TASKS[@]}"; do
     "${PREFERENCE_METHODS[@]}"
 done
 
-if awk -F '\t' 'NR > 1 && $3 != 0 {failed = 1} END {exit failed ? 0 : 1}' "${STATUS_FILE}"; then
+if awk -F '\t' '
+  NR > 1 { latest[$1 "\t" $2] = $3 }
+  END {
+    for (batch in latest) {
+      if (latest[batch] != 0) {
+        failed = 1
+      }
+    }
+    exit failed ? 0 : 1
+  }
+' "${STATUS_FILE}"; then
   echo "Queue completed with one or more failed batches. See ${STATUS_FILE}." >&2
   exit 1
 fi
 
+printf "completed_at\t%s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"${COMPLETED_MARKER}"
+sync_path "${COMPLETED_MARKER}"
 echo "Queue completed successfully: ${OUTPUT_ROOT}"
