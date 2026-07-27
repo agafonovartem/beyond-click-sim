@@ -241,7 +241,7 @@ The probability scorer is not part of the headline ranking result. It may be
 run later as a separately labelled calibration experiment; listwise ranks must
 never be treated as click probabilities.
 
-## Metrics and zero-positive groups
+## Metrics and degenerate-label groups
 
 Primary ranking metrics:
 
@@ -257,10 +257,18 @@ HR@10 is not reported because every retained group contains exactly ten
 candidates; conditional on at least one positive it would always equal one
 regardless of the ranking.
 
-Following the common KuaiRand convention, groups with zero positives have
-undefined IDCG and are excluded only when computing ranking metrics. They
-remain in the saved task and in pointwise metrics. No cohort or candidate
-selection conditions on the labels.
+Ranking metrics are computed only for mixed-label groups:
+
+```text
+1 <= number of positives <= 9
+```
+
+All-zero groups have undefined IDCG and no relevant item to retrieve.
+All-positive groups have NDCG and HR equal to one for every possible ordering.
+Both cases are therefore excluded only at ranking-metric computation time.
+They remain in the saved task and, if the optional probability experiment is
+run, contribute to its pointwise metrics. Cohort and candidate selection never
+condition on these labels.
 
 Optional probability metrics, reported only for separately run
 probability-producing methods:
@@ -275,12 +283,17 @@ Secondary diagnostics:
 - calibration intercept/slope and predicted versus observed click rate.
 
 The manifest must report the denominator for every metric, including the number
-and fraction of zero-positive, all-positive, and mixed-label groups.
+and fraction of all-zero, all-positive, and ranking-eligible mixed-label
+groups. Candidate seeds remain correlated resamples: scores are first averaged
+over a user's available mixed-label seed groups, and statistical resampling is
+then performed over users rather than treating `user × seed` as independent.
 
 In the fixed feasibility sample, random-target zero-positive rates are
 approximately 24--35% across split/seed cells; enough groups remain for ranking
-evaluation. Every row remains usable for log-loss and Brier score only in the
-optional probability experiment.
+evaluation. All-positive random-target groups are negligible, while standard
+targets contain a small number that must still be excluded consistently. Every
+row remains usable for log-loss and Brier score only in the optional
+probability experiment.
 
 ## Initial methods
 
