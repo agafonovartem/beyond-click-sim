@@ -155,7 +155,7 @@ def test_paired_comparison_averages_seeds_within_user() -> None:
                         user_id=user_id,
                         seed=seed,
                         method=(
-                            "llm_openai_vk_gpt54_mini_listwise_english"
+                            "llm_openai_vk_gpt55_listwise_english"
                         ),
                         history_control="observed",
                         value=0.5 + delta / 2,

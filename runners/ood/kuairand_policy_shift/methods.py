@@ -155,15 +155,15 @@ METHOD_REGISTRY: dict[str, MethodSpec] = {
             ("cold_item_score", 0.0),
         ),
     ),
-    "llm_openai_vk_gpt54_mini_listwise_english": MethodSpec(
-        name="llm_openai_vk_gpt54_mini_listwise_english",
+    "llm_openai_vk_gpt55_listwise_english": MethodSpec(
+        name="llm_openai_vk_gpt55_listwise_english",
         kind="llm",
         history_scope="visible_h20",
         supported_controls=("observed", "none"),
         supported_target_pools=("common_warm",),
         metadata_condition="english_semantics",
         client_name="openai_vk_proxy",
-        model="gpt-5.4-mini",
+        model="gpt-5.5",
         scorer_format_version=SCORER_FORMAT_VERSION,
         parser_format_version=PARSER_FORMAT_VERSION,
         input_price_per_million=0.75,

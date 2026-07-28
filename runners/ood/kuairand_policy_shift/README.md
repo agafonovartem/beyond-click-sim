@@ -2,7 +2,7 @@
 
 This directory implements one intentionally small experiment:
 
-> Given pre-intervention standard-feed behavior, can GPT-5.4-mini rank future
+> Given pre-intervention standard-feed behavior, can GPT-5.5 rank future
 > randomized exposures better than source-item popularity?
 
 The locked scientific specification is [`PROTOCOL.md`](PROTOCOL.md).
@@ -20,10 +20,10 @@ The completed first-run results are reported in
 
 The initial experiment contains one baseline and two GPT conditions:
 
-- **GPT-5.4-mini, observed history:** existing target-response listwise ranking
+- **GPT-5.5, observed history:** existing target-response listwise ranking
   with the latest 20 distinct source interactions and translated caption,
   cover text, and category metadata;
-- **GPT-5.4-mini, no history:** the same model, prompt target, candidates, and
+- **GPT-5.5, no history:** the same model, prompt target, candidates, and
   metadata with the user-history block removed; this is an ablation/control,
   not another recommender baseline;
 - **Pop:** the exact number of positive responses received by each item in the
@@ -48,7 +48,7 @@ preflight without API calls:
 
 ```bash
 uv run python -m runners.ood.kuairand_policy_shift.run \
-  --methods popularity,llm_openai_vk_gpt54_mini_listwise_english \
+  --methods popularity,llm_openai_vk_gpt55_listwise_english \
   --candidate-seeds 0,1,2 \
   --output-dir outputs/ood/kuairand_policy_shift_v2
 ```

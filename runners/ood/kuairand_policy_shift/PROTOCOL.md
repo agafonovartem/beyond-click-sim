@@ -5,7 +5,7 @@
 This is the locked specification implemented by the current KuaiRand task
 builder and runner. Its cohort sizes and construction parameters were selected
 from label-blind feasibility checks and aggregate label-prevalence checks
-before running either GPT-5.4-mini or Pop under this construction.
+before running either GPT-5.5 or Pop under this construction.
 
 It is an exploratory, model-blind protocol, not an externally preregistered
 confirmatory experiment.
@@ -31,7 +31,7 @@ Only one source regime is used:
 Random exposures are never used as history or training data. This is not a
 standard/random history square.
 
-The main comparison is GPT-5.4-mini versus Pop within the random-target column.
+The main comparison is GPT-5.5 versus Pop within the random-target column.
 The standard-target column is a temporal reference. Raw metric levels across
 the two columns are not a causal estimate of the intervention effect because
 the natural candidate and response distributions differ.
@@ -53,7 +53,7 @@ non-interaction following an exposure; it is not a sampled missing item.
 
 ## English semantic metadata
 
-GPT-5.4-mini sees the GPT-5.5 English translation of the released:
+GPT-5.5 sees the GPT-5.5 English translation of the released:
 
 - Chinese caption;
 - cover text;
@@ -243,9 +243,9 @@ For each candidate seed:
 
 Across all three seeds, the test task contains 30,000 target-row occurrences.
 
-## Method 1: GPT-5.4-mini
+## Method 1: GPT-5.5
 
-- Model: `gpt-5.4-mini`.
+- Model: `gpt-5.5`.
 - Client: `openai_vk_proxy`.
 - Task: existing target-response listwise ranking scorer.
 - Generation count: one.

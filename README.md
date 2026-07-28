@@ -215,13 +215,13 @@ Run the KuaiRand exposure-policy shift benchmark:
 
 ```bash
 uv run python -m runners.ood.kuairand_policy_shift.run \
-  --methods popularity,llm_openai_vk_gpt54_mini_listwise_english \
+  --methods popularity,llm_openai_vk_gpt55_listwise_english \
   --candidate-seeds 0,1,2 \
   --output-dir outputs/ood/kuairand_policy_shift_v2
 ```
 
 Without `--execute-llm`, the runner builds the tasks, runs source popularity,
-and writes the complete GPT-5.4-mini prompt/cost preflight without API calls.
+and writes the complete GPT-5.5 prompt/cost preflight without API calls.
 The experiment ranks natural logged exposures using pre-intervention standard
 history. NDCG@5 and HR@1 on mixed-label groups are primary; NDCG@10 and HR@5
 are secondary. The exact standard-to-random protocol, English-metadata

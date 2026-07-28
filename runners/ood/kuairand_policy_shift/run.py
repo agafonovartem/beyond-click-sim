@@ -964,8 +964,8 @@ def _validate_cross_method_targets(predictions: pd.DataFrame) -> None:
     if reference.empty:
         raise ValueError("Combined analysis requires popularity predictions")
     conditions = (
-        ("llm_openai_vk_gpt54_mini_listwise_english", "observed"),
-        ("llm_openai_vk_gpt54_mini_listwise_english", "none"),
+        ("llm_openai_vk_gpt55_listwise_english", "observed"),
+        ("llm_openai_vk_gpt55_listwise_english", "none"),
     )
     for method, control in conditions:
         candidate = (

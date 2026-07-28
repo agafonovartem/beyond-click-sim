@@ -55,7 +55,7 @@ class _FakeClient:
 def test_registry_contains_only_the_fixed_first_suite_methods() -> None:
     assert set(METHOD_REGISTRY) == {
         "popularity",
-        "llm_openai_vk_gpt54_mini_listwise_english",
+        "llm_openai_vk_gpt55_listwise_english",
     }
 
 
@@ -89,16 +89,16 @@ def test_popularity_uses_full_standard_source_positive_counts() -> None:
     }
 
 
-def test_gpt54_spec_encodes_visible_h20_controls_and_target_pools() -> None:
+def test_gpt55_spec_encodes_visible_h20_controls_and_target_pools() -> None:
     spec = METHOD_REGISTRY[
-        "llm_openai_vk_gpt54_mini_listwise_english"
+        "llm_openai_vk_gpt55_listwise_english"
     ]
     manifest = spec.manifest_config()
 
     assert spec.is_llm
     assert spec.is_paid
     assert spec.client_name == "openai_vk_proxy"
-    assert spec.model == "gpt-5.4-mini"
+    assert spec.model == "gpt-5.5"
     assert spec.history_scope == "visible_h20"
     assert spec.supported_controls == ("observed", "none")
     assert spec.supported_target_pools == ("common_warm",)
@@ -115,10 +115,10 @@ def test_gpt54_spec_encodes_visible_h20_controls_and_target_pools() -> None:
     assert manifest["hyperparameters"]["history_rows_per_user"] == 20
 
 
-def test_gpt54_scorer_uses_english_semantics_and_target_response_prompt() -> None:
+def test_gpt55_scorer_uses_english_semantics_and_target_response_prompt() -> None:
     client = _FakeClient()
     spec = METHOD_REGISTRY[
-        "llm_openai_vk_gpt54_mini_listwise_english"
+        "llm_openai_vk_gpt55_listwise_english"
     ]
     scorer = make_scorer(spec, seed=0, client=client)
 
@@ -216,16 +216,16 @@ def test_gpt54_scorer_uses_english_semantics_and_target_response_prompt() -> Non
     scores = scorer.score(candidates)
     assert scores.tolist() == [0.0, 1.0]
     request = client.completions.calls[0]
-    assert request["model"] == "gpt-5.4-mini"
+    assert request["model"] == "gpt-5.5"
     assert request["max_completion_tokens"] == 64
     assert request["reasoning_effort"] == "none"
     assert "temperature" not in request
     assert "max_tokens" not in request
 
 
-def test_gpt54_requires_a_client() -> None:
+def test_gpt55_requires_a_client() -> None:
     spec = METHOD_REGISTRY[
-        "llm_openai_vk_gpt54_mini_listwise_english"
+        "llm_openai_vk_gpt55_listwise_english"
     ]
 
     with pytest.raises(ValueError, match="require a client"):

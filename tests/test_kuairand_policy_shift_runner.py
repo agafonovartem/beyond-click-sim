@@ -32,7 +32,7 @@ from runners.ood.kuairand_policy_shift.run import (
 )
 
 
-GPT_METHOD = "llm_openai_vk_gpt54_mini_listwise_english"
+GPT_METHOD = "llm_openai_vk_gpt55_listwise_english"
 
 
 class FakeCompletions:
@@ -172,7 +172,7 @@ def test_gpt_runner_uses_english_target_response_prompt_and_checkpoints(
     assert len(first_client.completions.calls) == 8
     assert len(list((output_dir / "group_checkpoints").rglob("*.json"))) == 8
     first_request = first_client.completions.calls[0]
-    assert first_request["model"] == "gpt-5.4-mini"
+    assert first_request["model"] == "gpt-5.5"
     assert first_request["max_completion_tokens"] == 64
     assert first_request["reasoning_effort"] == "none"
     assert "temperature" not in first_request

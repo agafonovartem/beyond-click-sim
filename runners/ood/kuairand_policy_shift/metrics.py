@@ -89,14 +89,14 @@ def build_paired_comparisons(
                     _select_method(
                         scoped,
                         method=(
-                            "llm_openai_vk_gpt54_mini_listwise_english"
+                            "llm_openai_vk_gpt55_listwise_english"
                         ),
                         history_control="observed",
                     ),
                     _select_method(
                         scoped,
                         method=(
-                            "llm_openai_vk_gpt54_mini_listwise_english"
+                            "llm_openai_vk_gpt55_listwise_english"
                         ),
                         history_control="none",
                     ),
@@ -106,7 +106,7 @@ def build_paired_comparisons(
                     _select_method(
                         scoped,
                         method=(
-                            "llm_openai_vk_gpt54_mini_listwise_english"
+                            "llm_openai_vk_gpt55_listwise_english"
                         ),
                         history_control="observed",
                     ),
