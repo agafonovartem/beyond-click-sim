@@ -1,0 +1,230 @@
+{
+  "candidate_groups": {
+    "test": {
+      "requested": {
+        "groups": 1868,
+        "positives_max": 3,
+        "positives_mean": 2.559421841541756,
+        "positives_min": 1,
+        "rows_max": 9,
+        "rows_mean": 7.678265524625267,
+        "rows_min": 3,
+        "sampled_max": 0,
+        "sampled_mean": 0.0,
+        "sampled_min": 0
+      },
+      "scored": {
+        "groups": 1853,
+        "positives_max": 3,
+        "positives_mean": 2.555855369670804,
+        "positives_min": 1,
+        "rows_max": 9,
+        "rows_mean": 7.667566109012412,
+        "rows_min": 3,
+        "sampled_max": 0,
+        "sampled_mean": 0.0,
+        "sampled_min": 0
+      }
+    },
+    "val": {
+      "requested": {
+        "groups": 935,
+        "positives_max": 3,
+        "positives_mean": 2.174331550802139,
+        "positives_min": 1,
+        "rows_max": 9,
+        "rows_mean": 6.5229946524064175,
+        "rows_min": 3,
+        "sampled_max": 0,
+        "sampled_mean": 0.0,
+        "sampled_min": 0
+      },
+      "scored": {
+        "groups": 932,
+        "positives_max": 3,
+        "positives_mean": 2.171673819742489,
+        "positives_min": 1,
+        "rows_max": 9,
+        "rows_mean": 6.515021459227468,
+        "rows_min": 3,
+        "sampled_max": 0,
+        "sampled_mean": 0.0,
+        "sampled_min": 0
+      }
+    }
+  },
+  "decision_rule": {
+    "pointwise": {
+      "kind": "threshold_on_validation",
+      "metric": "macro_by_user_group_mean_f1",
+      "metric_value": 0.5517343515528633,
+      "selection_metric": "macro_by_user_group_mean_f1",
+      "threshold": 1.0
+    },
+    "ranking": {
+      "kind": "complete_listwise_rank_parser",
+      "score_mapping": "score = n_candidates - rank"
+    }
+  },
+  "git_commit": "cb987671385743cd9378eaba0a6478365cf1ce74",
+  "limits": {
+    "max_candidate_groups_per_split": null,
+    "max_llm_attempts": 5,
+    "max_workers": 64
+  },
+  "llm_errors": {
+    "test": 15,
+    "val": 3
+  },
+  "method": "llm_preference_listwise_ranking_openp5_style_litellm_qwen36_27b_full",
+  "protocol": "listwise_ranking_with_validation_threshold",
+  "scorer": {
+    "class": "LLMPreferenceListwiseRankingScorer",
+    "client_name": "litellm_local",
+    "column_labels": {
+      "item_genres_json": "genres",
+      "item_tags_json": "tags",
+      "item_title": "game title",
+      "playtime_forever": "user playtime minutes"
+    },
+    "extra_body": {
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      }
+    },
+    "json_list_columns": [
+      "item_genres_json",
+      "item_tags_json"
+    ],
+    "max_history_items": 20,
+    "max_tokens": 512,
+    "model": "Qwen/Qwen3.6-27B",
+    "prompt": {
+      "adaptations": [
+        "remove chronological and next-item language for the IID split",
+        "replace free-form item generation with the task-provided candidates",
+        "adapt parser-safe outputs to yes/no, listwise, and regression scorers"
+      ],
+      "family": "openp5_style",
+      "source": "https://github.com/JiangDeccc/EvaLLMasRecommender/blob/main/eva/templates/template.txt",
+      "system_role": false,
+      "temporal_language": false,
+      "version": "openp5_style_iid_v1"
+    },
+    "prompt_columns": {
+      "candidate_description_columns": [
+        "item_title",
+        "item_genres_json",
+        "item_tags_json"
+      ],
+      "history_description_columns": [
+        "item_title",
+        "item_genres_json",
+        "item_tags_json",
+        "playtime_forever"
+      ]
+    },
+    "serving": {
+      "backend": "litellm_proxy_over_vllm",
+      "gpu_memory_utilization": 0.9,
+      "litellm_base_url": "http://127.0.0.1:8080/v1",
+      "litellm_version": "1.91.0",
+      "max_model_len": 8192,
+      "model_revision": "unknown",
+      "routing_strategy": "simple-shuffle",
+      "tensor_parallel_size_per_replica": 1,
+      "thinking_enabled": false,
+      "vllm_ports": [
+        8000,
+        8001,
+        8002,
+        8003,
+        8004,
+        8005,
+        8006,
+        8007
+      ],
+      "vllm_replicas": 8,
+      "vllm_version": "0.19.1"
+    },
+    "target_description": "The user would play the candidate game for at least 120 minutes in total.",
+    "temperature": 0.0,
+    "uses_item_stats": false
+  },
+  "source": {
+    "base_git_commit": null,
+    "diff_sha256": null,
+    "snapshot_sha256": null
+  },
+  "task": {
+    "manifest": {
+      "candidate_group_column": "candidate_group",
+      "dataset": "steam",
+      "dataset_version": "v1",
+      "feature_columns": [
+        "user_steam_id",
+        "user_raw_user_id",
+        "user_user_url",
+        "user_reported_items_count",
+        "user_source_line",
+        "user_raw_snapshot_count",
+        "item_raw_item_id",
+        "item_title",
+        "item_library_item_name",
+        "item_metadata_available",
+        "item_metadata_title",
+        "item_app_name",
+        "item_release_date",
+        "item_genres_json",
+        "item_tags_json",
+        "item_specs_json",
+        "item_price_raw",
+        "item_developer",
+        "item_publisher"
+      ],
+      "filter": {
+        "class": "MinUserInteractionsFilter",
+        "min_interactions": 10,
+        "user_column": "user_id"
+      },
+      "history_context_columns": [
+        "playtime_forever"
+      ],
+      "item_enrichment": null,
+      "item_feature_builder": null,
+      "items": 10978,
+      "rows": {
+        "test": 14343,
+        "train": 3471481,
+        "val": 6099
+      },
+      "sampled_column": null,
+      "sampler": {
+        "candidate_group_column": "candidate_group",
+        "class": "CappedObservedPreferenceCandidateSampler",
+        "item_column": "item_id",
+        "max_candidate_groups_per_user": 5,
+        "max_eval_users": 1000,
+        "negative_ratio": 2,
+        "seed": 1,
+        "target_column": "target",
+        "target_source_column": "target_played_120",
+        "total_items": 10,
+        "user_column": "user_id"
+      },
+      "splitter": {
+        "class": "RandomFractionSplitter",
+        "group_column": "user_id",
+        "seed": 1,
+        "stratify_column": null,
+        "test_fraction": 0.2,
+        "train_fraction": 0.7,
+        "val_fraction": 0.1
+      },
+      "target_column": "target",
+      "target_source_column": "target_played_120",
+      "users": 57333
+    },
+    "name": "steam_preference_cap10_eval_users1000_cg5_m2_seed1"
+  }
+}

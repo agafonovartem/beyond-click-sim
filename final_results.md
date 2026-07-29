@@ -707,3 +707,114 @@ Run roots:
   `outputs/in_distribution/preference_prediction/20260720T1600Z_agent4rec_qwen3_8b_traits_taste_no_summary_control`.
 - Agent4Rec no-summary Qwen3.6-27B:
   `outputs/in_distribution/preference_prediction/20260720T0945Z_agent4rec_qwen36_27b_traits_taste_no_summary_control`.
+
+## OpenP5-style neutral ranker prompt control
+
+This control replaces the simulator-style role/system framing with a neutral
+ranker prompt adapted from the OpenP5 evaluation template. It keeps the current
+task-provided candidates rather than asking the model to generate items, removes
+chronological/next-item language because the split is IID, and uses the same
+parser-safe yes/no and listwise output contracts as the direct History methods.
+The recorded prompt family is `openp5_style_iid_v1`; manifests explicitly record
+`system_role=false` and `temporal_language=false`.
+
+The two completed matrices cover MovieLens-1M and Steam, seeds 0-2, Qwen3-8B
+and Qwen3.6-27B, interaction `m={1,3,9,19}`, and preference
+`m={1,2,3,9}`. Interaction exposes the same train-only item statistics as the
+matched History controls; preference exposes the same observed history and
+ordinary item metadata without item statistics. Both matrices completed all
+48 task batches with zero non-zero batch exit codes.
+
+Run roots:
+
+- Qwen3-8B:
+  `outputs/in_distribution/openp5_style_ranker/20260727_openp5_qwen3_8b_full`.
+- Qwen3.6-27B:
+  `outputs/in_distribution/openp5_style_ranker/20260727_openp5_qwen36_27b_full`.
+
+The compact run roots contain `COMPLETED`, `queue_status.tsv`, and every
+`manifest.json` and `metrics*.json`; row-level `predictions.parquet` and
+`llm_errors.jsonl` remain on the experiment PVCs. The manifests record code
+commit `cb987671385743cd9378eaba0a6478365cf1ce74`, LiteLLM `1.91.0`, vLLM
+`0.19.1`, eight single-GPU replicas, 8,192-token context, disabled thinking,
+temperature 0, and 256 output tokens. The physical Qwen revision was not
+recorded and is therefore `unknown` in these manifests.
+
+The pointwise tables use strict
+`test_failure_as_negative.macro_by_user_group_mean.f1`. The listwise tables use
+strict `test_failure_as_zero_group.macro_by_user_group_mean.ndcg@5`, so parser
+failures reduce the reported score instead of being dropped. Values are mean
+`+/-` sample standard deviation over seeds 0-2.
+
+### Interaction prediction
+
+Strict grouped yes/no F1:
+
+| dataset | backbone | m=1 | m=3 | m=9 | m=19 | test row coverage range |
+|---|---|---:|---:|---:|---:|---:|
+| ml-1m | Qwen3-8B | 0.4280 +/- 0.0097 | 0.3344 +/- 0.0083 | 0.2231 +/- 0.0028 | 0.1485 +/- 0.0007 | 1.000 |
+| ml-1m | Qwen3.6-27B | 0.7403 +/- 0.0063 | 0.6442 +/- 0.0025 | 0.4534 +/- 0.0029 | 0.3080 +/- 0.0039 | 1.000 |
+| steam | Qwen3-8B | 0.4181 +/- 0.0053 | 0.3309 +/- 0.0060 | 0.2259 +/- 0.0024 | 0.1658 +/- 0.0012 | 0.9999--1.000 |
+| steam | Qwen3.6-27B | 0.7238 +/- 0.0008 | 0.6999 +/- 0.0027 | 0.5897 +/- 0.0058 | 0.4638 +/- 0.0045 | 1.000 |
+
+Strict direct-listwise NDCG@5:
+
+| dataset | backbone | m=1 | m=3 | m=9 | m=19 | test row coverage range |
+|---|---|---:|---:|---:|---:|---:|
+| ml-1m | Qwen3-8B | 0.6900 +/- 0.0059 | 0.4744 +/- 0.0046 | 0.3893 +/- 0.0027 | 0.3260 +/- 0.0017 | 0.802--0.835 |
+| ml-1m | Qwen3.6-27B | 0.8826 +/- 0.0039 | 0.7058 +/- 0.0047 | 0.6539 +/- 0.0068 | 0.5932 +/- 0.0066 | 0.989--0.992 |
+| steam | Qwen3-8B | 0.7556 +/- 0.0005 | 0.5606 +/- 0.0076 | 0.4486 +/- 0.0058 | 0.3794 +/- 0.0104 | 0.771--0.805 |
+| steam | Qwen3.6-27B | 0.9419 +/- 0.0015 | 0.8229 +/- 0.0050 | 0.7930 +/- 0.0062 | 0.7377 +/- 0.0053 | 0.997--0.999 |
+
+On MovieLens interaction, neutral OpenP5-style listwise is below the
+simulator-style History prompt for Qwen3-8B by `0.028--0.037` NDCG@5 and for
+Qwen3.6-27B by `0.006--0.010`. The Qwen3-8B pointwise effect is also
+substantial: History F1 is `0.565/0.463/0.310/0.204`, compared with
+`0.428/0.334/0.223/0.149` above. Qwen3.6-27B pointwise results are mixed:
+OpenP5-style is lower at `m=1` but numerically higher at `m=3/9/19`.
+Qwen3.6-27B OpenP5-style listwise is close to MovieLens popularity in every
+slice, while both Qwen backbones remain below Steam popularity at every `m`.
+There is no matched direct-History listwise Steam run in the current registry.
+
+### Preference prediction
+
+Strict grouped yes/no F1:
+
+| dataset | backbone | m=1 | m=2 | m=3 | m=9 | test row coverage range |
+|---|---|---:|---:|---:|---:|---:|
+| ml-1m | Qwen3-8B | 0.2858 +/- 0.0065 | 0.2315 +/- 0.0056 | 0.1887 +/- 0.0083 | 0.0943 +/- 0.0048 | 1.000 |
+| ml-1m | Qwen3.6-27B | 0.6098 +/- 0.0030 | 0.5055 +/- 0.0047 | 0.4321 +/- 0.0016 | 0.2430 +/- 0.0052 | 1.000 |
+| steam | Qwen3-8B | 0.3034 +/- 0.0152 | 0.2632 +/- 0.0023 | 0.2402 +/- 0.0059 | 0.1186 +/- 0.0072 | 0.825--0.837 |
+| steam | Qwen3.6-27B | 0.6012 +/- 0.0074 | 0.5257 +/- 0.0047 | 0.4647 +/- 0.0101 | 0.2836 +/- 0.0068 | 1.000 |
+
+Strict direct-listwise NDCG@5:
+
+| dataset | backbone | m=1 | m=2 | m=3 | m=9 | test row coverage range |
+|---|---|---:|---:|---:|---:|---:|
+| ml-1m | Qwen3-8B | 0.6172 +/- 0.0038 | 0.5544 +/- 0.0104 | 0.5262 +/- 0.0115 | 0.3264 +/- 0.0156 | 0.956--0.991 |
+| ml-1m | Qwen3.6-27B | 0.7052 +/- 0.0015 | 0.6584 +/- 0.0091 | 0.6242 +/- 0.0089 | 0.4526 +/- 0.0055 | 0.991--0.999 |
+| steam | Qwen3-8B | 0.7339 +/- 0.0007 | 0.6640 +/- 0.0069 | 0.6330 +/- 0.0092 | 0.4126 +/- 0.0206 | 0.942--0.983 |
+| steam | Qwen3.6-27B | 0.7855 +/- 0.0051 | 0.7379 +/- 0.0057 | 0.7015 +/- 0.0090 | 0.5052 +/- 0.0096 | 0.976--0.996 |
+
+On MovieLens preference, Qwen3-8B OpenP5-style and History listwise are
+numerically indistinguishable at the table scale: their per-slice differences
+range from `-0.0063` to `+0.0004`. Qwen3.6-27B OpenP5-style is numerically
+`0.002--0.008` above History listwise and `0.013--0.017` above History
+pointwise F1, but no paired significance test is reported. Popularity remains
+above OpenP5-style in all four MovieLens preference slices.
+
+The older direct yes/no Steam preference runs show a model-dependent prompt
+effect. Qwen3-8B OpenP5-style strict F1 is much higher than the earlier
+simulator-style prompt despite lower parser coverage; Qwen3.6-27B OpenP5-style
+is modestly lower than the earlier simulator-style prompt. These are
+prompt-family robustness comparisons, not an isolated causal role-play
+ablation: the visible task rows and named backbones match, but the runs were
+executed at different times with different serving software/configurations.
+
+Overall, role framing is not a uniformly beneficial component of the one-step
+simulator backbone. Its largest observed benefit is Qwen3-8B interaction;
+MovieLens preference is essentially invariant for Qwen3-8B, and the stronger
+Qwen3.6-27B backbone shows only small, task-dependent differences. The neutral
+prompt does not remove the central ID result that popularity is strongest in
+many slices. No full OpenP5-style regression matrix is registered here; the
+current regression integration has only a local smoke method.

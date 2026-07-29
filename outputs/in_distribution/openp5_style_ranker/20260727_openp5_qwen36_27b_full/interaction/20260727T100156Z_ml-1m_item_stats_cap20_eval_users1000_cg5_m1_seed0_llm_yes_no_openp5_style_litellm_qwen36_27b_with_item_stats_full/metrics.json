@@ -1,0 +1,107 @@
+{
+  "candidate_groups": {
+    "requested": {
+      "groups": 2867,
+      "positives_max": 10,
+      "positives_mean": 8.85699337286362,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 17.71398674572724,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 8.85699337286362,
+      "sampled_min": 1
+    },
+    "scored": {
+      "groups": 2867,
+      "positives_max": 10,
+      "positives_mean": 8.85699337286362,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 17.71398674572724,
+      "rows_min": 2,
+      "sampled_max": 10,
+      "sampled_mean": 8.85699337286362,
+      "sampled_min": 1
+    }
+  },
+  "coverage": {
+    "failed_fraction": 0.0,
+    "failed_rows": 0,
+    "requested_rows": 50786,
+    "scored_fraction": 1.0,
+    "scored_rows": 50786
+  },
+  "llm_errors": 0,
+  "main_metric": "test.macro_by_user_group_mean.f1",
+  "max_candidate_groups": null,
+  "max_workers": 32,
+  "method": "llm_yes_no_openp5_style_litellm_qwen36_27b_with_item_stats_full",
+  "requested_rows": 50786,
+  "scored_rows": 50786,
+  "task": "ml-1m_item_stats_cap20_eval_users1000_cg5_m1_seed0",
+  "test": {
+    "macro_by_group": {
+      "accuracy": 0.7574943528161178,
+      "f1": 0.7194723014224608,
+      "n": 50786,
+      "n_groups": 2867,
+      "n_positive": 25393,
+      "n_predicted_positive": 21221,
+      "precision": 0.8099623974057178,
+      "recall": 0.6774003299727052
+    },
+    "macro_by_user_group_mean": {
+      "accuracy": 0.7678339814814815,
+      "f1": 0.7330242671067622,
+      "n": 50786,
+      "n_groups": 2867,
+      "n_positive": 25393,
+      "n_predicted_positive": 21221,
+      "n_users": 1000,
+      "precision": 0.818805453065453,
+      "recall": 0.693644761904762
+    },
+    "micro": {
+      "accuracy": 0.7560351277911236,
+      "f1": 0.7342000257433389,
+      "n": 50786,
+      "n_positive": 25393,
+      "n_predicted_positive": 21221,
+      "precision": 0.806371047547241,
+      "recall": 0.6738865041546883
+    }
+  },
+  "test_failure_as_negative": {
+    "macro_by_group": {
+      "accuracy": 0.7574943528161178,
+      "f1": 0.7194723014224608,
+      "n": 50786,
+      "n_groups": 2867,
+      "n_positive": 25393,
+      "n_predicted_positive": 21221,
+      "precision": 0.8099623974057178,
+      "recall": 0.6774003299727052
+    },
+    "macro_by_user_group_mean": {
+      "accuracy": 0.7678339814814815,
+      "f1": 0.7330242671067622,
+      "n": 50786,
+      "n_groups": 2867,
+      "n_positive": 25393,
+      "n_predicted_positive": 21221,
+      "n_users": 1000,
+      "precision": 0.818805453065453,
+      "recall": 0.693644761904762
+    },
+    "micro": {
+      "accuracy": 0.7560351277911236,
+      "f1": 0.7342000257433389,
+      "n": 50786,
+      "n_positive": 25393,
+      "n_predicted_positive": 21221,
+      "precision": 0.806371047547241,
+      "recall": 0.6738865041546883
+    }
+  }
+}

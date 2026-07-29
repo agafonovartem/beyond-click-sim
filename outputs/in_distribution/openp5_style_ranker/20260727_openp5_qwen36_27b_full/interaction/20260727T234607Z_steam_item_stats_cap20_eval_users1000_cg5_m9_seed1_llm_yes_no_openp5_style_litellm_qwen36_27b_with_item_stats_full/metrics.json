@@ -1,0 +1,107 @@
+{
+  "candidate_groups": {
+    "requested": {
+      "groups": 4149,
+      "positives_max": 2,
+      "positives_mean": 1.942877801879971,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.42877801879971,
+      "rows_min": 10,
+      "sampled_max": 18,
+      "sampled_mean": 17.485900216919738,
+      "sampled_min": 9
+    },
+    "scored": {
+      "groups": 4149,
+      "positives_max": 2,
+      "positives_mean": 1.942877801879971,
+      "positives_min": 1,
+      "rows_max": 20,
+      "rows_mean": 19.42877801879971,
+      "rows_min": 10,
+      "sampled_max": 18,
+      "sampled_mean": 17.485900216919738,
+      "sampled_min": 9
+    }
+  },
+  "coverage": {
+    "failed_fraction": 0.0,
+    "failed_rows": 0,
+    "requested_rows": 80610,
+    "scored_fraction": 1.0,
+    "scored_rows": 80610
+  },
+  "llm_errors": 0,
+  "main_metric": "test.macro_by_user_group_mean.f1",
+  "max_candidate_groups": null,
+  "max_workers": 32,
+  "method": "llm_yes_no_openp5_style_litellm_qwen36_27b_with_item_stats_full",
+  "requested_rows": 80610,
+  "scored_rows": 80610,
+  "task": "steam_item_stats_cap20_eval_users1000_cg5_m9_seed1",
+  "test": {
+    "macro_by_group": {
+      "accuracy": 0.8964208242950108,
+      "f1": 0.5797462038242949,
+      "n": 80610,
+      "n_groups": 4149,
+      "n_positive": 8061,
+      "n_predicted_positive": 11603,
+      "precision": 0.546860132850733,
+      "recall": 0.7020968908170644
+    },
+    "macro_by_user_group_mean": {
+      "accuracy": 0.9003099999999999,
+      "f1": 0.5929795507270508,
+      "n": 80610,
+      "n_groups": 4149,
+      "n_positive": 8061,
+      "n_predicted_positive": 11603,
+      "n_users": 1000,
+      "precision": 0.5621662842712842,
+      "recall": 0.7122083333333333
+    },
+    "micro": {
+      "accuracy": 0.8960178637886118,
+      "f1": 0.5737388120423108,
+      "n": 80610,
+      "n_positive": 8061,
+      "n_predicted_positive": 11603,
+      "precision": 0.4861673705076273,
+      "recall": 0.6997891080511103
+    }
+  },
+  "test_failure_as_negative": {
+    "macro_by_group": {
+      "accuracy": 0.8964208242950108,
+      "f1": 0.5797462038242949,
+      "n": 80610,
+      "n_groups": 4149,
+      "n_positive": 8061,
+      "n_predicted_positive": 11603,
+      "precision": 0.546860132850733,
+      "recall": 0.7020968908170644
+    },
+    "macro_by_user_group_mean": {
+      "accuracy": 0.9003099999999999,
+      "f1": 0.5929795507270508,
+      "n": 80610,
+      "n_groups": 4149,
+      "n_positive": 8061,
+      "n_predicted_positive": 11603,
+      "n_users": 1000,
+      "precision": 0.5621662842712842,
+      "recall": 0.7122083333333333
+    },
+    "micro": {
+      "accuracy": 0.8960178637886118,
+      "f1": 0.5737388120423108,
+      "n": 80610,
+      "n_positive": 8061,
+      "n_predicted_positive": 11603,
+      "precision": 0.4861673705076273,
+      "recall": 0.6997891080511103
+    }
+  }
+}
