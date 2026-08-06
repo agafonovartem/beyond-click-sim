@@ -279,6 +279,26 @@ Predict whether this user would interact with the recommended item.
 Answer with exactly one word: yes or no."""
 
 
+POLICY_RANKING_PREFERENCE_ITEMWISE_SYSTEM_PROMPT = """You are simulating a user's positive preference response to a recommendation.
+Given the user's observed feedback history, a positive-preference target, and one recommended item, decide whether the user's response to that item would meet the target.
+Use only the provided history, target definition, and item information.
+Answer with exactly one word: yes or no."""
+
+
+POLICY_RANKING_PREFERENCE_ITEMWISE_USER_PROMPT_TEMPLATE = """User feedback history:
+{history}
+
+Positive-preference target:
+{target_description}
+
+Recommended item:
+{candidate}
+
+Would the user's response to this recommendation meet the positive-preference target?
+
+Answer: yes or no."""
+
+
 REGRESSION_SYSTEM_PROMPT = """You are simulating a user's numeric response in a recommender system.
 Given the user's interaction history and one candidate item, predict the user's numeric response.
 Use only the provided history and candidate information.

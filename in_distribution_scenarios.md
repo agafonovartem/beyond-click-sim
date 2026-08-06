@@ -280,6 +280,40 @@ The runner builds each task once (fitting all 6 policies on the train split), th
 
 **Proportional smoke capping.** In smoke mode, the group cap (`max_llm_groups=25`) is distributed proportionally across policies so every policy stays represented in the result. Without this, a smoke run could accidentally exclude some policies entirely.
 
+### Variant: Preference Target (Q3-preference)
+
+A second protocol runs the identical pipeline against a **positive-preference** target instead of the interaction target. It lives in a separate runner package, `runners/in_distribution/policy_ranking_agreement_preference/`, and writes to `outputs/in_distribution/policy_ranking_agreement_preference/`.
+
+**Motivation.** Under the interaction target, a policy's real utility is the rate at which its recommendations were interacted with at all. `target_interact` is `1` for every observed interaction, so this measures engagement and cannot distinguish a recommendation the user rated 5 from one they rated 1. The preference variant asks the narrower question: do simulators rank policies the same way real data does when "good recommendation" means the user actually *liked* the item?
+
+**What changes:**
+
+| | Interaction (default) | Preference variant |
+|---|---|---|
+| `target_source_column` (ml-1m) | `target_interact` | `target_like_ge4` (rating ≥ 4) |
+| `target_source_column` (steam) | `target_interact` | `target_played_120` (playtime ≥ 120 min) |
+| LLM scorer | `LLMInteractionYesNoScorer` | `LLMPreferenceYesNoScorer` |
+| Agent4Rec scorer | `Agent4RecYesNoScorer` | `Agent4RecPreferenceYesNoScorer` |
+| Task name | `{dataset}_policy_ranking[_eval_users{N}]_seed{s}` | `{dataset}_policy_ranking_preference[_eval_users{N}]_seed{s}` |
+
+**What does not change:** the filter (`min_interactions=10`), splitter (80/20, empty val), the six-policy roster, `POLICY_K = 10`, per-dataset history/candidate prompt columns, train-only item enrichment, held-out history masking, utility aggregation (`mean_score`), and the agreement metrics (Kendall's τ main, Spearman's ρ). Because policies never read a target column, each policy recommends the **same items** under both protocols — only the labels attached to those recommendations differ. This makes the two protocols directly comparable on identical candidate rows.
+
+**Both the ground truth and the elicited question move together.** The simulator is asked whether the user's response would meet the dataset's positive-preference target (`"The user would rate the candidate movie at least 4 out of 5."` / `"The user would play the candidate game for at least 120 minutes in total."` — worded identically to the preference-prediction task family). Asking an interaction question while grading against a preference label would make the agreement number uninterpretable. This holds in both batch and itemwise scoring: itemwise preference scoring uses `POLICY_RANKING_PREFERENCE_ITEMWISE_*` prompts rather than the interaction itemwise prompts.
+
+**Interpretation caveats:**
+
+- Preference targets are **strictly sparser** than interaction targets (an item must be interacted with *and* liked). Real per-policy utilities are correspondingly lower, so utility magnitudes are not comparable across the two protocols — only the induced policy orderings are.
+- The popularity baseline changes meaning. `PopularityScorer` sums the task target per item, so under this protocol item "popularity" is the count of train interactions that met the preference target, not the raw interaction count. Under the interaction protocol `target_interact` is all-ones, making it a pure interaction count.
+- Issue #11 in `issues.md` (yes/no scorers emit binary scores, so simulated utility is a mean of 0/1 votes) applies unchanged here.
+
+**CLI example:**
+
+```bash
+python -m runners.in_distribution.policy_ranking_agreement_preference.run \
+  --tasks ml-1m_policy_ranking_preference_eval_users1000_seed0 \
+  --methods popularity_scorer
+```
+
 ---
 
 ## Cold Start

@@ -23,6 +23,7 @@ if str(REPO_ROOT / "src") not in sys.path:
 
 
 NAMESPACE = "a-ashabokov"
+# Default pod set for historical 27B ablation runs. Prefer --pods / grid.json["pods"].
 PODS = [f"agent-exp-policy-ranking-{i}" for i in range(8)]
 REMOTE_REPO = "/home/jovyan/beyond-click-sim"
 REMOTE_ZIP = "/home/jovyan/beyond-click-sim-code.zip"
@@ -140,6 +141,35 @@ def assert_safe_name(name: str, *, label: str = "name") -> str:
     if not name or not _SAFE_NAME_RE.fullmatch(name):
         raise ValueError(f"unsafe {label}: {name!r}")
     return name
+
+
+def parse_pods(raw: str | Iterable[str] | None, *, default: list[str] | None = None) -> list[str]:
+    """Parse a comma-separated pod list (or iterable) into unique ordered names."""
+    if raw is None:
+        pods = list(default if default is not None else PODS)
+    elif isinstance(raw, str):
+        pods = [part.strip() for part in raw.split(",") if part.strip()]
+    else:
+        pods = [str(part).strip() for part in raw if str(part).strip()]
+    if not pods:
+        raise ValueError("pods must be non-empty")
+    seen: set[str] = set()
+    unique: list[str] = []
+    for pod in pods:
+        assert_safe_name(pod, label="pod")
+        if pod in seen:
+            raise ValueError(f"duplicate pod: {pod}")
+        seen.add(pod)
+        unique.append(pod)
+    return unique
+
+
+def grid_pods(grid: dict[str, Any], *, default: list[str] | None = None) -> list[str]:
+    """Return the immutable pod list persisted in grid.json."""
+    raw = grid.get("pods")
+    if raw is None:
+        return parse_pods(None, default=default)
+    return parse_pods(raw)
 
 
 def method_requires_item_stats_tasks(method: str) -> bool:

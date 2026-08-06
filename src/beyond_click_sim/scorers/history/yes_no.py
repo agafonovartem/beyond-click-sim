@@ -19,6 +19,8 @@ from beyond_click_sim.scorers.history.prompts import (
     OPENP5_STYLE_PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE,
     POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT,
     POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE,
+    POLICY_RANKING_PREFERENCE_ITEMWISE_SYSTEM_PROMPT,
+    POLICY_RANKING_PREFERENCE_ITEMWISE_USER_PROMPT_TEMPLATE,
     PREFERENCE_YES_NO_SYSTEM_PROMPT,
     PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE,
     history_prompt_messages,
@@ -411,6 +413,40 @@ class LLMPreferenceYesNoScorer(LLMInteractionYesNoScorer):
             simulator_user_prompt=simulator_user_prompt,
             openp5_style_user_prompt=openp5_style_user_prompt,
         )
+
+    def _build_itemwise_messages(
+        self,
+        *,
+        user_id: Any,
+        candidate: Any,
+    ) -> list[dict[str, str]]:
+        """Ask the preference question for a single recommended item.
+
+        The inherited implementation asks whether the user would *interact*
+        with the item. Itemwise preference scoring must ask whether the user's
+        response would meet `target_description` instead, so that the elicited
+        answer matches the preference target it is scored against.
+        """
+
+        history = self.history_by_user_.get(user_id, []) if self.history_by_user_ else []
+        candidate_fields = self._format_item_fields(
+            row=candidate,
+            columns=self.candidate_description_columns,
+        )
+        user_prompt = POLICY_RANKING_PREFERENCE_ITEMWISE_USER_PROMPT_TEMPLATE.format(
+            history="\n".join(history)
+            if history
+            else "- No feedback history available.",
+            target_description=self.target_description,
+            candidate=candidate_fields,
+        )
+        return [
+            {
+                "role": "system",
+                "content": POLICY_RANKING_PREFERENCE_ITEMWISE_SYSTEM_PROMPT,
+            },
+            {"role": "user", "content": user_prompt},
+        ]
 
 
 def parse_yes_no_response(text: str, *, labels: Sequence[str]) -> dict[str, float]:

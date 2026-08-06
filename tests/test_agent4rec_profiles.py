@@ -487,6 +487,7 @@ def test_build_taste_can_generate_cache_misses_concurrently(tmp_path) -> None:
         "hits": 0,
         "misses": 3,
         "generated": 3,
+        "errors": 0,
         "max_workers": 3,
     }
     rows = [

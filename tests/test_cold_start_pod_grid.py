@@ -67,11 +67,23 @@ def test_listwise_completion_requires_manifest_and_metrics(tmp_path: Path) -> No
     assert cold_run.is_completed(tmp_path, task, method)
 
 
+QWEN3_8B_METHODS = [
+    "llm_preference_listwise_ranking_vllm_qwen3_8b_item_stats_full",
+    "llm_preference_listwise_ranking_vllm_qwen3_8b_item_stats_sumhistory_full",
+    "llm_preference_listwise_ranking_vllm_qwen3_8b_item_stats_sumcandidate_full",
+    "llm_preference_listwise_ranking_vllm_qwen3_8b_item_stats_sumboth_full",
+    "agent4rec_preference_listwise_ranking_vllm_qwen3_8b_traits_full",
+]
+
+AGENT_EXP_PODS = [f"agent-exp-{i}" for i in range(8)]
+
+
 def test_ablation_grid_is_4x45_item_stats_cartesian() -> None:
     built = grid.build_ablation_grid()
     assert built["job_count"] == 180
     assert len(built["methods"]) == 4
     assert len(built["tasks"]) == 45
+    assert built["pods"] == list(grid.PODS)
     assert all("item_stats" in t for t in built["tasks"])
     pairs = [(j["method"], j["task"]) for j in built["jobs"]]
     assert len(pairs) == len(set(pairs))
@@ -79,6 +91,41 @@ def test_ablation_grid_is_4x45_item_stats_cartesian() -> None:
     for method in built["methods"]:
         method_tasks = {t for m, t in pairs if m == method}
         assert method_tasks == set(built["tasks"])
+
+
+def test_ablation_grid_supports_5x45_with_custom_pods() -> None:
+    built = grid.build_ablation_grid(
+        QWEN3_8B_METHODS,
+        pods=AGENT_EXP_PODS,
+        grid_id="ablation_qwen38b_testgrid",
+    )
+    assert built["job_count"] == 225
+    assert len(built["methods"]) == 5
+    assert len(built["tasks"]) == 45
+    assert built["pods"] == AGENT_EXP_PODS
+    assert set(built["pods_jobs"]) == set(AGENT_EXP_PODS)
+    pairs = [(j["method"], j["task"]) for j in built["jobs"]]
+    assert len(pairs) == len(set(pairs)) == 225
+    for method in built["methods"]:
+        method_tasks = {t for m, t in pairs if m == method}
+        assert method_tasks == set(built["tasks"])
+
+
+def test_parse_pods_and_grid_pods_persist_custom_list() -> None:
+    pods = grid.parse_pods("agent-exp-0,agent-exp-1,agent-exp-2")
+    assert pods == ["agent-exp-0", "agent-exp-1", "agent-exp-2"]
+    with pytest.raises(ValueError):
+        grid.parse_pods("agent-exp-0,agent-exp-0")
+    with pytest.raises(ValueError):
+        grid.parse_pods("../evil")
+    built = grid.build_ablation_grid(
+        QWEN3_8B_METHODS[:1],
+        pods=pods,
+        grid_id="ablation_podpersist_test",
+    )
+    assert grid.grid_pods(built) == pods
+    # Missing pods key falls back to default PODS.
+    assert grid.grid_pods({}) == list(grid.PODS)
 
 
 def test_item_stats_llm_methods_never_get_plain_tasks() -> None:
@@ -115,6 +162,27 @@ def test_pod_assignment_is_unique_and_balanced() -> None:
         for attempt in (1, 2, 3)
     ]
     assert len(tokens) == len(set(tokens))
+
+
+def test_pod_assignment_balanced_for_5x45_custom_pods() -> None:
+    built = grid.build_ablation_grid(
+        QWEN3_8B_METHODS,
+        pods=AGENT_EXP_PODS,
+        grid_id="ablation_qwen38b_balance",
+    )
+    sizes = [len(jobs) for jobs in built["pods_jobs"].values()]
+    assert min(sizes) >= 28
+    assert max(sizes) <= 29
+    assert sum(sizes) == 225
+    owned = {}
+    for pod, jobs in built["pods_jobs"].items():
+        for job in jobs:
+            key = (job["method"], job["task"])
+            assert key not in owned
+            owned[key] = pod
+        methods_on_pod = {job["method"] for job in jobs}
+        assert len(methods_on_pod) == 5
+    assert len({j["job_id"] for j in built["jobs"]}) == 225
 
 
 def test_worker_state_roundtrip(tmp_path: Path) -> None:
