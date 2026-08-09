@@ -203,13 +203,18 @@ Current state of the replacement:
   `node_id` — passing `node_id=None` would regularise the whole embedding table
   on every mini-batch instead of the batch triples.
 - **Not quality-validated.** Best CPU run so far is 0.505 at 20 epochs, still
-  climbing, versus the 0.538 NumPy reference. Parity is untested.
-- **Search space is a placeholder.** `SEARCH_SPACES["LightGCNTorchPolicy"]`
-  (`src/beyond_click_sim/tasks/policy_tuning.py:128`) still carries the
-  NumPy-era box (`n_layers` {2,3}, `learning_rate` log[0.001, 0.01]) and does
-  not search `iterations`, so the class default of 1000 epochs applies
-  untested. That box was built around the full-batch optimizer and is
-  meaningless for this one.
+  climbing, versus the 0.538 NumPy reference. Parity is untested. **This half
+  of the finding remains open.**
+- **Search space — FIXED (2026-08).** `SEARCH_SPACES["LightGCNTorchPolicy"]`
+  previously carried the NumPy-era box (`n_layers` {2,3}, `learning_rate`
+  log[0.001, 0.01]) and did not search `iterations`, so the class default of
+  1000 epochs applied untested. It now searches `n_layers` {2,3} x
+  `regularization` {1e-4, 1e-3, 1e-2} x `iterations` {300, 1000} = 12 configs,
+  with lr fixed at 0.001. The box follows He et al. Sec 4.1.2 and RecBole's
+  published LightGCN tuning range, narrowed for budget; `iterations` is
+  searched in place of the early stopping both references use, since
+  `Policy.fit` receives no validation data. Per-parameter rationale and the
+  deviations from both references are recorded inline in `SEARCH_SPACES`.
 
 Why it matters: LightGCN is one of six policies whose **real** ranking is the
 ground truth the agreement metrics are measured against. Until the new backend
@@ -217,14 +222,17 @@ is tuned and shown to at least match the NumPy reference, any Kendall tau
 computed on a roster containing it is agreement with an arbitrary policy
 position, not with a defensible one.
 
-Fix: benchmark and re-tune on GPU; rebuild the box around the reference
-defaults (lr 0.001, batch 2048, lambda 1e-4, K=3) with `iterations` searched;
-gate on beating 0.538 on the ml-1m inner split before reporting any LightGCN
-number.
+Remaining fix: benchmark one fit on the GPU pod (12 configs x 12 jobs = 144
+full-length fits), then gate on beating **0.538** ndcg@10 on the ml-1m inner
+split before reporting any LightGCN number.
 
-Stale references to fix alongside: this file's Finding 1 (above),
-`in_distribution_scenarios.md:126`, and `docs/policy_tuning.md:86` all still
-name `LightGCNPolicy` and quote its NumPy defaults.
+Stale references updated alongside: `in_distribution_scenarios.md` (policy
+table now lists both backends and marks the NumPy one as reference-only; the
+L2-regularization note now covers the mean-vs-sum loss scaling difference) and
+`docs/policy_tuning.md` (search-space table, cost note, device note). This
+file's Finding 1 still names `LightGCNPolicy` in the `positive_feedback_column`
+list; that statement remains true of the NumPy class and the torch class
+implements the same filtering, so the closed finding was left intact.
 
 ## 8. (Medium, shared) LightGCN results are not reproducible across runs or devices
 

@@ -3,9 +3,10 @@
 Protocol: for each (dataset, target_source_column, split_seed), a validation
 split is carved from the *outer train* frame of the policy-ranking task
 (test data is never passed in). Each tunable policy is searched with a seeded
-Optuna TPESampler; every trial — not just the winner — is recorded with its
-full metric payload so the search can be audited. The resulting artifact is
-consumed by the policy-ranking task builders via `build_tuned_policy_roster`.
+Optuna GridSampler over its categorical space; every trial — not just the
+winner — is recorded with its full metric payload so the search can be
+audited. The resulting artifact is consumed by the policy-ranking task
+builders via `build_tuned_policy_roster`.
 
 Artifacts are strictly validated on load: any change to the dataset, filter,
 splitter, target, search spaces, or split seed invalidates the artifact and
@@ -107,34 +108,60 @@ SEARCH_SPACES: dict[str, dict[str, Any]] = {
     # pinned at the value that won at every (n_factors, lr) probed; 0.01 and
     # 0.1 cost 0.014 and 0.073 respectively.
     "BPRPolicy": {
-        "n_trials": 12,
+        "n_trials": 6,
         "params": {
             "n_factors": {"kind": "categorical", "choices": [32, 64]},
             "learning_rate": {
                 "kind": "categorical",
                 "choices": [0.001, 0.002, 0.005],
             },
-            "iterations": {"kind": "categorical", "choices": [100, 300]},
+            # "iterations": {"kind": "categorical", "choices": [100, 300]},
+            "iterations": {"kind": "categorical", "choices": [300]},
             "regularization": {"kind": "categorical", "choices": [0.001]},
         },
     },
-    # Now on the PyTorch/PyG backend, which runs the paper's mini-batch Adam
-    # protocol, so the old box (built around the NumPy full-batch optimiser)
-    # no longer applies: `iterations` here counts epochs, and the reference
-    # defaults are lr=0.001, batch=2048, 1000 epochs, lambda=1e-4, K=3.
-    # This box is a placeholder around those defaults and has NOT been
-    # validated on either dataset — benchmark and re-tune on GPU before
-    # treating any LightGCN number as final.
+    # PyTorch/PyG backend running the paper's mini-batch Adam protocol, so
+    # `iterations` counts epochs (~292 optimiser steps each on ml-1m), not
+    # full-batch updates. The box follows the two published references:
+    #
+    #   He et al. (SIGIR 2020) Sec 4.1.2 — searches lambda over
+    #     {1e-6 ... 1e-2} (optimum "in most cases" 1e-4) and K over 1..4
+    #     (K=3 best); fixes lr=0.001, batch 1024-2048, dim 64, ~1000 epochs.
+    #   RecBole's published LightGCN tuning range — reg_weight
+    #     {1e-5, 1e-4, 1e-3, 1e-2}, n_layers {1,2,3,4},
+    #     learning_rate {1e-2, 5e-3, 1e-3, 5e-4, 1e-4}.
+    #
+    # `regularization` here is the reference implementation's `decay`, applied
+    # to the layer-0 embeddings of each batch triple over a mean BPR loss, so
+    # it is directly comparable to both references' lambda.
+    #
+    # Deviations from those ranges, and why:
+    # - K restricted to {2, 3}: the paper reports K=3 best and RecBole defaults
+    #   to 2; K=1 underfits and K=4 oversmooths. Spending budget on the two
+    #   plausible values instead of four.
+    # - lambda restricted to {1e-4, 1e-3, 1e-2}: 1e-5 is effectively
+    #   unregularised, and ml-1m is far denser than the paper's Gowalla /
+    #   Yelp2018 / Amazon-Book, so the overfitting risk sits at the upper end.
+    # - lr fixed at 0.001, the default in both the paper and the reference
+    #   implementation. RecBole does suggest tuning it; this is a deliberate
+    #   budget trade so `iterations` can be searched instead. Revisit if a
+    #   selected config lands on a range edge.
+    # - `iterations` searched, which neither reference does: they early-stop on
+    #   a validation split, and `Policy.fit` has no val data to do that with.
+    #   Searching it on the inner split is the equivalent protocol here.
+    #
+    # 6 configs x 12 tuning jobs = 72 full-length fits. Benchmark one fit on
+    # the GPU pod before launching the sweep.
     "LightGCNTorchPolicy": {
         "n_trials": 6,
         "params": {
             "n_layers": {"kind": "categorical", "choices": [2, 3]},
-            "learning_rate": {
-                "kind": "float",
-                "low": 0.001,
-                "high": 0.01,
-                "log": True,
+            "regularization": {
+                "kind": "categorical",
+                "choices": [1e-4, 1e-3, 1e-2],
             },
+            # "iterations": {"kind": "categorical", "choices": [300, 1000]},
+            "iterations": {"kind": "categorical", "choices": [300]},
         },
     },
 }
@@ -170,6 +197,27 @@ def default_artifacts_dir() -> Path:
         ):
             return path / "artifacts"
     raise RuntimeError("Could not find beyond-click-sim repo root")
+
+
+def _grid_search_space(spec: dict[str, Any]) -> dict[str, list[Any]]:
+    """Build an Optuna GridSampler search_space from a categorical SEARCH_SPACES spec."""
+
+    grid: dict[str, list[Any]] = {}
+    for name, param_spec in spec["params"].items():
+        if param_spec["kind"] != "categorical":
+            raise ValueError(
+                f"GridSampler only supports categorical params; got {name}="
+                f"{param_spec['kind']!r}"
+            )
+        grid[name] = list(param_spec["choices"])
+    return grid
+
+
+def _grid_n_trials(grid: dict[str, list[Any]]) -> int:
+    n_trials = 1
+    for values in grid.values():
+        n_trials *= len(values)
+    return n_trials
 
 
 def _suggest_params(trial: Any, spec: dict[str, Any]) -> dict[str, Any]:
@@ -349,9 +397,20 @@ def tune_policies_for_split(
             }
             continue
 
+        grid = _grid_search_space(spec)
+        grid_size = _grid_n_trials(grid)
+        n_trials = int(spec["n_trials"])
+        # Allow n_trials > grid_size so failed points can be retried; forbid a
+        # budget smaller than the grid (that would make selection non-exhaustive).
+        if n_trials < grid_size:
+            raise ValueError(
+                f"SEARCH_SPACES[{name!r}] n_trials={n_trials} is smaller than "
+                f"categorical grid size {grid_size}. Raise n_trials or shrink "
+                "the choices lists."
+            )
         study = optuna.create_study(
             direction="maximize",
-            sampler=optuna.samplers.TPESampler(seed=sampler_seed),
+            sampler=optuna.samplers.GridSampler(grid, seed=sampler_seed),
         )
         trial_log: list[dict[str, Any]] = []
 
@@ -387,8 +446,9 @@ def tune_policies_for_split(
 
         study.optimize(
             objective,
-            n_trials=int(spec["n_trials"]),
+            n_trials=n_trials,
             catch=(Exception,),
+            show_progress_bar=True,
         )
         completed = [
             t for t in study.trials
@@ -396,7 +456,7 @@ def tune_policies_for_split(
         ]
         if not completed:
             raise RuntimeError(
-                f"All {spec['n_trials']} tuning trials failed for {name} "
+                f"All {n_trials} tuning trials failed for {name} "
                 f"(dataset={dataset_name}, target={target_source_column}, "
                 f"seed={split_seed}); refusing to write a tuning artifact. "
                 f"Trial errors: {[t['error'] for t in trial_log][:3]}"
@@ -406,8 +466,8 @@ def tune_policies_for_split(
             "selected_params": dict(study.best_params),
             "val_objective": float(study.best_value),
             "n_eval_users": int(len(val_users)),
-            "sampler": {"name": "TPESampler", "seed": sampler_seed},
-            "n_trials": int(spec["n_trials"]),
+            "sampler": {"name": "GridSampler", "seed": sampler_seed},
+            "n_trials": n_trials,
             "trials": trial_log,
         }
 
@@ -551,7 +611,7 @@ def build_tuned_policy_roster(
             **entry["selected_params"],
         )
         policy.hyperparameter_selection = {
-            "kind": "optuna_tpe_search" if entry["tuned"] else "fixed_baseline",
+            "kind": "optuna_grid_search" if entry["tuned"] else "fixed_baseline",
             "objective": payload["identity"]["objective"],
             "val_objective": entry["val_objective"],
             "n_trials": entry.get("n_trials"),

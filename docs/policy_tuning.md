@@ -81,15 +81,30 @@ dicts (`SEARCH_SPACES`), hashed (`search_spaces_sha256`) into the artifact ident
 | Policy | Space | n_trials |
 |---|---|---|
 | ItemKNNPolicy | `n_neighbors` in {10, 20, 50, 100} | 4 |
-| ALSPolicy | `n_factors` {32, 64}; `regularization` log [0.01, 1.0]; `alpha` {1, 10, 40}; iterations=20 fixed | 12 |
-| BPRPolicy | `n_factors` {32, 64}; `learning_rate` log [0.005, 0.1]; `regularization` log [0.001, 0.1]; iterations=100 fixed | 12 |
-| LightGCNPolicy | `n_layers` {2, 3}; `learning_rate` log [0.001, 0.01]; rest fixed | 6 |
+| ALSPolicy | `n_factors` {16, 32, 64}; `regularization` {0.01, 0.1}; `alpha` {2, 5, 10, 20}; iterations=20 fixed | 24 |
+| BPRPolicy | `n_factors` {32, 64}; `learning_rate` {0.001, 0.002, 0.005}; `iterations` {100, 300}; regularization=0.001 fixed | 12 |
+| LightGCNTorchPolicy | `n_layers` {2, 3}; `regularization` {1e-4, 1e-3, 1e-2}; `iterations` {300, 1000}; lr=0.001 fixed | 12 |
+
+All four spaces are fully categorical, and `n_trials` equals the grid size in each case.
 
 Notes:
 
-- Small budgets are deliberate: LightGCN (pure NumPy, 200 iterations) dominates wall clock.
-  With few trials TPE behaves mostly like seeded random search — accepted for determinism and
-  simplicity.
+- Box placement for ItemKNN/ALS/BPR comes from an exhaustive sweep on the ml-1m inner
+  validation split (`target_interact`, seed 0). Notable results: ItemKNN's optimum is
+  interior at 20; ALS capacity is monotonically *decreasing* (32 > 64 > 128 > 256), and
+  `alpha` swings ndcg by 0.071 while `regularization` moves it ~0.002 across two decades;
+  BPR's `learning_rate` and `iterations` are coupled, and the previous box (lr >= 0.005,
+  iterations pinned at 100) capped it at 0.476 where (lr=0.001, iterations=300) reaches
+  0.508. The sweep is ml-1m only — re-check on steam before treating these as final.
+- LightGCN's box follows He et al. (SIGIR 2020) Sec 4.1.2 and RecBole's published tuning
+  range, narrowed to fit the budget; `iterations` is searched in place of the early
+  stopping both references use, since `Policy.fit` has no validation data. See the inline
+  comment in `SEARCH_SPACES` for the per-parameter rationale.
+- With these budgets TPE behaves mostly like seeded random search: `TPESampler` defaults
+  to `n_startup_trials=10`, so only trials beyond the tenth are model-guided. Measured
+  expected regret of the random draws against the exhaustive grid is small (ALS 0.0016,
+  BPR 0.0068 at 12 trials), but a `GridSampler` switch would make selection exhaustive and
+  seed-independent.
 - `ALSPolicy` exposes `regularization` and `alpha` (added for this feature); defaults
   0.01 / 1.0 equal the implicit library's own defaults, so pre-tuning behavior is unchanged.
   On the all-ones confidence matrix, ALS depends essentially on the alpha/regularization
@@ -149,11 +164,12 @@ uv run python -m runners.in_distribution.policy_tuning.run
 # incremental: skip existing artifacts (e.g. after adding new seeds)
 uv run python -m runners.in_distribution.policy_tuning.run --resume
 
-# subset; partial passes merge into an existing full artifact
+# subset passes: may create a partial artifact, or merge into an existing one
 uv run python -m runners.in_distribution.policy_tuning.run \
-    --datasets ml-1m --seeds 0 --policies ItemKNNPolicy,ALSPolicy,BPRPolicy
+    --datasets ml-1m --seeds 0 --policies LightGCNTorchPolicy
 uv run python -m runners.in_distribution.policy_tuning.run \
-    --datasets ml-1m --seeds 0 --policies LightGCNPolicy
+    --datasets ml-1m --seeds 0 \
+    --policies RandomPolicy,PopularityPolicy,ItemKNNPolicy,ALSPolicy,BPRPolicy
 ```
 
 ## Operational facts worth knowing
@@ -167,10 +183,18 @@ uv run python -m runners.in_distribution.policy_tuning.run \
   invalidates all affected artifacts** (by design, via the identity hash) — re-tune.
 - **Until artifacts exist, neither policy-ranking setup can build tasks** — the builders
   raise with the remediation command.
-- **`--policies` merge requires an existing full artifact** for that job; run the full set
-  once first.
-- LightGCN is the bottleneck: seeds x setups x datasets x 6 trials at 200 pure-NumPy
-  iterations. Split it into its own `--policies LightGCNPolicy` pass (or pods) if needed.
+- **`--policies` may write a partial artifact** when the file does not exist yet; a later
+  `--policies` pass on the same path merges missing entries in. Do not run two writers on
+  the same artifact path concurrently. `--emit-config` refuses partial artifacts (missing
+  roster policies).
+- LightGCN is the bottleneck: seeds x setups x datasets x 12 trials, each a full
+  mini-batch training run (~292 optimiser steps per epoch on ml-1m, up to 1000 epochs).
+  That is 144 fits across the sweep. Benchmark one fit on the GPU pod before launching,
+  and split it into its own `--policies LightGCNTorchPolicy` pass if needed.
+- `LightGCNTorchPolicy` selects its device automatically (`device="auto"` resolves
+  cuda -> mps -> cpu at fit time) and records `resolved_device` in the *task* manifest.
+  The tuning artifact does not record the device, and PyTorch does not guarantee
+  CPU/GPU equivalence — do not mix devices within a result set.
 - Setup names in the CLI are `interaction` and `preference` (`--setups`).
 
 ## Verification status

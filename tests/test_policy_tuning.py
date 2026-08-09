@@ -269,13 +269,15 @@ def test_inner_split_never_leaks_val_into_fit_or_recommend():
 
 
 def test_failed_trials_are_logged_and_search_continues():
+    # GridSampler does not re-queue a failed single-point grid under catch=;
+    # use two distinct points so the second trial still runs after the first fails.
     _FlakyPolicy.attempts = 0
     artifact = _tune(
         policy_classes=(_FlakyPolicy,),
         search_spaces={
             "_FlakyPolicy": {
                 "n_trials": 2,
-                "params": {"magic": {"kind": "categorical", "choices": [0]}},
+                "params": {"magic": {"kind": "categorical", "choices": [0, 1]}},
             }
         },
     )
@@ -291,7 +293,7 @@ def test_all_trials_failed_raises():
             search_spaces={
                 "_AlwaysFailsPolicy": {
                     "n_trials": 2,
-                    "params": {"magic": {"kind": "categorical", "choices": [0]}},
+                    "params": {"magic": {"kind": "categorical", "choices": [0, 1]}},
                 }
             },
         )
@@ -343,7 +345,7 @@ def test_roster_roundtrip_applies_tuned_params(tmp_path):
             "toy_liked_seed0.json"
         )
     assert roster[0].hyperparameter_selection["kind"] == "fixed_baseline"
-    assert knn.hyperparameter_selection["kind"] == "optuna_tpe_search"
+    assert knn.hyperparameter_selection["kind"] == "optuna_grid_search"
     assert knn.hyperparameter_selection["val_objective"] == (
         artifact["policies"]["ItemKNNPolicy"]["val_objective"]
     )

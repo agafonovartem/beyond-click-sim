@@ -29,8 +29,11 @@ from __future__ import annotations
 
 from typing import Any, Self
 
+import torch
 import numpy as np
 import pandas as pd
+from loguru import logger
+from torch_geometric.nn.models import LightGCN
 
 from beyond_click_sim.tasks.policies import Policy
 
@@ -99,8 +102,6 @@ class LightGCNTorchPolicy(Policy):
 
     @staticmethod
     def _resolve_device(requested: str) -> str:
-        import torch
-
         if requested != "auto":
             return requested
         if torch.cuda.is_available():
@@ -154,8 +155,6 @@ class LightGCNTorchPolicy(Policy):
         user_column: str = "user_id",
         item_column: str = "item_id",
     ) -> Self:
-        import torch
-        from torch_geometric.nn.models import LightGCN
 
         device_name = self._resolve_device(self.device)
         self.resolved_device = device_name
@@ -238,7 +237,7 @@ class LightGCNTorchPolicy(Policy):
         rng = np.random.default_rng(self.seed)
 
         model.train()
-        for _ in range(self.iterations):
+        for epoch in range(self.iterations):
             users, positives, negatives = self._sample_triples(
                 rng,
                 n_users=n_users,
@@ -258,6 +257,8 @@ class LightGCNTorchPolicy(Policy):
                 negatives[perm] + n_users, dtype=torch.long, device=device
             )
 
+            epoch_loss = 0.0
+            n_batches = 0
             for start in range(0, n_pairs, self.batch_size):
                 end = min(start + self.batch_size, n_pairs)
                 ub, pb, nb = u_t[start:end], p_t[start:end], n_t[start:end]
@@ -281,6 +282,15 @@ class LightGCNTorchPolicy(Policy):
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                epoch_loss += float(loss.detach())
+                n_batches += 1
+
+            if (epoch + 1) % 50 == 0 or epoch + 1 == self.iterations:
+                logger.info(
+                    f"{self.name} epoch {epoch + 1}/{self.iterations} "
+                    f"loss={epoch_loss / max(n_batches, 1):.4f} "
+                    f"device={device_name}"
+                )
 
         model.eval()
         with torch.no_grad():

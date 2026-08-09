@@ -9,7 +9,7 @@ artifacts via `build_tuned_policy_roster`.
 Usage:
     uv run python -m runners.in_distribution.policy_tuning.run
     uv run python -m runners.in_distribution.policy_tuning.run \
-        --datasets ml-1m --seeds 0 --policies ItemKNNPolicy,ALSPolicy,BPRPolicy
+        --datasets ml-1m --seeds 0 --policies LightGCNTorchPolicy
 """
 
 from __future__ import annotations
@@ -123,16 +123,17 @@ def tune_one(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / artifact_filename(dataset_name, target_source_column, seed)
-    if policy_class_names is not None:
-        if not path.exists():
-            raise RuntimeError(
-                f"--policies requires an existing full artifact to merge into: "
-                f"{path}. Run without --policies first."
-            )
+    if policy_class_names is not None and path.exists():
         previous = json.loads(path.read_text(encoding="utf-8"))
         for name, entry in previous["policies"].items():
             if name not in artifact["policies"]:
                 artifact["policies"][name] = entry
+    elif policy_class_names is not None:
+        print(
+            f"warning: writing partial artifact {path.name} "
+            f"(policies={sorted(artifact['policies'])})",
+            flush=True,
+        )
     path.write_text(
         json.dumps(json_safe(artifact), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -165,9 +166,14 @@ def emit_configs(
             for seed in resolve_seeds(setup, requested_seeds):
                 path = artifacts_dir / artifact_filename(dataset_name, target, seed)
                 if path.exists():
-                    seed_to_artifact[seed] = json.loads(
-                        path.read_text(encoding="utf-8")
-                    )
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                    missing = sorted(set(POLICY_CLASSES) - set(payload.get("policies", {})))
+                    if missing:
+                        raise RuntimeError(
+                            f"Partial artifact {path.name} is missing policies "
+                            f"{missing}; finish tuning before --emit-config."
+                        )
+                    seed_to_artifact[seed] = payload
                 else:
                     print(
                         f"warning: no artifact for {setup}/{dataset_name}/"
@@ -214,8 +220,9 @@ def main() -> None:
         "--policies",
         default=None,
         help=(
-            "Comma-separated policy class names to tune (subset; merges into an "
-            "existing artifact). Default: all policies."
+            "Comma-separated policy class names to tune (subset). Writes a "
+            "partial artifact if none exists yet; otherwise merges into the "
+            "existing file. Default: all policies."
         ),
     )
     parser.add_argument("--output-dir", default=str(DEFAULT_ARTIFACTS_DIR))

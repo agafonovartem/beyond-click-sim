@@ -123,7 +123,8 @@ Six policies are compared, spanning the main families of collaborative filtering
 | `ItemKNNPolicy` | Memory-based CF (item-item cosine similarity) | `k`, `n_neighbors=20`, `seed` |
 | `ALSPolicy` | Matrix factorization via ALS | `k`, `n_factors=64`, `iterations=20`, `seed` |
 | `BPRPolicy` | MF via Bayesian Personalized Ranking | `k`, `n_factors=64`, `learning_rate=0.01`, `regularization=0.01`, `iterations=100`, `seed` |
-| `LightGCNPolicy` | Graph CF (LightGCN, He et al. 2020) | `k`, `n_factors=64`, `n_layers=3`, `learning_rate=0.001`, `regularization=1e-4`, `iterations=200`, `seed` |
+| `LightGCNTorchPolicy` | Graph CF (LightGCN, He et al. 2020), PyTorch/PyG backend | `k`, `n_factors=64`, `n_layers=3`, `learning_rate=0.001`, `regularization=1e-4`, `iterations=1000` (mini-batch epochs), `batch_size=2048`, `device="auto"`, `seed` |
+| `LightGCNPolicy` | Same model, pure-NumPy full-batch backend — **reference/fallback only, not in the roster** | `k`, `n_factors=64`, `n_layers=3`, `learning_rate=0.001`, `regularization=1e-4`, `iterations=200` (full-batch updates), `seed` |
 
 All policy classes implement the `Policy` ABC:
 - `fit(train_interactions, *, items, ...)` → `Self` — trains the model on the train split
@@ -274,7 +275,7 @@ The runner builds each task once (fitting all 6 policies on the train split), th
 
 **No validation split.** Q3 requires no hyperparameter tuning at evaluation time — policies are fixed, and the scorer uses `temperature=0.0`. The val split is always empty.
 
-**L2 regularization on initial embeddings only (LightGCN).** Per LightGCN paper Section 3.3, regularization is applied to `E0` (the initial embedding matrix), not to the propagated `E_final`. This is critical for correct gradient computation and is implemented accordingly in `LightGCNPolicy`.
+**L2 regularization on initial embeddings only (LightGCN).** Per LightGCN paper Section 3.3, regularization is applied to `E0` (the initial embedding matrix), not to the propagated `E_final`. This is critical for correct gradient computation and is implemented accordingly in both backends. In `LightGCNTorchPolicy` the penalty covers the layer-0 embeddings of each batch triple over a mean BPR loss, matching the author-endorsed reference implementation; note that the NumPy backend sums the loss over all pairs instead, which makes the same nominal `regularization=1e-4` contribute ~0.01% of the gradient there.
 
 **Cross-policy deduplication (itemwise mode).** When the same item appears in multiple policies' recommendation lists for the same user, the LLM is called only once per `(user, item)` pair and the score is broadcast. This is correct because the itemwise scorer is context-independent of which policy recommended the item.
 

@@ -13,6 +13,7 @@ __pycache__/
 .vscode/
 *.vsix
 logs/
+artifacts/*
 
 # Generated outputs are large. Track only compact run provenance/metric JSONs.
 /outputs/*
