@@ -200,3 +200,57 @@ def test_empty_policies_raises():
             splitter=RandomFractionSplitter(0.7, 0.0, 0.3, seed=0),
             policies=[],
         )
+
+
+def test_duplicate_policy_names_raise():
+    with pytest.raises(ValueError, match="unique"):
+        PolicyRankingTaskBuilder(
+            name="bad",
+            dataset_filter=MinUserInteractionsFilter(min_interactions=3),
+            splitter=RandomFractionSplitter(0.7, 0.0, 0.3, seed=0),
+            policies=[RandomPolicy(k=3, seed=0), RandomPolicy(k=3, seed=0)],
+        )
+
+
+def test_named_same_class_variants_build_distinct_policy_rows(tmp_path):
+    dataset = _write_toy_dataset(tmp_path / "ds")
+    task = _make_builder(
+        policies=[
+            RandomPolicy(k=3, seed=0, name="rand_a"),
+            RandomPolicy(k=3, seed=1, name="rand_b"),
+        ]
+    ).build(dataset)
+    policies_in_test = set(task.test["policy"].unique())
+    assert policies_in_test == {"rand_a", "rand_b"}
+    manifest_names = {p["name"] for p in task.manifest["policies"]}
+    assert manifest_names == {"rand_a", "rand_b"}
+
+
+def test_manifest_records_policy_hyperparameters(tmp_path):
+    dataset = _write_toy_dataset(tmp_path / "ds")
+    task = _make_builder().build(dataset)
+    entries = {p["name"]: p for p in task.manifest["policies"]}
+    assert entries["PopularityPolicy"]["hyperparameters"]["k"] == 3
+    assert entries["RandomPolicy"]["hyperparameters"]["seed"] == 0
+    # Untuned policies have no selection record.
+    assert entries["RandomPolicy"]["hyperparameter_selection"] is None
+    assert entries["PopularityPolicy"]["hyperparameter_selection"] is None
+
+
+def test_manifest_records_policy_training_signal(tmp_path):
+    dataset = _write_toy_dataset(tmp_path / "ds")
+    task = _make_builder(
+        policies=[
+            RandomPolicy(k=3, seed=0),
+            PopularityPolicy(
+                k=3, seed=0, positive_feedback_column="target_interact"
+            ),
+        ]
+    ).build(dataset)
+    entries = {p["name"]: p for p in task.manifest["policies"]}
+    assert entries["RandomPolicy"]["positive_feedback_column"] is None
+    popularity = entries["PopularityPolicy"]
+    assert popularity["positive_feedback_column"] == "target_interact"
+    # target_interact is all-ones, so the filter keeps every train row.
+    assert popularity["fit_rows"] == len(task.train)
+    assert popularity["fit_users"] == task.train["user_id"].nunique()

@@ -7,13 +7,9 @@ from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
 
-from beyond_click_sim.evaluation import (
-    binary_classification_metrics,
-    grouped_binary_classification_metrics,
-    user_grouped_binary_classification_metrics,
-)
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import LLMInteractionYesNoScorer
+from beyond_click_sim.scorers.base import Scorer
 from beyond_click_sim.tasks import split_xy
 from beyond_click_sim.tasks.cold_start import ColdStartTask
 from runners.in_distribution.llm_error_budget import (
@@ -22,16 +18,29 @@ from runners.in_distribution.llm_error_budget import (
     LLMErrorRateExceededError,
     check_error_budget,
 )
+from runners.in_distribution.item_summaries import (
+    ITEM_SUMMARY_COLUMN,
+    ITEM_SUMMARY_COLUMN_LABEL,
+    SummaryVisibility,
+    maybe_add_item_summary_prompt_columns,
+    resolve_item_summary_visibility,
+    task_item_summary_metadata,
+)
 from runners.in_distribution.llm_item_stats import (
     item_rating_column_labels,
     maybe_add_item_rating_prompt_columns,
 )
 from runners.in_distribution.interaction_prediction.methods.common import (
     candidate_group_summary,
+    cold_start_metadata,
     current_git_commit,
+    failure_as_negative_pointwise_metrics,
     limit_candidate_groups,
+    pointwise_metrics_for_split,
     prediction_frame,
     ranking_metrics_for_split,
+    ranking_metrics_with_failed_groups_as_zero,
+    score_coverage_summary,
     task_xy,
     write_json,
 )
@@ -63,7 +72,8 @@ TEMPERATURE = 0.0
 MAX_TOKENS = 256
 MAX_LLM_ATTEMPTS = 5
 OLLAMA_MAX_WORKERS = 1
-VLLM_MAX_WORKERS = 128
+# VLLM_MAX_WORKERS = 128
+VLLM_MAX_WORKERS = 240
 
 DATASET_PROMPT_COLUMNS = {
     "ml-1m": {
@@ -293,6 +303,174 @@ def run_qwen36_35b_a3b_itemwise_full(
     )
 
 
+def _sumboth_kwargs(scoring: str, *, qwen: bool) -> dict[str, object]:
+    return {
+        "summary_visibility": "both",
+        "scoring": scoring,
+        **({"extra_body": QWEN_EXTRA_BODY} if qwen else {}),
+    }
+
+
+def run_llama31_8b_sumboth_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_sumboth_smoke",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT, model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=25, max_workers=OLLAMA_MAX_WORKERS,
+        **_sumboth_kwargs("batch", qwen=False),
+    )
+
+
+def run_llama31_8b_sumboth_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_sumboth_full",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT, model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=None, max_workers=OLLAMA_MAX_WORKERS,
+        **_sumboth_kwargs("batch", qwen=False),
+    )
+
+
+def run_llama31_8b_itemwise_sumboth_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_itemwise_sumboth_smoke",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT, model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=25, max_workers=OLLAMA_MAX_WORKERS,
+        **_sumboth_kwargs("itemwise", qwen=False),
+    )
+
+
+def run_llama31_8b_itemwise_sumboth_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{OLLAMA_LLAMA31_8B_METHOD_NAME}_itemwise_sumboth_full",
+        client_name=OLLAMA_LLAMA31_8B_CLIENT, model=OLLAMA_LLAMA31_8B_MODEL,
+        max_candidate_groups=None, max_workers=OLLAMA_MAX_WORKERS,
+        **_sumboth_kwargs("itemwise", qwen=False),
+    )
+
+
+def run_llama33_70b_sumboth_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_sumboth_smoke",
+        client_name=VLLM_LLAMA33_70B_CLIENT, model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=25, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("batch", qwen=False),
+    )
+
+
+def run_llama33_70b_sumboth_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_sumboth_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT, model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=None, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("batch", qwen=False),
+    )
+
+
+def run_llama33_70b_itemwise_sumboth_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_itemwise_sumboth_smoke",
+        client_name=VLLM_LLAMA33_70B_CLIENT, model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=25, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("itemwise", qwen=False),
+    )
+
+
+def run_llama33_70b_itemwise_sumboth_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_LLAMA33_70B_METHOD_NAME}_itemwise_sumboth_full",
+        client_name=VLLM_LLAMA33_70B_CLIENT, model=VLLM_LLAMA33_70B_MODEL,
+        max_candidate_groups=None, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("itemwise", qwen=False),
+    )
+
+
+def run_qwen36_27b_sumboth_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_sumboth_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT, model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("batch", qwen=True),
+    )
+
+
+def run_qwen36_27b_sumboth_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_sumboth_full",
+        client_name=VLLM_QWEN36_27B_CLIENT, model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("batch", qwen=True),
+    )
+
+
+def run_qwen36_27b_itemwise_sumboth_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_sumboth_smoke",
+        client_name=VLLM_QWEN36_27B_CLIENT, model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("itemwise", qwen=True),
+    )
+
+
+def run_qwen36_27b_itemwise_sumboth_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_sumboth_full",
+        client_name=VLLM_QWEN36_27B_CLIENT, model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("itemwise", qwen=True),
+    )
+
+
+def run_qwen36_35b_a3b_sumboth_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_sumboth_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT, model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("batch", qwen=True),
+    )
+
+
+def run_qwen36_35b_a3b_sumboth_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_sumboth_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT, model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("batch", qwen=True),
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_sumboth_smoke(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_sumboth_smoke",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT, model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("itemwise", qwen=True),
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_sumboth_full(task: ColdStartTask, output_dir: Path) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_sumboth_full",
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT, model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None, max_workers=VLLM_MAX_WORKERS,
+        **_sumboth_kwargs("itemwise", qwen=True),
+    )
+
+
 def run_method(
     task: ColdStartTask,
     output_dir: Path,
@@ -308,6 +486,7 @@ def run_method(
     max_workers: int = 1,
     use_item_stats: bool = False,
     extra_body: dict | None = None,
+    summary_visibility: SummaryVisibility = "none",
     scoring: str = "itemwise",
     max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
     min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
@@ -320,21 +499,37 @@ def run_method(
 
     `scoring="itemwise"` (default) issues one LLM call per candidate. `scoring="batch"`
     issues one LLM call per full candidate group (all positives + negatives together).
+
+    `summary_visibility` controls movie summaries (ml-1m only): "history" appends
+    summaries to profile items (online_session_history only — never post-k items),
+    "candidate" appends them to candidate items, "both" does both.
     """
 
     if scoring not in ("batch", "itemwise"):
         raise ValueError(f"scoring must be 'batch' or 'itemwise', got {scoring!r}")
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
+    resolved_summary_visibility = resolve_item_summary_visibility(summary_visibility)
     prompt_columns = maybe_add_item_rating_prompt_columns(
         dataset_name,
         DATASET_PROMPT_COLUMNS[dataset_name],
         use_item_stats=use_item_stats,
     )
+    prompt_columns = maybe_add_item_summary_prompt_columns(
+        dataset_name,
+        prompt_columns,
+        history_item_summaries=resolved_summary_visibility["history"],
+        candidate_item_summaries=resolved_summary_visibility["candidate"],
+    )
     column_labels = item_rating_column_labels(
         dataset_name,
         use_item_stats=use_item_stats,
     )
+    if resolved_summary_visibility["any"]:
+        column_labels = {
+            **column_labels,
+            ITEM_SUMMARY_COLUMN: ITEM_SUMMARY_COLUMN_LABEL,
+        }
     candidate_group_column = task.schema.candidate_group_column
     if candidate_group_column is None:
         raise ValueError("LLM yes/no method requires candidate_group_column")
@@ -352,6 +547,12 @@ def run_method(
         *xy["test"],
         candidate_group_column=candidate_group_column,
         max_candidate_groups=max_candidate_groups,
+    )
+    item_summary_metadata = task_item_summary_metadata(
+        task,
+        history=resolved_summary_visibility["history"],
+        candidate=resolved_summary_visibility["candidate"],
+        extra_frames={"online_session_history": task.online_session_history},
     )
 
     scorer = LLMInteractionYesNoScorer(
@@ -394,31 +595,42 @@ def run_method(
         y=y_test,
         scores=scores,
         predictions=predictions,
+        metadata=cold_start_metadata(task),
     ).to_parquet(output_dir / "predictions.parquet", index=False)
     _write_errors(output_dir / "llm_errors.jsonl", errors)
+
+    if not valid.any():
+        raise RuntimeError("LLM scorer did not produce any valid scores")
 
     valid_scores = scores.loc[valid]
     valid_X = X_test.loc[valid].copy()
     valid_y = y_test.loc[valid].copy()
     valid_predictions = valid_scores.astype(bool).rename("prediction")
-    macro_metrics = grouped_binary_classification_metrics(
-        valid_y,
-        valid_predictions,
-        valid_X[candidate_group_column],
+    parsed_only_metrics = pointwise_metrics_for_split(
+        X=valid_X,
+        y=valid_y,
+        predictions=valid_predictions,
+        candidate_group_column=candidate_group_column,
     )
-    user_group_metrics = user_grouped_binary_classification_metrics(
-        valid_y,
-        valid_predictions,
-        valid_X[candidate_group_column],
-        valid_X["user_id"],
+    failure_as_negative_metrics = failure_as_negative_pointwise_metrics(
+        X=X_test,
+        y=y_test,
+        scores=scores,
+        candidate_group_column=candidate_group_column,
     )
-    micro_metrics = binary_classification_metrics(valid_y, valid_predictions)
     ranking_metrics = ranking_metrics_for_split(
         X=valid_X,
         y=valid_y,
         scores=valid_scores,
         candidate_group_column=candidate_group_column,
     )
+    failure_as_zero_ranking_metrics = ranking_metrics_with_failed_groups_as_zero(
+        X=X_test,
+        y=y_test,
+        scores=scores,
+        candidate_group_column=candidate_group_column,
+    )
+    coverage = score_coverage_summary(scores)
     requested_candidate_groups = candidate_group_summary(
         X_test,
         y_test,
@@ -447,6 +659,8 @@ def run_method(
             "prompt_columns": prompt_columns,
             "column_labels": column_labels,
             "uses_item_stats": use_item_stats,
+            "summary_visibility": summary_visibility,
+            "item_summaries": item_summary_metadata,
             "extra_body": extra_body,
             "prompt_style": scoring,
         },
@@ -476,11 +690,9 @@ def run_method(
         "method": method_name,
         "task": task.name,
         "main_metric": POINTWISE_MAIN_METRIC,
-        "test": {
-            "macro_by_group": macro_metrics,
-            "macro_by_user_group_mean": user_group_metrics,
-            "micro": micro_metrics,
-        },
+        "test": parsed_only_metrics,
+        "test_failure_as_negative": failure_as_negative_metrics,
+        "coverage": coverage,
         "llm_errors": len(errors),
         "scored_rows": int(valid.sum()),
         "requested_rows": int(len(X_test)),
@@ -502,6 +714,8 @@ def run_method(
             "tie_policy": RANKING_TIE_POLICY,
         },
         "test": ranking_metrics,
+        "test_failure_as_zero_group": failure_as_zero_ranking_metrics,
+        "coverage": coverage,
         "llm_errors": len(errors),
         "scored_rows": int(valid.sum()),
         "requested_rows": int(len(X_test)),
@@ -539,7 +753,7 @@ def _assign_itemwise_groups(
 
 
 def _score_groups(
-    scorer: LLMInteractionYesNoScorer,
+    scorer: Scorer,
     X: pd.DataFrame,
     *,
     candidate_group_column: str,
@@ -626,7 +840,7 @@ def _score_groups(
 
 
 def _score_one_group(
-    scorer: LLMInteractionYesNoScorer,
+    scorer: Scorer,
     group_id: object,
     group: pd.DataFrame,
     *,

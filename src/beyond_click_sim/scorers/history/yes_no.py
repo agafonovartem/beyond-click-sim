@@ -19,6 +19,8 @@ from beyond_click_sim.scorers.history.prompts import (
     OPENP5_STYLE_PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE,
     POLICY_RANKING_ITEMWISE_SYSTEM_PROMPT,
     POLICY_RANKING_ITEMWISE_USER_PROMPT_TEMPLATE,
+    POLICY_RANKING_PREFERENCE_ITEMWISE_SYSTEM_PROMPT,
+    POLICY_RANKING_PREFERENCE_ITEMWISE_USER_PROMPT_TEMPLATE,
     PREFERENCE_YES_NO_SYSTEM_PROMPT,
     PREFERENCE_YES_NO_USER_PROMPT_TEMPLATE,
     history_prompt_messages,
@@ -412,6 +414,48 @@ class LLMPreferenceYesNoScorer(LLMInteractionYesNoScorer):
             openp5_style_user_prompt=openp5_style_user_prompt,
         )
 
+    def _build_itemwise_messages(
+        self,
+        *,
+        user_id: Any,
+        candidate: Any,
+    ) -> list[dict[str, str]]:
+        """Ask the preference question for a single recommended item.
+
+        The inherited implementation asks whether the user would *interact*
+        with the item. Itemwise preference scoring must ask whether the user's
+        response would meet `target_description` instead, so that the elicited
+        answer matches the preference target it is scored against.
+        """
+
+        history = self.history_by_user_.get(user_id, []) if self.history_by_user_ else []
+        candidate_fields = self._format_item_fields(
+            row=candidate,
+            columns=self.candidate_description_columns,
+        )
+        user_prompt = POLICY_RANKING_PREFERENCE_ITEMWISE_USER_PROMPT_TEMPLATE.format(
+            history="\n".join(history)
+            if history
+            else "- No feedback history available.",
+            target_description=self.target_description,
+            candidate=candidate_fields,
+        )
+        return [
+            {
+                "role": "system",
+                "content": POLICY_RANKING_PREFERENCE_ITEMWISE_SYSTEM_PROMPT,
+            },
+            {"role": "user", "content": user_prompt},
+        ]
+
+
+_YES_NO_TRAILING_PUNCT = ".,!?;:"
+
+
+def sanitize_yes_no_answer(text: str) -> str:
+    """Normalize a yes/no token: strip, lower, drop trailing sentence punctuation."""
+    return text.strip().lower().rstrip(_YES_NO_TRAILING_PUNCT).strip()
+
 
 def parse_yes_no_response(text: str, *, labels: Sequence[str]) -> dict[str, float]:
     """Parse strict `Ck: yes/no` responses into numeric scores."""
@@ -431,7 +475,7 @@ def parse_yes_no_response(text: str, *, labels: Sequence[str]) -> dict[str, floa
         if label in parsed:
             raise ValueError(f"Duplicate candidate label: {label!r}")
 
-        answer = raw_answer.lower()
+        answer = sanitize_yes_no_answer(raw_answer)
         if answer == "yes":
             parsed[label] = 1.0
         elif answer == "no":
@@ -449,9 +493,10 @@ def parse_single_yes_no_response(text: str) -> float:
     """Parse a bare yes/no response into a numeric score (1.0 or 0.0).
 
     Accepts a response that is exactly the word 'yes' or 'no' (case-insensitive,
-    surrounding whitespace stripped). Raises ValueError for anything else.
+    surrounding whitespace stripped, trailing sentence punctuation ignored).
+    Raises ValueError for anything else.
     """
-    answer = text.strip().lower()
+    answer = sanitize_yes_no_answer(text)
     if answer == "yes":
         return 1.0
     if answer == "no":

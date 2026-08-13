@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -106,6 +106,7 @@ class Agent4RecProfileGenerator:
         title_column: str = "item_title",
         summary_column: str | None = None,
         include_conformity: bool = True,
+        activity_counts: Mapping[Any, int] | None = None,
         activity_descriptions: dict[int, str] | None = None,
         conformity_descriptions: dict[int, str] | None = None,
         diversity_descriptions: dict[int, str] | None = None,
@@ -118,7 +119,7 @@ class Agent4RecProfileGenerator:
         taste_temperature: float = 0.0,
         taste_max_tokens: int | None = None,
         taste_max_attempts: int = 5,
-        taste_max_workers: int = 1,
+        taste_max_workers: int = 16,
     ) -> None:
         profile_components_tuple = tuple(profile_components)
         if not profile_components_tuple:
@@ -154,6 +155,9 @@ class Agent4RecProfileGenerator:
         self.title_column = title_column
         self.summary_column = summary_column
         self.include_conformity = include_conformity
+        self.activity_counts = (
+            None if activity_counts is None else dict(activity_counts)
+        )
         self.activity_descriptions = (
             AGENT4REC_ACTIVITY_DESCRIPTIONS
             if activity_descriptions is None
@@ -256,6 +260,7 @@ class Agent4RecProfileGenerator:
         updated_profiles = dict(profiles)
         hits = 0
         misses = 0
+        error_count = 0
         cached_tastes: dict[Any, str] = {}
         generated_tastes: dict[Any, str] = {}
         misses_to_generate: list[tuple[Any, UserHistory, str]] = []
@@ -291,34 +296,26 @@ class Agent4RecProfileGenerator:
 
             if misses_to_generate:
                 max_workers = min(self.taste_max_workers, len(misses_to_generate))
-                if max_workers == 1:
-                    for user_id, history, cache_key in misses_to_generate:
-                        parsed = self._generate_taste(
-                            user_id=user_id,
-                            history=history,
-                        )
-                        row = self._taste_cache_row(
-                            user_id=user_id,
-                            history=history,
-                            cache_key=cache_key,
-                            parsed=parsed,
-                        )
-                        self._append_taste_cache_row(self.taste_cache_path, row)
-                        cache[cache_key] = row
-                        generated_tastes[user_id] = parsed.taste
-                else:
-                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                        futures = {
-                            executor.submit(
-                                self._generate_taste,
+                error_count_lock = threading.Lock()
+
+                def _count_error() -> None:
+                    nonlocal error_count
+                    with error_count_lock:
+                        error_count += 1
+
+                progress = tqdm(
+                    total=len(misses_to_generate),
+                    desc=f"agent4rec taste ({self.taste_model})",
+                    unit="user",
+                )
+                try:
+                    if max_workers == 1:
+                        for user_id, history, cache_key in misses_to_generate:
+                            parsed = self._generate_taste(
                                 user_id=user_id,
                                 history=history,
-                            ): (user_id, history, cache_key)
-                            for user_id, history, cache_key in misses_to_generate
-                        }
-                        for future in as_completed(futures):
-                            user_id, history, cache_key = futures[future]
-                            parsed = future.result()
+                                on_error=_count_error,
+                            )
                             row = self._taste_cache_row(
                                 user_id=user_id,
                                 history=history,
@@ -328,6 +325,35 @@ class Agent4RecProfileGenerator:
                             self._append_taste_cache_row(self.taste_cache_path, row)
                             cache[cache_key] = row
                             generated_tastes[user_id] = parsed.taste
+                            progress.set_postfix(errors=error_count)
+                            progress.update(1)
+                    else:
+                        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                            futures = {
+                                executor.submit(
+                                    self._generate_taste,
+                                    user_id=user_id,
+                                    history=history,
+                                    on_error=_count_error,
+                                ): (user_id, history, cache_key)
+                                for user_id, history, cache_key in misses_to_generate
+                            }
+                            for future in as_completed(futures):
+                                user_id, history, cache_key = futures[future]
+                                parsed = future.result()
+                                row = self._taste_cache_row(
+                                    user_id=user_id,
+                                    history=history,
+                                    cache_key=cache_key,
+                                    parsed=parsed,
+                                )
+                                self._append_taste_cache_row(self.taste_cache_path, row)
+                                cache[cache_key] = row
+                                generated_tastes[user_id] = parsed.taste
+                                progress.set_postfix(errors=error_count)
+                                progress.update(1)
+                finally:
+                    progress.close()
 
             for user_id in requested_user_ids:
                 taste = cached_tastes.get(user_id)
@@ -343,6 +369,7 @@ class Agent4RecProfileGenerator:
             "hits": hits,
             "misses": misses,
             "generated": misses,
+            "errors": error_count,
             "max_workers": min(self.taste_max_workers, max(1, misses)),
         }
         return updated_profiles
@@ -362,6 +389,11 @@ class Agent4RecProfileGenerator:
             "title_column": self.title_column,
             "summary_column": self.summary_column,
             "include_conformity": self.include_conformity,
+            "activity_source": (
+                "fit_frame_row_counts"
+                if self.activity_counts is None
+                else "external_activity_counts"
+            ),
             "diversity_top_mass": AGENT4REC_DIVERSITY_TOP_MASS,
             "trait_thresholds": self.trait_thresholds_,
         }
@@ -390,7 +422,7 @@ class Agent4RecProfileGenerator:
             required_columns.append(self.rating_column)
         self._require_columns(X, required_columns)
 
-        activity_num = X.groupby(self.user_column, sort=False).size()
+        activity_num = self._activity_num(X)
         activity_low = float(activity_num.quantile(0.60))
         activity_high = float(activity_num.quantile(0.90))
 
@@ -446,6 +478,29 @@ class Agent4RecProfileGenerator:
                     high=conformity_high,
                 )
         return traits
+
+    def _activity_num(self, X: pd.DataFrame) -> pd.Series:
+        """Per-user activity numbers for trait binning.
+
+        Defaults to row counts within the fit frame. When `activity_counts`
+        was supplied (e.g. total raw interaction counts from the full dataset,
+        pre-split and pre-truncation), those fixed user properties are used
+        instead — this keeps the activity trait non-degenerate when the fit
+        frame holds only a short per-user profile (cold start with small k).
+        """
+
+        if self.activity_counts is None:
+            return X.groupby(self.user_column, sort=False).size()
+        frame_users = list(dict.fromkeys(X[self.user_column].tolist()))
+        missing = [user_id for user_id in frame_users if user_id not in self.activity_counts]
+        if missing:
+            raise ValueError(
+                f"activity_counts is missing {len(missing)} fit-frame users: "
+                f"{missing[:5]}"
+            )
+        return pd.Series(
+            {user_id: float(self.activity_counts[user_id]) for user_id in frame_users}
+        )
 
     def _agent4rec_diversity_count_by_user(self, X: pd.DataFrame) -> pd.Series:
         """Count dominant genres per user using Agent4Rec-style top-mass logic.
@@ -541,7 +596,13 @@ class Agent4RecProfileGenerator:
             diversity_description=profile.diversity_description,
         )
 
-    def _generate_taste(self, *, user_id: Any, history: UserHistory) -> Agent4RecTasteProfile:
+    def _generate_taste(
+        self,
+        *,
+        user_id: Any,
+        history: UserHistory,
+        on_error: Callable[[], None] | None = None,
+    ) -> Agent4RecTasteProfile:
         last_error: Exception | None = None
         for attempt in range(1, self.taste_max_attempts + 1):
             try:
@@ -558,6 +619,8 @@ class Agent4RecProfileGenerator:
                 return parse_agent4rec_modify_taste_response(raw_response)
             except Exception as error:
                 last_error = error
+                if on_error is not None:
+                    on_error()
         raise RuntimeError(
             "Could not generate Agent4Rec taste profile "
             f"for user {user_id!r} after {self.taste_max_attempts} attempts"

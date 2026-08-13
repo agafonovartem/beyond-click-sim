@@ -20,17 +20,45 @@ class Policy(ABC):
 
     The output of `recommend` is consumed by a Scorer that predicts how users
     would respond to each recommended item.
+
+    By default every observed training interaction is treated as a positive
+    training signal (binary implicit feedback). With `positive_feedback_column`
+    set, policies train only on rows where that binary column is 1 — e.g. a
+    positive-preference target such as "rating >= 4". Seen-item exclusion at
+    recommend time is unaffected either way: it always uses the full
+    (unfiltered) training frame passed to `recommend`, so consumed-but-disliked
+    items are never recommended.
     """
 
-    def __init__(self, k: int, seed: int = 0) -> None:
+    def __init__(
+        self,
+        k: int,
+        seed: int = 0,
+        positive_feedback_column: str | None = None,
+        name: str | None = None,
+    ) -> None:
         if k < 1:
             raise ValueError("k must be positive.")
         self.k = k
         self.seed = seed
+        self.positive_feedback_column = positive_feedback_column
+        self._name_override = name
+        self.fit_row_count_: int | None = None
+        self.fit_user_count_: int | None = None
+        # Filled in by the tuning roster factory when hyperparameters come from
+        # an offline search artifact; recorded in task manifests.
+        self.hyperparameter_selection: dict[str, Any] | None = None
 
     @property
     def name(self) -> str:
-        """Short identifier used in the policy column and manifests."""
+        """Short identifier used in the policy column and manifests.
+
+        Defaults to the class name; an explicit override allows several
+        variants of the same policy family (different hyperparameters) in one
+        roster. Names must be unique within a task's policy roster.
+        """
+        if self._name_override:
+            return self._name_override
         return self.__class__.__name__
 
     @abstractmethod
@@ -62,6 +90,46 @@ class Policy(ABC):
         The 'rank' column holds integer rank 1..k (1 = most recommended).
         """
         ...
+
+    def _positive_rows(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """Return only the rows the policy may learn from.
+
+        With `positive_feedback_column=None` every row is kept (binary implicit
+        feedback). Otherwise only rows where the column is 1 are kept, and the
+        column must exist and be binary 0/1.
+        """
+
+        if self.positive_feedback_column is None:
+            return frame
+        if self.positive_feedback_column not in frame.columns:
+            raise ValueError(
+                "positive_feedback_column missing from training frame: "
+                f"{self.positive_feedback_column!r}"
+            )
+        values = frame[self.positive_feedback_column]
+        if not values.dropna().isin([0, 1]).all():
+            raise ValueError(
+                "positive_feedback_column must be binary 0/1, got values: "
+                f"{sorted(values.dropna().unique().tolist())}"
+            )
+        return frame[values == 1]
+
+    def _fit_frame(
+        self,
+        train_interactions: pd.DataFrame,
+        *,
+        user_column: str,
+    ) -> pd.DataFrame:
+        """Return the training frame the policy is allowed to learn from.
+
+        Applies `_positive_rows` and records post-filter fit counts for
+        manifest provenance.
+        """
+
+        fit_frame = self._positive_rows(train_interactions)
+        self.fit_row_count_ = int(len(fit_frame))
+        self.fit_user_count_ = int(fit_frame[user_column].nunique())
+        return fit_frame
 
     def _seen_items_by_user(
         self,
@@ -159,8 +227,10 @@ class PopularityPolicy(Policy):
     """Recommend the top-k most popular unseen items per user.
 
     Popularity is measured as total train interaction count per item (i.e. the
-    number of users who interacted with each item in training). Items already
-    seen by a user in training are excluded from their recommendation list.
+    number of users who interacted with each item in training). With
+    `positive_feedback_column` set, it is the count of positive-feedback rows
+    instead (e.g. preference popularity). Items already seen by a user in
+    training are excluded from their recommendation list.
     """
 
     def fit(
@@ -171,6 +241,9 @@ class PopularityPolicy(Policy):
         user_column: str = "user_id",
         item_column: str = "item_id",
     ) -> Self:
+        train_interactions = self._fit_frame(
+            train_interactions, user_column=user_column
+        )
         # Item popularity: total interaction count in training.
         popularity = (
             train_interactions.groupby(item_column, sort=False)
@@ -252,8 +325,13 @@ class ItemKNNPolicy(Policy):
     from dominating and keeps scoring tractable.
 
     Similarity is computed on the binary item-user interaction matrix (L2-normalized
-    per item). Items not seen in training have no latent representation and cannot
-    be recommended. Cold-start users (absent from training) receive no recommendations.
+    per item). With `positive_feedback_column` set, the matrix contains only
+    positive-feedback rows: items never positively rated have no representation
+    and cannot be recommended, and a user's seed items at recommend time are
+    their positively rated items only (seen-item exclusion still uses the full
+    training frame). Items not seen in training have no latent representation
+    and cannot be recommended. Cold-start users (absent from training) receive
+    no recommendations.
     """
 
     def __init__(
@@ -261,8 +339,15 @@ class ItemKNNPolicy(Policy):
         k: int,
         n_neighbors: int = 20,
         seed: int = 0,
+        positive_feedback_column: str | None = None,
+        name: str | None = None,
     ) -> None:
-        super().__init__(k=k, seed=seed)
+        super().__init__(
+            k=k,
+            seed=seed,
+            positive_feedback_column=positive_feedback_column,
+            name=name,
+        )
         if n_neighbors < 1:
             raise ValueError("n_neighbors must be positive.")
         self.n_neighbors = n_neighbors
@@ -278,6 +363,9 @@ class ItemKNNPolicy(Policy):
         from sklearn.neighbors import NearestNeighbors
         from sklearn.preprocessing import normalize
 
+        train_interactions = self._fit_frame(
+            train_interactions, user_column=user_column
+        )
         items_seen = train_interactions[item_column].unique()
         users_seen = train_interactions[user_column].unique()
 
@@ -328,12 +416,24 @@ class ItemKNNPolicy(Policy):
             user_column=user_column,
             item_column=item_column,
         )
+        # Seed items are the user's *positive* feedback only: a disliked item
+        # can still be in the fitted item space (positive for other users), so
+        # filtering via `_item_idx_` membership alone is not sufficient.
+        seed_by_user = self._seen_items_by_user(
+            self._positive_rows(train_interactions),
+            user_column=user_column,
+            item_column=item_column,
+        )
         output_columns = [user_column, item_column, "policy", "rank"]
         rows: list[dict[str, Any]] = []
 
         for user_id in users[user_column]:
             seen = seen_by_user.get(user_id, set())
-            seed_indices = [self._item_idx_[it] for it in seen if it in self._item_idx_]
+            seed_indices = [
+                self._item_idx_[it]
+                for it in seed_by_user.get(user_id, set())
+                if it in self._item_idx_
+            ]
             if not seed_indices:
                 continue
 
@@ -379,6 +479,7 @@ class ALSPolicy(Policy):
     binary user-item interaction matrix. Each observed interaction is treated
     as a positive signal; duplicate (user, item) pairs in training accumulate
     to higher confidence, consistent with standard implicit-feedback MF practice.
+    With `positive_feedback_column` set, only positive-feedback rows are used.
 
     Only items seen in training have latent factors and can be recommended.
     Cold-start users (absent from training) receive no recommendations.
@@ -390,14 +491,29 @@ class ALSPolicy(Policy):
         n_factors: int = 64,
         iterations: int = 20,
         seed: int = 0,
+        positive_feedback_column: str | None = None,
+        regularization: float = 0.01,
+        alpha: float = 1.0,
+        name: str | None = None,
     ) -> None:
-        super().__init__(k=k, seed=seed)
+        super().__init__(
+            k=k,
+            seed=seed,
+            positive_feedback_column=positive_feedback_column,
+            name=name,
+        )
         if n_factors < 1:
             raise ValueError("n_factors must be positive.")
         if iterations < 1:
             raise ValueError("iterations must be positive.")
+        if regularization <= 0:
+            raise ValueError("regularization must be positive.")
+        if alpha < 0:
+            raise ValueError("alpha must be non-negative.")
         self.n_factors = n_factors
         self.iterations = iterations
+        self.regularization = regularization
+        self.alpha = alpha
 
     def fit(
         self,
@@ -409,6 +525,9 @@ class ALSPolicy(Policy):
     ) -> Self:
         from implicit.als import AlternatingLeastSquares
 
+        train_interactions = self._fit_frame(
+            train_interactions, user_column=user_column
+        )
         users_seen = train_interactions[user_column].unique()
         items_seen = train_interactions[item_column].unique()
 
@@ -425,6 +544,8 @@ class ALSPolicy(Policy):
 
         model = AlternatingLeastSquares(
             factors=self.n_factors,
+            regularization=self.regularization,
+            alpha=self.alpha,
             iterations=self.iterations,
             random_state=self.seed,
             use_gpu=False,
@@ -434,6 +555,7 @@ class ALSPolicy(Policy):
         self._model_ = model
         self._user_idx_: dict[Any, int] = user_idx
         self._items_in_train_: list[Any] = items_seen.tolist()
+        self._item_position_: dict[Any, int] = item_idx
         self._user_item_ = user_item
         return self
 
@@ -449,12 +571,23 @@ class ALSPolicy(Policy):
         output_columns = [user_column, item_column, "policy", "rank"]
         rows: list[dict[str, Any]] = []
 
+        # Seen-exclusion uses the full (unfiltered) training frame so that
+        # consumed-but-disliked items are never recommended, even though they
+        # were excluded from the fitted matrix by a positive-feedback filter.
+        seen_by_user = self._seen_items_by_user(
+            train_interactions,
+            user_column=user_column,
+            item_column=item_column,
+        )
         n_items = len(self._items_in_train_)
         for user_id in users[user_column]:
             user_row = self._user_idx_.get(user_id)
             if user_row is None:
                 continue
-            seen_indices = set(self._user_item_[user_row].indices.tolist())
+            seen = seen_by_user.get(user_id, set())
+            seen_indices = {
+                self._item_position_[it] for it in seen if it in self._item_position_
+            }
             unseen_indices = [i for i in range(n_items) if i not in seen_indices]
             if not unseen_indices:
                 continue
@@ -485,6 +618,7 @@ class BPRPolicy(Policy):
     BPR optimizes a pairwise ranking objective via SGD: for each observed (user, item)
     pair it maximizes the predicted score over a randomly sampled unobserved item.
     This makes it better aligned with ranking tasks than pointwise MSE objectives.
+    With `positive_feedback_column` set, only positive-feedback rows are used.
 
     Only items seen in training have latent factors and can be recommended.
     Cold-start users (absent from training) receive no recommendations.
@@ -498,8 +632,15 @@ class BPRPolicy(Policy):
         regularization: float = 0.01,
         iterations: int = 100,
         seed: int = 0,
+        positive_feedback_column: str | None = None,
+        name: str | None = None,
     ) -> None:
-        super().__init__(k=k, seed=seed)
+        super().__init__(
+            k=k,
+            seed=seed,
+            positive_feedback_column=positive_feedback_column,
+            name=name,
+        )
         if n_factors < 1:
             raise ValueError("n_factors must be positive.")
         if iterations < 1:
@@ -519,6 +660,9 @@ class BPRPolicy(Policy):
     ) -> Self:
         from implicit.bpr import BayesianPersonalizedRanking
 
+        train_interactions = self._fit_frame(
+            train_interactions, user_column=user_column
+        )
         users_seen = train_interactions[user_column].unique()
         items_seen = train_interactions[item_column].unique()
 
@@ -546,6 +690,7 @@ class BPRPolicy(Policy):
         self._model_ = model
         self._user_idx_: dict[Any, int] = user_idx
         self._items_in_train_: list[Any] = items_seen.tolist()
+        self._item_position_: dict[Any, int] = item_idx
         self._user_item_ = user_item
         return self
 
@@ -561,12 +706,23 @@ class BPRPolicy(Policy):
         output_columns = [user_column, item_column, "policy", "rank"]
         rows: list[dict[str, Any]] = []
 
+        # Seen-exclusion uses the full (unfiltered) training frame so that
+        # consumed-but-disliked items are never recommended, even though they
+        # were excluded from the fitted matrix by a positive-feedback filter.
+        seen_by_user = self._seen_items_by_user(
+            train_interactions,
+            user_column=user_column,
+            item_column=item_column,
+        )
         n_items = len(self._items_in_train_)
         for user_id in users[user_column]:
             user_row = self._user_idx_.get(user_id)
             if user_row is None:
                 continue
-            seen_indices = set(self._user_item_[user_row].indices.tolist())
+            seen = seen_by_user.get(user_id, set())
+            seen_indices = {
+                self._item_position_[it] for it in seen if it in self._item_position_
+            }
             unseen_indices = [i for i in range(n_items) if i not in seen_indices]
             if not unseen_indices:
                 continue
@@ -610,6 +766,8 @@ class LightGCNPolicy(Policy):
     multiplications applied to grad_E_final.
 
     L2 regularization is applied to E0 only, per the original paper (Section 3.3).
+    With `positive_feedback_column` set, the bipartite graph contains only
+    positive-feedback rows.
 
     Cold-start users (absent from training) receive no recommendations.
     """
@@ -624,8 +782,15 @@ class LightGCNPolicy(Policy):
         iterations: int = 200,
         batch_size: int = 2048,
         seed: int = 0,
+        positive_feedback_column: str | None = None,
+        name: str | None = None,
     ) -> None:
-        super().__init__(k=k, seed=seed)
+        super().__init__(
+            k=k,
+            seed=seed,
+            positive_feedback_column=positive_feedback_column,
+            name=name,
+        )
         if n_factors < 1:
             raise ValueError("n_factors must be positive.")
         if n_layers < 1:
@@ -649,6 +814,9 @@ class LightGCNPolicy(Policy):
     ):
         from scipy.sparse import diags, hstack, vstack
 
+        train_interactions = self._fit_frame(
+            train_interactions, user_column=user_column
+        )
         # Deduplicate: treat interactions as binary
         unique_ints = train_interactions[[user_column, item_column]].drop_duplicates()
         users_seen = unique_ints[user_column].unique()

@@ -3,11 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from beyond_click_sim.evaluation import (
-    binary_classification_metrics,
-    grouped_binary_classification_metrics,
-    user_grouped_binary_classification_metrics,
-)
+import pandas as pd
+
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import Agent4RecProfileGenerator, Agent4RecYesNoScorer
 from beyond_click_sim.scorers.agent4rec.prompts import AGENT4REC_TASTE_PROMPT_VERSION
@@ -41,14 +38,22 @@ from runners.in_distribution.cold_start.metrics import (
 )
 from runners.in_distribution.interaction_prediction.methods.common import (
     candidate_group_summary,
+    cold_start_metadata,
     current_git_commit,
+    failure_as_negative_pointwise_metrics,
     limit_candidate_groups,
+    pointwise_metrics_for_split,
     prediction_frame,
     ranking_metrics_for_split,
+    ranking_metrics_with_failed_groups_as_zero,
+    score_coverage_summary,
     task_xy,
     write_json,
 )
-from runners.in_distribution.interaction_prediction.task_builders import repo_root
+from runners.in_distribution.interaction_prediction.task_builders import (
+    load_canonical_dataset,
+    repo_root,
+)
 
 
 OLLAMA_LLAMA31_8B_METHOD_NAME = "agent4rec_yes_no_ollama_llama31_8b"
@@ -75,16 +80,14 @@ TASTE_MAX_TOKENS = None
 OLLAMA_MAX_WORKERS = 1
 VLLM_MAX_WORKERS = 128
 
+# Default Agent4Rec item card matches the interaction-prediction runner:
+# title, train-only "History ratings" (item_rating_mean), genres. Requires an
+# item_stats task — plain tasks lack the column and fail fast in run_method.
 DATASET_CANDIDATE_COLUMNS: dict[str, tuple[str, ...]] = {
-    "ml-1m": ("item_title", "item_genres"),
-    "ml-1m_item_stats": ("item_title", PREFIXED_ITEM_RATING_MEAN_COLUMN, "item_genres"),
+    "ml-1m": ("item_title", PREFIXED_ITEM_RATING_MEAN_COLUMN, "item_genres"),
 }
 DATASET_COLUMN_LABELS: dict[str, dict[str, str]] = {
     "ml-1m": {
-        "item_title": "movie title",
-        "item_genres": "genres",
-    },
-    "ml-1m_item_stats": {
         "item_title": "movie title",
         PREFIXED_ITEM_RATING_MEAN_COLUMN: "History ratings",
         "item_genres": "genres",
@@ -328,154 +331,86 @@ def run_qwen36_27b_itemwise_traits_taste_gpt4o_mini_full(
     )
 
 
-def run_qwen36_27b_item_stats_smoke(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_item_stats_smoke",
-        client_name=VLLM_QWEN36_27B_CLIENT,
-        model=VLLM_QWEN36_27B_MODEL,
-        max_candidate_groups=25,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="batch",
-    )
-
-
-def run_qwen36_27b_item_stats_full(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_item_stats_full",
-        client_name=VLLM_QWEN36_27B_CLIENT,
-        model=VLLM_QWEN36_27B_MODEL,
-        max_candidate_groups=None,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="batch",
-    )
-
-
-def run_qwen36_27b_itemwise_item_stats_smoke(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_item_stats_smoke",
-        client_name=VLLM_QWEN36_27B_CLIENT,
-        model=VLLM_QWEN36_27B_MODEL,
-        max_candidate_groups=25,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="itemwise",
-    )
-
-
-def run_qwen36_27b_itemwise_item_stats_full(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_item_stats_full",
-        client_name=VLLM_QWEN36_27B_CLIENT,
-        model=VLLM_QWEN36_27B_MODEL,
-        max_candidate_groups=None,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="itemwise",
-    )
-
-
-def run_qwen36_27b_item_stats_traits_taste_gpt4o_mini_smoke(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_item_stats_traits_taste_gpt4o_mini_smoke",
-        client_name=VLLM_QWEN36_27B_CLIENT,
-        model=VLLM_QWEN36_27B_MODEL,
-        max_candidate_groups=25,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        profile_components=("traits", "taste"),
-        taste_client_name=OPENAI_CLIENT,
-        taste_model=GPT4O_MINI_TASTE_MODEL,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="batch",
-    )
-
-
-def run_qwen36_27b_item_stats_traits_taste_gpt4o_mini_full(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_27B_METHOD_NAME}_item_stats_traits_taste_gpt4o_mini_full",
-        client_name=VLLM_QWEN36_27B_CLIENT,
-        model=VLLM_QWEN36_27B_MODEL,
-        max_candidate_groups=None,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        profile_components=("traits", "taste"),
-        taste_client_name=OPENAI_CLIENT,
-        taste_model=GPT4O_MINI_TASTE_MODEL,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="batch",
-    )
-
-
-def run_qwen36_27b_itemwise_item_stats_traits_taste_gpt4o_mini_smoke(
+def run_qwen36_27b_traits_taste_gpt4o_mini_sumboth_smoke(
     task: ColdStartTask, output_dir: Path
 ) -> dict[str, object]:
     return run_method(
         task, output_dir,
         method_name=(
-            f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_item_stats_traits_taste_gpt4o_mini_smoke"
+            f"{VLLM_QWEN36_27B_METHOD_NAME}_traits_taste_gpt4o_mini_sumboth_smoke"
         ),
         client_name=VLLM_QWEN36_27B_CLIENT,
         model=VLLM_QWEN36_27B_MODEL,
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="itemwise",
+        summary_usage="both",
+        scoring="batch",
     )
 
 
-def run_qwen36_27b_itemwise_item_stats_traits_taste_gpt4o_mini_full(
+def run_qwen36_27b_traits_taste_gpt4o_mini_sumboth_full(
     task: ColdStartTask, output_dir: Path
 ) -> dict[str, object]:
     return run_method(
         task, output_dir,
         method_name=(
-            f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_item_stats_traits_taste_gpt4o_mini_full"
+            f"{VLLM_QWEN36_27B_METHOD_NAME}_traits_taste_gpt4o_mini_sumboth_full"
         ),
         client_name=VLLM_QWEN36_27B_CLIENT,
         model=VLLM_QWEN36_27B_MODEL,
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
-        summary_usage=canonical_agent4rec_summary_usage(task),
+        summary_usage="both",
+        scoring="batch",
+    )
+
+
+def run_qwen36_27b_itemwise_traits_taste_gpt4o_mini_sumboth_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=(
+            f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_traits_taste_gpt4o_mini_sumboth_smoke"
+        ),
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage="both",
+        scoring="itemwise",
+    )
+
+
+def run_qwen36_27b_itemwise_traits_taste_gpt4o_mini_sumboth_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=(
+            f"{VLLM_QWEN36_27B_METHOD_NAME}_itemwise_traits_taste_gpt4o_mini_sumboth_full"
+        ),
+        client_name=VLLM_QWEN36_27B_CLIENT,
+        model=VLLM_QWEN36_27B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage="both",
         scoring="itemwise",
     )
 
@@ -616,156 +551,103 @@ def run_qwen36_35b_a3b_itemwise_traits_taste_gpt4o_mini_full(
     )
 
 
-def run_qwen36_35b_a3b_item_stats_smoke(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_item_stats_smoke",
-        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
-        model=VLLM_QWEN36_35B_A3B_MODEL,
-        max_candidate_groups=25,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="batch",
-    )
-
-
-def run_qwen36_35b_a3b_item_stats_full(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_item_stats_full",
-        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
-        model=VLLM_QWEN36_35B_A3B_MODEL,
-        max_candidate_groups=None,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="batch",
-    )
-
-
-def run_qwen36_35b_a3b_itemwise_item_stats_smoke(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_item_stats_smoke",
-        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
-        model=VLLM_QWEN36_35B_A3B_MODEL,
-        max_candidate_groups=25,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="itemwise",
-    )
-
-
-def run_qwen36_35b_a3b_itemwise_item_stats_full(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_item_stats_full",
-        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
-        model=VLLM_QWEN36_35B_A3B_MODEL,
-        max_candidate_groups=None,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="itemwise",
-    )
-
-
-def run_qwen36_35b_a3b_item_stats_traits_taste_gpt4o_mini_smoke(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_item_stats_traits_taste_gpt4o_mini_smoke",
-        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
-        model=VLLM_QWEN36_35B_A3B_MODEL,
-        max_candidate_groups=25,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        profile_components=("traits", "taste"),
-        taste_client_name=OPENAI_CLIENT,
-        taste_model=GPT4O_MINI_TASTE_MODEL,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="batch",
-    )
-
-
-def run_qwen36_35b_a3b_item_stats_traits_taste_gpt4o_mini_full(
-    task: ColdStartTask, output_dir: Path
-) -> dict[str, object]:
-    return run_method(
-        task, output_dir,
-        method_name=f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_item_stats_traits_taste_gpt4o_mini_full",
-        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
-        model=VLLM_QWEN36_35B_A3B_MODEL,
-        max_candidate_groups=None,
-        max_workers=VLLM_MAX_WORKERS,
-        extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
-        profile_components=("traits", "taste"),
-        taste_client_name=OPENAI_CLIENT,
-        taste_model=GPT4O_MINI_TASTE_MODEL,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="batch",
-    )
-
-
-def run_qwen36_35b_a3b_itemwise_item_stats_traits_taste_gpt4o_mini_smoke(
+def run_qwen36_35b_a3b_traits_taste_gpt4o_mini_sumboth_smoke(
     task: ColdStartTask, output_dir: Path
 ) -> dict[str, object]:
     return run_method(
         task, output_dir,
         method_name=(
-            f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_item_stats_traits_taste_gpt4o_mini_smoke"
+            f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_traits_taste_gpt4o_mini_sumboth_smoke"
         ),
         client_name=VLLM_QWEN36_35B_A3B_CLIENT,
         model=VLLM_QWEN36_35B_A3B_MODEL,
         max_candidate_groups=25,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
-        summary_usage=canonical_agent4rec_summary_usage(task),
-        scoring="itemwise",
+        summary_usage="both",
+        scoring="batch",
     )
 
 
-def run_qwen36_35b_a3b_itemwise_item_stats_traits_taste_gpt4o_mini_full(
+def run_qwen36_35b_a3b_traits_taste_gpt4o_mini_sumboth_full(
     task: ColdStartTask, output_dir: Path
 ) -> dict[str, object]:
     return run_method(
         task, output_dir,
         method_name=(
-            f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_item_stats_traits_taste_gpt4o_mini_full"
+            f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_traits_taste_gpt4o_mini_sumboth_full"
         ),
         client_name=VLLM_QWEN36_35B_A3B_CLIENT,
         model=VLLM_QWEN36_35B_A3B_MODEL,
         max_candidate_groups=None,
         max_workers=VLLM_MAX_WORKERS,
         extra_body=QWEN_EXTRA_BODY,
-        use_item_stats=True,
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
-        summary_usage=canonical_agent4rec_summary_usage(task),
+        summary_usage="both",
+        scoring="batch",
+    )
+
+
+def run_qwen36_35b_a3b_itemwise_traits_taste_gpt4o_mini_sumboth_smoke(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=(
+            f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_traits_taste_gpt4o_mini_sumboth_smoke"
+        ),
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=25,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage="both",
         scoring="itemwise",
     )
+
+
+def run_qwen36_35b_a3b_itemwise_traits_taste_gpt4o_mini_sumboth_full(
+    task: ColdStartTask, output_dir: Path
+) -> dict[str, object]:
+    return run_method(
+        task, output_dir,
+        method_name=(
+            f"{VLLM_QWEN36_35B_A3B_METHOD_NAME}_itemwise_traits_taste_gpt4o_mini_sumboth_full"
+        ),
+        client_name=VLLM_QWEN36_35B_A3B_CLIENT,
+        model=VLLM_QWEN36_35B_A3B_MODEL,
+        max_candidate_groups=None,
+        max_workers=VLLM_MAX_WORKERS,
+        extra_body=QWEN_EXTRA_BODY,
+        profile_components=("traits", "taste"),
+        taste_client_name=OPENAI_CLIENT,
+        taste_model=GPT4O_MINI_TASTE_MODEL,
+        summary_usage="both",
+        scoring="itemwise",
+    )
+
+
+def _full_dataset_activity_counts(dataset_name: str) -> dict[object, int]:
+    """Per-user total raw interaction counts from the full canonical dataset.
+
+    Intentionally unused by the default cold-start Agent4Rec runner. Feeding these
+    counts into ``Agent4RecProfileGenerator(activity_counts=...)`` would expose a
+    metadata leak: totals include post-k / evaluation-period interactions, so the
+    activity trait in the system prompt would depend on held-out behavior rather
+    than the k-item profile alone. Kept only for an explicit ablation that opts
+    into that visibility condition.
+    """
+
+    interactions = load_canonical_dataset(dataset_name).load_interactions()
+    return interactions.groupby("user_id", sort=False).size().to_dict()
 
 
 def run_method(
@@ -777,7 +659,6 @@ def run_method(
     model: str,
     max_candidate_groups: int | None,
     profile_components: tuple[str, ...] = ("traits",),
-    use_item_stats: bool = False,
     taste_client_name: str | None = None,
     taste_model: str | None = None,
     taste_temperature: float = TASTE_TEMPERATURE,
@@ -793,13 +674,28 @@ def run_method(
     scoring: str = "itemwise",
     max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
     min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
+    activity_counts: dict[object, int] | None = None,
 ) -> dict[str, object]:
     """Run Agent4Rec yes/no scorer for cold-start evaluation.
 
     Fits on task.online_session_history (the cold user's k earliest interactions).
     task.train contains only warm users and provides no per-cold-user context.
-    Trait groupings are degenerate for k=1 (all users same activity count) but
-    valid; more informative for k=3 and k=5.
+
+    The default item card includes train-only "History ratings"
+    (item_rating_mean, computed from warm task.train interactions only), matching
+    the interaction-prediction Agent4Rec default. Requires an item_stats task.
+
+    Activity defaults to fit-frame row counts (``activity_counts=None``). On the
+    k-item profile that makes every cold user equally active, so the activity
+    trait is degenerate — preferred over feeding full-dataset totals, which would
+    leak evaluation-period interaction volume into the system prompt. Pass
+    ``activity_counts=_full_dataset_activity_counts(...)`` only for an explicit
+    metadata-visibility ablation. Diversity/conformity still come from the
+    k-item profile.
+
+    ``summary_usage="profile"|"both"`` puts profile-item summaries into the
+    taste-generation prompt; the summaries cover only online_session_history
+    items and require "taste" in profile_components (traits never see summaries).
 
     `scoring="itemwise"` (default) issues one LLM call per candidate. `scoring="batch"`
     issues one LLM call per full candidate group (all positives + negatives together).
@@ -808,21 +704,26 @@ def run_method(
         raise ValueError(f"scoring must be 'batch' or 'itemwise', got {scoring!r}")
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
-    config_key = f"{dataset_name}_item_stats" if use_item_stats else dataset_name
-    if config_key not in DATASET_CANDIDATE_COLUMNS:
+    if dataset_name not in DATASET_CANDIDATE_COLUMNS:
         raise ValueError(
-            f"Agent4Rec cold-start: no prompt config for dataset {dataset_name!r} "
-            f"(use_item_stats={use_item_stats})"
+            f"Agent4Rec cold-start: no prompt config for dataset {dataset_name!r}"
         )
+    uses_taste = "taste" in profile_components
     resolved_summary_usage = resolve_agent4rec_summary_usage(summary_usage)
-    if resolved_summary_usage["profile"]:
-        raise ValueError("Agent4Rec cold start supports summaries only for candidates")
+    if resolved_summary_usage["profile"] and not uses_taste:
+        raise ValueError(
+            "Agent4Rec summary_usage='profile' or 'both' requires "
+            "'taste' in profile_components: profile summaries are only visible "
+            "in the taste-generation prompt"
+        )
     item_summary_metadata = task_item_summary_metadata(
         task,
+        profile=resolved_summary_usage["profile"],
         candidate=resolved_summary_usage["candidate"],
+        extra_frames={"online_session_history": task.online_session_history},
     )
-    candidate_columns = DATASET_CANDIDATE_COLUMNS[config_key]
-    column_labels = dict(DATASET_COLUMN_LABELS[config_key])
+    candidate_columns = DATASET_CANDIDATE_COLUMNS[dataset_name]
+    column_labels = dict(DATASET_COLUMN_LABELS[dataset_name])
     if resolved_summary_usage["candidate"]:
         candidate_columns = (*candidate_columns, ITEM_SUMMARY_COLUMN)
         column_labels[ITEM_SUMMARY_COLUMN] = ITEM_SUMMARY_COLUMN_LABEL
@@ -843,8 +744,8 @@ def run_method(
         max_candidate_groups=max_candidate_groups,
     )
     profile_user_ids = X_test["user_id"].drop_duplicates().tolist()
+    _require_columns(X_test, list(candidate_columns))
 
-    uses_taste = "taste" in profile_components
     if uses_taste:
         if not taste_client_name:
             raise ValueError("taste_client_name is required for taste profiles")
@@ -854,14 +755,19 @@ def run_method(
             task,
             taste_model=taste_model,
             taste_prompt_version=AGENT4REC_TASTE_PROMPT_VERSION,
+            use_history_item_summaries=resolved_summary_usage["profile"],
         )
         taste_client = make_llm_client(taste_client_name)
     else:
         taste_cache_path = None
         taste_client = None
 
+    # Default activity_counts=None: use fit-frame counts only. Do not pass
+    # _full_dataset_activity_counts(...) here — that includes post-k / eval
+    # interactions and leaks lifetime activity metadata into the prompt.
     profile_generator = Agent4RecProfileGenerator(
         profile_components=profile_components,
+        activity_counts=activity_counts,
         taste_client=taste_client,
         taste_client_name=taste_client_name,
         taste_model=taste_model,
@@ -870,6 +776,9 @@ def run_method(
         taste_temperature=taste_temperature,
         taste_max_tokens=taste_max_tokens,
         taste_max_attempts=taste_max_attempts,
+        summary_column=(
+            ITEM_SUMMARY_COLUMN if resolved_summary_usage["profile"] else None
+        ),
     )
     scorer = Agent4RecYesNoScorer(
         client=make_llm_client(client_name),
@@ -914,27 +823,42 @@ def run_method(
         y=y_test,
         scores=scores,
         predictions=predictions,
+        metadata=cold_start_metadata(task),
     ).to_parquet(output_dir / "predictions.parquet", index=False)
     _write_errors(output_dir / "llm_errors.jsonl", errors)
+
+    if not valid.any():
+        raise RuntimeError("Agent4Rec scorer did not produce any valid scores")
 
     valid_scores = scores.loc[valid]
     valid_X = X_test.loc[valid].copy()
     valid_y = y_test.loc[valid].copy()
     valid_predictions = valid_scores.astype(bool).rename("prediction")
-
-    macro_metrics = grouped_binary_classification_metrics(
-        valid_y, valid_predictions, valid_X[candidate_group_column]
+    parsed_only_metrics = pointwise_metrics_for_split(
+        X=valid_X,
+        y=valid_y,
+        predictions=valid_predictions,
+        candidate_group_column=candidate_group_column,
     )
-    user_group_metrics = user_grouped_binary_classification_metrics(
-        valid_y, valid_predictions, valid_X[candidate_group_column], valid_X["user_id"]
+    failure_as_negative_metrics = failure_as_negative_pointwise_metrics(
+        X=X_test,
+        y=y_test,
+        scores=scores,
+        candidate_group_column=candidate_group_column,
     )
-    micro_metrics = binary_classification_metrics(valid_y, valid_predictions)
     ranking_metrics = ranking_metrics_for_split(
         X=valid_X,
         y=valid_y,
         scores=valid_scores,
         candidate_group_column=candidate_group_column,
     )
+    failure_as_zero_ranking_metrics = ranking_metrics_with_failed_groups_as_zero(
+        X=X_test,
+        y=y_test,
+        scores=scores,
+        candidate_group_column=candidate_group_column,
+    )
+    coverage = score_coverage_summary(scores)
     requested_candidate_groups = candidate_group_summary(
         X_test, y_test,
         candidate_group_column=candidate_group_column,
@@ -953,7 +877,6 @@ def run_method(
             "class": "Agent4RecYesNoScorer",
             "fit_on": "online_session_history",
             "k": task.k,
-            "use_item_stats": use_item_stats,
             "client_name": client_name,
             "model": model,
             "temperature": temperature,
@@ -993,11 +916,9 @@ def run_method(
         "method": method_name,
         "task": task.name,
         "main_metric": POINTWISE_MAIN_METRIC,
-        "test": {
-            "macro_by_group": macro_metrics,
-            "macro_by_user_group_mean": user_group_metrics,
-            "micro": micro_metrics,
-        },
+        "test": parsed_only_metrics,
+        "test_failure_as_negative": failure_as_negative_metrics,
+        "coverage": coverage,
         "llm_errors": len(errors),
         "scored_rows": int(valid.sum()),
         "requested_rows": int(len(X_test)),
@@ -1019,6 +940,8 @@ def run_method(
             "tie_policy": RANKING_TIE_POLICY,
         },
         "test": ranking_metrics,
+        "test_failure_as_zero_group": failure_as_zero_ranking_metrics,
+        "coverage": coverage,
         "llm_errors": len(errors),
         "scored_rows": int(valid.sum()),
         "requested_rows": int(len(X_test)),
@@ -1036,23 +959,35 @@ def run_method(
     return result
 
 
+def _require_columns(frame: pd.DataFrame, columns: list[str]) -> None:
+    missing = [column for column in columns if column not in frame.columns]
+    if missing:
+        raise ValueError(
+            "Agent4Rec cold start requires item-stats task columns for the "
+            f"candidate prompt. Missing columns: {missing}. Run on an "
+            "item_stats task variant."
+        )
+
+
 def agent4rec_taste_cache_path(
     task: ColdStartTask,
     *,
     taste_model: str,
     taste_prompt_version: str,
+    use_history_item_summaries: bool = False,
 ) -> Path:
     dataset_name = str(task.manifest["dataset"])
     dataset_version = str(task.manifest["dataset_version"])
     split_seed = task.manifest["splitter"]["seed"]
     model_slug = _cache_slug(taste_model)
+    summary_slug = "_summary" if use_history_item_summaries else ""
     return (
         repo_root()
         / "outputs"
         / "agent4rec_taste_cache"
         / (
             f"{dataset_name}_{dataset_version}_seed{split_seed}_"
-            f"{model_slug}_{taste_prompt_version}.jsonl"
+            f"{model_slug}_{taste_prompt_version}{summary_slug}.jsonl"
         )
     )
 

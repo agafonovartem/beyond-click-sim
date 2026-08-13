@@ -23,7 +23,10 @@ from beyond_click_sim.scorers.history.selection import (
     UserHistory,
     select_history_by_user,
 )
-from beyond_click_sim.scorers.history.yes_no import parse_single_yes_no_response
+from beyond_click_sim.scorers.history.yes_no import (
+    parse_single_yes_no_response,
+    sanitize_yes_no_answer,
+)
 
 
 class Agent4RecYesNoScorer(Scorer):
@@ -547,7 +550,7 @@ def _parse_agent4rec_binary_response(
             duplicate_labels.append(label)
             continue
 
-        decision = raw_decision.strip().strip(";").lower()
+        decision = sanitize_yes_no_answer(raw_decision)
         if decision == "yes":
             parsed[label] = 1.0
         elif decision == "no":

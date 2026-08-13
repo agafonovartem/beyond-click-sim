@@ -53,7 +53,7 @@ def _ml1m_cold_task(
     *,
     history_user_id: str = "u1",
     train_rows: list[dict] | None = None,
-    include_item_rating_mean: bool = False,
+    include_item_rating_mean: bool = True,
     dataset: str = "ml-1m",
 ) -> ColdStartTask:
     """Minimal two-item ml-1m ColdStartTask.
@@ -211,6 +211,10 @@ def test_cold_start_agent4rec_runner_writes_all_artifacts(
     assert predictions["score"].tolist() == [1.0, 0.0]
     assert predictions["prediction"].tolist() == [True, False]
 
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    profile_generator = manifest["scorer"]["profile_generator"]
+    assert profile_generator["activity_source"] == "fit_frame_row_counts"
+
 
 # ---------------------------------------------------------------------------
 # Itemwise scoring — default mode
@@ -348,9 +352,10 @@ def test_cold_start_agent4rec_runner_manifest_records_fit_on_history_and_k(
     assert manifest["scorer"]["k"] == task.k
     assert manifest["scorer"]["class"] == "Agent4RecYesNoScorer"
     assert manifest["scorer"]["prompt_style"] == "batch"
-    # Basic ml-1m config must NOT include item_rating_mean
+    # Default ml-1m card: title, train-only History ratings, genres, + summary
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
+        "item_rating_mean",
         "item_genres",
         "item_summary",
     ]
@@ -358,11 +363,11 @@ def test_cold_start_agent4rec_runner_manifest_records_fit_on_history_and_k(
 
 
 # ---------------------------------------------------------------------------
-# item_stats path — rating_mean column selected in prompt
+# Default item card — train-only History ratings in the candidate prompt
 # ---------------------------------------------------------------------------
 
 
-def test_cold_start_agent4rec_runner_item_stats_includes_rating_mean_column(
+def test_cold_start_agent4rec_runner_default_card_includes_rating_mean_column(
     tmp_path: Path, monkeypatch
 ) -> None:
     client = FakeClient(
@@ -373,22 +378,20 @@ def test_cold_start_agent4rec_runner_item_stats_includes_rating_mean_column(
     )
     monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: client)
 
-    task = _ml1m_cold_task(include_item_rating_mean=True)
+    task = _ml1m_cold_task()
     agent4rec_yes_no.run_method(
         task,
         tmp_path,
-        method_name="test_item_stats",
+        method_name="test_default_card",
         client_name="fake",
         model="fake-model",
         max_candidate_groups=None,
         max_llm_attempts=1,
         max_workers=1,
-        use_item_stats=True,
         scoring="batch",
     )
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["scorer"]["use_item_stats"] is True
     assert "item_rating_mean" in manifest["scorer"]["candidate_description_columns"]
 
     user_prompt = client.completions.calls[0]["messages"][1]["content"]
@@ -742,3 +745,242 @@ def test_cold_start_agent4rec_runner_fails_fast_and_persists_partial_errors(
     assert not (tmp_path / "manifest.json").exists()
     assert not (tmp_path / "metrics.json").exists()
     assert not (tmp_path / "metrics_ranking.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# Failure-aware metric variants
+# ---------------------------------------------------------------------------
+
+
+def _two_group_cold_task() -> ColdStartTask:
+    """Two candidate groups (g1, g2) of two rows each for user u1."""
+    base = _ml1m_cold_task()
+    test_df = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u1", "u1"],
+            "item_id": ["it1", "it2", "it3", "it4"],
+            "candidate_group": ["g1", "g1", "g2", "g2"],
+            "item_title": ["Lion King", "Godfather", "Toy Story", "Heat"],
+            "item_genres": ["Animation", "Crime", "Animation", "Crime"],
+            "item_summary": [
+                "A lion prince returns to reclaim his kingdom.",
+                "A crime family transfers power to a reluctant son.",
+                "Toys come alive when people are absent.",
+                "A detective pursues a disciplined thief.",
+            ],
+            "item_rating_mean": [4.15, 4.57, 4.15, 3.60],
+            "sampled": [False, True, False, True],
+            "target": [1, 0, 1, 0],
+        }
+    )
+    return ColdStartTask(
+        name=base.name,
+        train=base.train,
+        val=base.val,
+        test=test_df,
+        online_session_history=base.online_session_history,
+        k=base.k,
+        schema=base.schema,
+        manifest=base.manifest,
+    )
+
+
+def test_cold_start_agent4rec_runner_reports_failure_aware_metric_variants(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """One group parses, one fails: parsed-only metrics exclude the failed
+    group while the failure-aware variants penalize it."""
+
+    client = FakeClient(
+        [
+            "ID: C1; MOVIE: Lion King; WATCH: yes; REASON: fits\n"
+            "ID: C2; MOVIE: Godfather; WATCH: no; REASON: not fit",
+            "maybe",
+        ]
+    )
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: client)
+    task = _two_group_cold_task()
+
+    result = agent4rec_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="agent4rec_failure_variants_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        scoring="batch",
+        max_error_rate=0.5,
+        min_groups_before_check=1,
+    )
+
+    assert result["llm_errors"] == 1
+    assert result["scored_rows"] == 2
+    assert result["requested_rows"] == 4
+
+    coverage = result["coverage"]
+    assert coverage["requested_rows"] == 4
+    assert coverage["scored_rows"] == 2
+    assert coverage["failed_fraction"] == 0.5
+
+    # parsed-only: only g1 rows, predicted [yes, no] against targets [1, 0]
+    assert result["test"]["micro"]["recall"] == 1.0
+    # failure-as-negative: the failed g2 positive counts as "no"
+    assert result["test_failure_as_negative"]["micro"]["recall"] == 0.5
+    assert result["test_failure_as_negative"]["micro"]["precision"] == 1.0
+
+    ranking = json.loads(
+        (tmp_path / "metrics_ranking.json").read_text(encoding="utf-8")
+    )
+    assert ranking["test"]["macro_by_group"]["hit_rate@1"] == 1.0
+    assert (
+        ranking["test_failure_as_zero_group"]["macro_by_group"]["hit_rate@1"]
+        == 0.5
+    )
+    assert ranking["coverage"]["failed_fraction"] == 0.5
+
+
+# ---------------------------------------------------------------------------
+# Default item card requirements and profile summaries
+# ---------------------------------------------------------------------------
+
+
+def test_cold_start_agent4rec_runner_fails_cleanly_on_plain_task(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The default card includes item_rating_mean; plain tasks lack it and
+    must fail at setup, not inside the scoring retry loop."""
+
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: FakeClient([]))
+    task = _ml1m_cold_task(include_item_rating_mean=False)
+
+    with pytest.raises(ValueError, match="item-stats task columns"):
+        agent4rec_yes_no.run_method(
+            task,
+            tmp_path,
+            method_name="test_plain_task",
+            client_name="fake",
+            model="fake-model",
+            max_candidate_groups=None,
+            scoring="batch",
+        )
+
+
+def test_cold_start_agent4rec_runner_profile_summaries_require_taste(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Profile summaries only reach the taste-generation prompt; without the
+    taste component the condition would be a silent no-op."""
+
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: FakeClient([]))
+    task = _ml1m_cold_task()
+
+    with pytest.raises(ValueError, match="requires"):
+        agent4rec_yes_no.run_method(
+            task,
+            tmp_path,
+            method_name="test_profile_summaries_no_taste",
+            client_name="fake",
+            model="fake-model",
+            max_candidate_groups=None,
+            profile_components=("traits",),
+            summary_usage="both",
+            scoring="batch",
+        )
+
+
+def test_cold_start_agent4rec_runner_profile_summaries_use_history_items_only(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """With summary_usage='both', the taste-generation prompt shows summaries
+    of online_session_history (profile) items only — never candidate/post-k
+    item summaries."""
+
+    scoring_client = FakeClient(
+        [
+            "ID: C2; MOVIE: Godfather; WATCH: no; REASON: not animated\n"
+            "ID: C1; MOVIE: Lion King; WATCH: yes; REASON: animated taste"
+        ]
+    )
+    taste_client = FakeClient(
+        [
+            "TASTE: I enjoy animated family movies.\n"
+            "REASON: I rated animated movies highly.\n"
+            "HIGH RATINGS: animated family movies\n"
+            "LOW RATINGS: crime movies"
+        ]
+    )
+
+    def _fake_make_llm_client(client_name: str) -> FakeClient:
+        if client_name == "openai":
+            return taste_client
+        if client_name == "fake":
+            return scoring_client
+        raise AssertionError(f"unexpected client: {client_name!r}")
+
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", _fake_make_llm_client)
+    cache_path = tmp_path / "taste-cache.jsonl"
+    monkeypatch.setattr(
+        agent4rec_yes_no,
+        "agent4rec_taste_cache_path",
+        lambda *_a, **_kw: cache_path,
+    )
+
+    task = _ml1m_cold_task()
+    agent4rec_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="test_sumboth",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        profile_components=("traits", "taste"),
+        taste_client_name="openai",
+        taste_model="gpt-4o-mini",
+        summary_usage="both",
+        scoring="batch",
+    )
+
+    # Taste prompt: history items with their summaries — profile items only.
+    taste_prompt = taste_client.completions.calls[0]["messages"][1]["content"]
+    assert "Toys come alive when people are absent." in taste_prompt  # ih1
+    assert "A street thief discovers a magical lamp." in taste_prompt  # ih2
+    assert "A detective pursues a disciplined thief." in taste_prompt  # ih3
+    assert "lion prince" not in taste_prompt  # candidate it1 summary
+    assert "crime family transfers power" not in taste_prompt  # candidate it2
+
+    # Scoring prompt: candidates carry their summaries.
+    scoring_prompt = scoring_client.completions.calls[0]["messages"][1]["content"]
+    assert "lion prince" in scoring_prompt
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    profile_manifest = manifest["scorer"]["profile_generator"]
+    assert profile_manifest["summary_column"] == "item_summary"
+    assert manifest["scorer"]["item_summaries"]["profile_item_summaries"] is True
+    assert manifest["scorer"]["item_summaries"]["candidate_item_summaries"] is True
+
+
+def test_agent4rec_taste_cache_path_summary_slug(tmp_path: Path, monkeypatch) -> None:
+    """Profile summaries change the taste prompt, so they must not share the
+    no-summary cache file."""
+
+    monkeypatch.setattr(agent4rec_yes_no, "repo_root", lambda: tmp_path)
+    task = _ml1m_cold_task()
+
+    plain = agent4rec_yes_no.agent4rec_taste_cache_path(
+        task, taste_model="gpt-4o-mini", taste_prompt_version="agent4rec_taste_v1"
+    )
+    summarized = agent4rec_yes_no.agent4rec_taste_cache_path(
+        task,
+        taste_model="gpt-4o-mini",
+        taste_prompt_version="agent4rec_taste_v1",
+        use_history_item_summaries=True,
+    )
+
+    assert plain.name == "ml-1m_v1_seed42_gpt-4o-mini_agent4rec_taste_v1.jsonl"
+    assert summarized.name == (
+        "ml-1m_v1_seed42_gpt-4o-mini_agent4rec_taste_v1_summary.jsonl"
+    )

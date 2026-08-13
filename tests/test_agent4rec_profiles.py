@@ -149,6 +149,64 @@ def test_build_traits_can_skip_conformity_for_steam_like_histories() -> None:
     assert "conformity" not in generator.trait_thresholds_
 
 
+def test_build_traits_uses_external_activity_counts_when_provided() -> None:
+    # Every user has exactly 2 fit-frame rows, so fit-frame activity counts
+    # would be degenerate; external counts must drive the activity tiers.
+    X = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u2", "u2", "u3", "u3", "u4", "u4"],
+            "item_id": ["i1", "i2", "i3", "i4", "i5", "i6", "i7", "i8"],
+            "rating": [5, 4, 3, 2, 5, 4, 5, 4],
+            "item_genres": ["Action"] * 8,
+        }
+    )
+    generator = Agent4RecProfileGenerator(
+        activity_counts={"u1": 1, "u2": 10, "u3": 100, "u4": 1000}
+    )
+
+    profiles = generator.build_traits(X, pd.Series([1] * 8))
+
+    # p60/p90 of [1, 10, 100, 1000] -> 82/730 -> tiers 1/1/2/3
+    assert generator.trait_thresholds_["activity"]["p60"] == pytest.approx(82.0)
+    assert generator.trait_thresholds_["activity"]["p90"] == pytest.approx(730.0)
+    assert profiles["u1"].activity_group == 1
+    assert profiles["u2"].activity_group == 1
+    assert profiles["u3"].activity_group == 2
+    assert profiles["u4"].activity_group == 3
+    assert generator.manifest()["activity_source"] == "external_activity_counts"
+
+
+def test_build_traits_defaults_to_fit_frame_activity_counts() -> None:
+    X = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u2"],
+            "item_id": ["i1", "i2", "i3"],
+            "rating": [5, 4, 3],
+            "item_genres": ["Action"] * 3,
+        }
+    )
+    generator = Agent4RecProfileGenerator()
+
+    generator.build_traits(X, pd.Series([1, 1, 1]))
+
+    assert generator.manifest()["activity_source"] == "fit_frame_row_counts"
+
+
+def test_build_traits_raises_when_activity_counts_miss_fit_frame_users() -> None:
+    X = pd.DataFrame(
+        {
+            "user_id": ["u1", "u2"],
+            "item_id": ["i1", "i2"],
+            "rating": [5, 4],
+            "item_genres": ["Action", "Drama"],
+        }
+    )
+    generator = Agent4RecProfileGenerator(activity_counts={"u1": 10})
+
+    with pytest.raises(ValueError, match="activity_counts"):
+        generator.build_traits(X, pd.Series([1, 1]))
+
+
 def test_parse_agent4rec_modify_taste_response_matches_original_join_style() -> None:
     parsed = parse_agent4rec_modify_taste_response(
         "TASTE: I enjoy animated films.\n"
@@ -429,6 +487,7 @@ def test_build_taste_can_generate_cache_misses_concurrently(tmp_path) -> None:
         "hits": 0,
         "misses": 3,
         "generated": 3,
+        "errors": 0,
         "max_workers": 3,
     }
     rows = [
@@ -512,3 +571,21 @@ def test_load_taste_cache_keeps_first_duplicate_cache_key(tmp_path) -> None:
     cache = Agent4RecProfileGenerator._load_taste_cache(cache_path)
 
     assert cache == {"duplicate": row}
+
+
+def test_taste_cache_key_distinguishes_ordered_history_prefixes() -> None:
+    cache_key = getattr(Agent4RecProfileGenerator, "_taste_cache_key")
+    first_prefix = cache_key(
+        user_id="u1",
+        history_item_ids=("i1", "i2"),
+    )
+    longer_prefix = cache_key(
+        user_id="u1",
+        history_item_ids=("i1", "i2", "i3"),
+    )
+    reordered_prefix = cache_key(
+        user_id="u1",
+        history_item_ids=("i2", "i1"),
+    )
+
+    assert len({first_prefix, longer_prefix, reordered_prefix}) == 3

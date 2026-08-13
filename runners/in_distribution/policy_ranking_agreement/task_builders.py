@@ -9,12 +9,13 @@ from beyond_click_sim.tasks import (
     RandomFractionSplitter,
     Task,
 )
-from beyond_click_sim.tasks.policies import ALSPolicy, BPRPolicy, ItemKNNPolicy, LightGCNPolicy, PopularityPolicy, RandomPolicy
+from beyond_click_sim.tasks.policies import Policy
+from beyond_click_sim.tasks.policy_config import load_policy_roster
 from beyond_click_sim.tasks.policy_ranking import PolicyRankingTaskBuilder
 
 
 VERSION = "v1"
-SEEDS = (0, 1, 2)
+SEEDS = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 MIN_INTERACTIONS = 10
 DATASETS = ("ml-1m", "steam")
 TRAIN_FRACTION = 0.8
@@ -27,14 +28,22 @@ DATASET_HISTORY_CONTEXT_COLUMNS: dict[str, tuple[str, ...]] = {
     "steam": ("playtime_forever",),
 }
 
-POLICIES = [
-    RandomPolicy(k=POLICY_K, seed=0),
-    PopularityPolicy(k=POLICY_K, seed=0),
-    ItemKNNPolicy(k=POLICY_K, n_neighbors=20, seed=0),
-    ALSPolicy(k=POLICY_K, n_factors=64, iterations=20, seed=0),
-    BPRPolicy(k=POLICY_K, n_factors=64, learning_rate=0.01, regularization=0.01, iterations=100, seed=0),
-    LightGCNPolicy(k=POLICY_K, n_factors=64, n_layers=3, learning_rate=0.001, regularization=1e-4, iterations=200, seed=0),
-]
+
+def _make_policies(dataset_name: str, seed: int) -> list[Policy]:
+    """The policy roster from the committed, manually reviewed config.
+
+    Raises if `configs/policies/interaction.json` has no section for this
+    (dataset, seed) — see `docs/policy_configs.md`.
+    """
+
+    return load_policy_roster(
+        setup="interaction",
+        dataset_name=dataset_name,
+        split_seed=seed,
+        policy_k=POLICY_K,
+        positive_feedback_column=None,
+        repo_root=repo_root(),
+    )
 
 
 def build_policy_ranking_task(
@@ -54,7 +63,7 @@ def build_policy_ranking_task(
             test_fraction=TEST_FRACTION,
             seed=seed,
         ),
-        policies=POLICIES,
+        policies=_make_policies(dataset_name, seed),
         history_context_columns=DATASET_HISTORY_CONTEXT_COLUMNS[dataset_name],
         eval_sampler=None if max_eval_users is None else _user_sampler(max_eval_users, seed),
     )

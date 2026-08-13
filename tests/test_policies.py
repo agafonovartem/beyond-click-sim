@@ -14,6 +14,10 @@ def _interactions(*rows):
     return pd.DataFrame(rows, columns=["user_id", "item_id"])
 
 
+def _preference_interactions(*rows):
+    return pd.DataFrame(rows, columns=["user_id", "item_id", "feedback"])
+
+
 # ---------------------------------------------------------------------------
 # Policy base: invalid k
 # ---------------------------------------------------------------------------
@@ -31,6 +35,19 @@ def test_policy_rejects_non_positive_k():
         BPRPolicy(k=0)
     with pytest.raises(ValueError):
         LightGCNPolicy(k=0)
+
+
+def test_policy_name_defaults_to_class_name():
+    assert RandomPolicy(k=1).name == "RandomPolicy"
+    assert ALSPolicy(k=1).name == "ALSPolicy"
+
+
+def test_policy_name_override():
+    policy = ALSPolicy(k=1, n_factors=32, name="als_f32")
+    assert policy.name == "als_f32"
+    assert ItemKNNPolicy(k=1, name="knn_10").name == "knn_10"
+    assert BPRPolicy(k=1, name="bpr_a").name == "bpr_a"
+    assert LightGCNPolicy(k=1, name="lgcn_a").name == "lgcn_a"
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +268,31 @@ class TestALSPolicy:
     def test_rejects_non_positive_iterations(self):
         with pytest.raises(ValueError, match="iterations"):
             ALSPolicy(k=5, iterations=0)
+
+    def test_regularization_and_alpha_exposed(self):
+        policy = ALSPolicy(k=2, regularization=0.5, alpha=10.0)
+        assert policy.regularization == 0.5
+        assert policy.alpha == 10.0
+        # Defaults reproduce the implicit library's own defaults.
+        default = ALSPolicy(k=2)
+        assert default.regularization == 0.01
+        assert default.alpha == 1.0
+
+    def test_rejects_invalid_regularization_and_alpha(self):
+        with pytest.raises(ValueError, match="regularization"):
+            ALSPolicy(k=5, regularization=0.0)
+        with pytest.raises(ValueError, match="alpha"):
+            ALSPolicy(k=5, alpha=-1.0)
+
+    def test_fit_with_regularization_and_alpha(self):
+        policy = ALSPolicy(
+            k=3, n_factors=2, iterations=5, seed=0,
+            regularization=0.5, alpha=10.0,
+        )
+        recs = policy.fit(self.train, items=self.items).recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+        assert not recs.empty
 
 
 # ---------------------------------------------------------------------------
@@ -503,3 +545,126 @@ class TestLightGCNPolicy:
     def test_rejects_non_positive_iterations(self):
         with pytest.raises(ValueError, match="iterations"):
             LightGCNPolicy(k=5, iterations=0)
+
+
+# ---------------------------------------------------------------------------
+# positive_feedback_column: training on a positive-preference signal
+# ---------------------------------------------------------------------------
+
+class TestPositiveFeedbackFilter:
+    """Policies with `positive_feedback_column` train on positive rows only.
+
+    The filtered fit frame of this fixture is exactly the shared CF fixture
+    used by the per-policy test classes above (A/C co-occurrence), so the
+    CF signal assertions mirror them. On top of that: B is consumed-but-
+    disliked by u1 (positive for u6, so it is in the fitted item space and
+    only the full-frame seen-mask can exclude it), E is never positive
+    (no representation at all), and u7 has zero positive rows (cold start).
+    """
+
+    def setup_method(self):
+        self.items = _items("A", "B", "C", "D", "E")
+        self.train = _preference_interactions(
+            ("u1", "A", 1),
+            ("u2", "A", 1), ("u2", "C", 1),
+            ("u3", "A", 1), ("u3", "C", 1),
+            ("u4", "A", 1), ("u4", "C", 1),
+            ("u5", "A", 1), ("u5", "C", 1),
+            ("u6", "B", 1), ("u6", "D", 1),
+            ("u1", "B", 0),
+            ("u7", "E", 0),
+        )
+        self.users = pd.DataFrame({"user_id": ["u1", "u7"]})
+
+    @staticmethod
+    def _cf_policies():
+        kwargs = {"positive_feedback_column": "feedback"}
+        return [
+            ALSPolicy(k=3, n_factors=2, iterations=30, seed=0, **kwargs),
+            ItemKNNPolicy(k=3, n_neighbors=5, seed=0, **kwargs),
+            BPRPolicy(
+                k=3, n_factors=4, learning_rate=0.05, iterations=300, seed=0,
+                **kwargs,
+            ),
+            LightGCNPolicy(
+                k=3, n_factors=8, n_layers=2, learning_rate=0.05,
+                iterations=500, seed=0, **kwargs,
+            ),
+        ]
+
+    def _recommend(self, policy):
+        return policy.fit(self.train, items=self.items).recommend(
+            self.users, train_interactions=self.train, items=self.items
+        )
+
+    def test_cf_policies_recover_preference_signal(self):
+        for policy in self._cf_policies():
+            recs = self._recommend(policy)
+            u1_rank1 = recs[(recs["user_id"] == "u1") & (recs["rank"] == 1)]
+            assert len(u1_rank1) == 1, policy.name
+            assert u1_rank1.iloc[0]["item_id"] == "C", policy.name
+
+    def test_disliked_consumed_item_never_recommended(self):
+        # B is disliked by u1 (filtered out of fit) but positive for u6, so it
+        # has latent factors; only the full-frame seen-mask can exclude it.
+        for policy in self._cf_policies():
+            recs = self._recommend(policy)
+            u1_items = set(recs[recs["user_id"] == "u1"]["item_id"])
+            assert "B" not in u1_items, policy.name
+
+    def test_negative_only_item_never_recommended(self):
+        for policy in self._cf_policies():
+            recs = self._recommend(policy)
+            assert "E" not in set(recs["item_id"]), policy.name
+
+    def test_zero_positive_user_is_cold_start(self):
+        for policy in self._cf_policies():
+            recs = self._recommend(policy)
+            assert recs[recs["user_id"] == "u7"].empty, policy.name
+
+    def test_fit_counts_recorded(self):
+        for policy in self._cf_policies():
+            policy.fit(self.train, items=self.items)
+            assert policy.fit_row_count_ == 11, policy.name
+            assert policy.fit_user_count_ == 6, policy.name
+
+    def test_popularity_ranks_by_positive_counts(self):
+        items = _items("i1", "i2", "i3")
+        train = _preference_interactions(
+            ("v1", "i1", 1),
+            ("v2", "i1", 0),
+            ("v3", "i1", 0),
+            ("v4", "i2", 1),
+            ("v5", "i2", 1),
+        )
+        users = pd.DataFrame({"user_id": ["v9"]})
+        # Unfiltered: i1 (3 rows) beats i2 (2 rows).
+        plain = PopularityPolicy(k=1, seed=0).fit(train, items=items).recommend(
+            users, train_interactions=train, items=items
+        )
+        assert plain.iloc[0]["item_id"] == "i1"
+        # Filtered: i2 (2 positives) beats i1 (1 positive).
+        policy = PopularityPolicy(k=1, seed=0, positive_feedback_column="feedback")
+        filtered = policy.fit(train, items=items).recommend(
+            users, train_interactions=train, items=items
+        )
+        assert filtered.iloc[0]["item_id"] == "i2"
+        assert policy.fit_row_count_ == 3
+        assert policy.fit_user_count_ == 3
+
+    def test_missing_feedback_column_raises(self):
+        policy = PopularityPolicy(k=1, seed=0, positive_feedback_column="nope")
+        with pytest.raises(ValueError, match="positive_feedback_column"):
+            policy.fit(self.train, items=self.items)
+
+    def test_non_binary_feedback_column_raises(self):
+        bad = self.train.copy()
+        bad.loc[0, "feedback"] = 2
+        policy = PopularityPolicy(k=1, seed=0, positive_feedback_column="feedback")
+        with pytest.raises(ValueError, match="binary"):
+            policy.fit(bad, items=self.items)
+
+    def test_no_filter_keeps_all_rows(self):
+        policy = PopularityPolicy(k=1, seed=0).fit(self.train, items=self.items)
+        assert policy.fit_row_count_ == len(self.train)
+        assert policy.fit_user_count_ == 7

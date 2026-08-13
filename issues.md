@@ -20,6 +20,13 @@ This means headline metrics are conditional on successful parsing. Coverage is r
 `llm_errors`, `scored_rows`, `requested_rows`, regression `coverage`, and requested/scored
 candidate-group summaries where applicable, but the metric value itself is not failure-penalized.
 
+**Update (2026-07):** the interaction-prediction and cold-start `llm_yes_no` runners, and the
+cold-start `agent4rec_yes_no` runner, now also publish failure-penalized variants alongside the
+parsed-only headline:
+`test_failure_as_negative` (pointwise; failed rows counted as `no`),
+`test_failure_as_zero_group` (ranking; groups with any missing score contribute zero utility),
+and a row-level `coverage` summary. The headline `main_metric` remains the parsed-only value.
+
 ## 2. `candidate_group` ids collide between val and test splits
 
 `CappedUserInteractionCandidateSampler._candidate_group_id` builds the group id from only
@@ -35,6 +42,17 @@ identical across splits (`runners/in_distribution/interaction_prediction/methods
 Any later analysis that does `groupby("candidate_group")` without also grouping on `split`
 will silently merge a val group with its test counterpart, mixing splits in per-group
 aggregates.
+
+**Correction (2026-07, cold-start review):** an earlier version of this entry claimed the
+same within-task collision for cold start. That was wrong: `ColdUserHoldoutSplitter` makes
+val-cold and test-cold users disjoint, so no id can appear in both splits of one cold-start
+parquet. The real cold-start risk was **cross-run** concatenation (same id across k/m/seed
+runs). The redesigned cold-start pipeline addresses this: `candidate_group` is unique within
+`(dataset, k, m, negative_strategy, sampling_seed, split)`, and cold-start runners write
+`k`, `negative_ratio`, `sampling_seed`, `negative_strategy` as constant columns into
+`predictions.parquet` (`cold_start_metadata` in
+`runners/in_distribution/interaction_prediction/methods/common.py`). The within-task val/test
+collision described above remains open for `interaction_prediction` only.
 
 **Fix:** namespace the group id by split (e.g. prefix with the split name in the builder),
 or document that `candidate_group` is unique only within a split and require analyses to
@@ -74,6 +92,14 @@ different difficulty across `m`, even when both groups have 20 candidates. For t
 `group_size <= k`, `k_eff = min(k, group_size)` (`src/beyond_click_sim/evaluation/ranking.py:135`)
 and hit-rate returns `1.0` whenever the group has a positive (`ranking.py:163-164`), so
 `groups_with_size_lte@k` must be checked before interpreting `@k` metrics.
+
+**Update (2026-07, cold-start redesign):** the redesigned cold-start pipeline removes the
+population confound (evaluated users and target frames are now byte-identical across m;
+`target_frame_sha256` in the manifest). The metric-baseline caveat remains and is sharper
+there: cold-start groups are 1 positive + m negatives, so group size = 1+m and @5 is
+degenerate for every group when m < 4. Use @1 as the cross-m headline (documented in
+`cold_start_spec.md`, Metrics Caveats). This entry remains open for the
+interaction_prediction cap20 tasks described above.
 
 **Fix:** do not pool headline ranking metrics across different `m` values. Report each `m`
 separately with `groups_with_size_lte@k`, positive prevalence, `groups_with_score_ties_fraction`,
@@ -186,3 +212,44 @@ between these methods therefore cannot be attributed cleanly to Agent4Rec-style 
 **Fix:** compare Agent4Rec against matched baselines: same temperature/token budget, same visible
 item-card fields (including an `llm_yes_no_with_item_stats` baseline), and, if needed, a no-history
 LLM variant. Record the controlled comparison axis explicitly in the manifest.
+
+## 10. ItemKNN zero-score floor for items unseen in warm train (cold start)
+
+`ColdItemKNNScorer.score()` initializes all scores to 0.0 and only fills candidates present in
+the warm-train item index (`src/beyond_click_sim/scorers/item_knn.py:101,123-127`); profile items
+absent from warm train are silently skipped (`item_knn.py:112-114`).
+
+**Update (2026-07, strict warm-item coverage):** `ColdStartTaskBuilder` now enforces that
+history, targets, and sampled negatives use only warm-train items
+(`warm_item_coverage.policy = "strict"` in the task manifest). The previous
+"candidate item absent from warm train" case should no longer arise for cold-start
+candidate rows. Scores can still be exactly 0.0 for warm items with no usable neighbor
+mass, so zero-score rate diagnostics remain useful when interpreting KNN-vs-LLM gaps.
+
+**Fix/diagnostic:** report the fraction of scored candidates with score exactly 0.0 per run;
+state remaining zero-score mass explicitly when interpreting KNN-vs-LLM gaps.
+
+## 11. LLM "ranking" metrics are computed from binary 0/1 scores
+
+All LLM yes/no methods emit scores in {0.0, 1.0}, so `metrics_ranking.json` for LLM methods ranks
+groups that consist entirely of ties. With `RANKING_TIE_POLICY = "average"`
+(`runners/in_distribution/interaction_prediction/metrics.py:11`) the reported NDCG/HR is the
+expected value under uniform random tie-breaking — principled, but a deterministic function of
+the per-group yes/no pattern, carrying no graded discrimination. `groups_with_score_ties_fraction`
+is ~1.0 for every LLM run. In the redesigned cold start (1 positive + m negatives per group) this
+reduces to "did the model say yes to the target and no to everything else."
+
+Any pointwise-vs-ranking claim about these **yes/no-derived** LLM ranking runs must state that the
+protocol is binary-score-with-expected-tie-breaking.
+
+**Update (2026-07, cold-start listwise):** cold-start now has direct history-LLM and Agent4Rec
+preference-listwise families (`llm_preference_listwise_ranking_*` and
+`agent4rec_preference_listwise_ranking_*`) that elicit a complete within-group ranking and remove
+binary-score ties by construction. Those are the appropriate protocols for ranking-focused
+cold-start claims, subject to their forced-complete-order and candidate-order caveats. The warning
+in this issue remains active for `llm_yes_no` and `agent4rec_yes_no` ranking artifacts, which are
+still derived from binary scores.
+
+**Fix/diagnostic:** report `groups_with_score_ties_fraction` alongside LLM ranking numbers; if
+ranking agreement for LLMs becomes a paper claim, add a graded scoring variant (e.g. 1–5 rating
+or pairwise/listwise ranking prompts) instead of deriving ranks from yes/no.

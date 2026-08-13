@@ -22,6 +22,18 @@ from beyond_click_sim.tasks.samplers import PostSplitUserSampler
 POLICY_EVAL_KS = (1, 3, 5, 10)
 
 
+def _policy_hyperparameters(policy: Policy) -> dict[str, Any]:
+    """Public scalar constructor attributes of a policy, for manifests."""
+
+    params: dict[str, Any] = {}
+    for name, value in vars(policy).items():
+        if name.startswith("_") or name.endswith("_"):
+            continue
+        if isinstance(value, (int, float, str, bool)) or value is None:
+            params[name] = value
+    return params
+
+
 class PolicyRankingTaskBuilder(TaskBuilder):
     """Build a policy-ranking task for Q3 evaluation.
 
@@ -77,6 +89,17 @@ class PolicyRankingTaskBuilder(TaskBuilder):
         )
         if not policies:
             raise ValueError("policies must be non-empty.")
+        policy_names = [policy.name for policy in policies]
+        duplicate_names = sorted(
+            {name for name in policy_names if policy_names.count(name) > 1}
+        )
+        if duplicate_names:
+            raise ValueError(
+                "Policy names must be unique within a roster — the name is the "
+                "policy's identity in the test frame, utility aggregation, and "
+                f"manifests. Duplicates: {duplicate_names}. Give variants an "
+                "explicit `name=` override."
+            )
         if self.dataset_filter is None:
             raise ValueError("PolicyRankingTaskBuilder requires dataset_filter.")
         if self.splitter is None:
@@ -280,6 +303,15 @@ class PolicyRankingTaskBuilder(TaskBuilder):
                         "name": policy.name,
                         "k": policy.k,
                         "seed": policy.seed,
+                        "positive_feedback_column": getattr(
+                            policy, "positive_feedback_column", None
+                        ),
+                        "hyperparameters": _policy_hyperparameters(policy),
+                        "hyperparameter_selection": getattr(
+                            policy, "hyperparameter_selection", None
+                        ),
+                        "fit_rows": getattr(policy, "fit_row_count_", None),
+                        "fit_users": getattr(policy, "fit_user_count_", None),
                     }
                     for policy in self.policies
                 ],

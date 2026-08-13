@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -70,9 +71,12 @@ def prediction_frame(
     y: pd.Series,
     scores: pd.Series,
     predictions: pd.Series,
+    metadata: Mapping[str, object] | None = None,
 ) -> pd.DataFrame:
     frame = X.copy()
     frame.insert(0, "split", split)
+    for position, (column, value) in enumerate((metadata or {}).items(), start=1):
+        frame.insert(position, column, value)
     frame["target"] = y
     frame["score"] = scores
     frame["prediction"] = predictions
@@ -85,12 +89,35 @@ def score_frame(
     X: pd.DataFrame,
     y: pd.Series,
     scores: pd.Series,
+    metadata: Mapping[str, object] | None = None,
 ) -> pd.DataFrame:
     frame = X.copy()
     frame.insert(0, "split", split)
+    for position, (column, value) in enumerate((metadata or {}).items(), start=1):
+        frame.insert(position, column, value)
     frame["target"] = y
     frame["score"] = scores
     return frame
+
+
+def cold_start_metadata(task: Task) -> dict[str, object]:
+    """Parquet metadata columns for cold-start tasks; {} for other tasks.
+
+    `candidate_group` ids are unique only within
+    (dataset, k, m, negative_strategy, sampling_seed, split). These columns make
+    that key explicit in row-level artifacts so concatenated runs across the
+    cold-start grid cannot silently merge unrelated candidate sets.
+    """
+
+    manifest = task.manifest
+    if "sampling_seed" not in manifest:
+        return {}
+    return {
+        "k": manifest["k"],
+        "negative_ratio": manifest["sampler"]["negative_ratio"],
+        "sampling_seed": manifest["sampling_seed"],
+        "negative_strategy": manifest["negative_strategy"],
+    }
 
 
 def ranking_metrics_for_split(

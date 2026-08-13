@@ -895,6 +895,18 @@ def test_parse_single_yes_no_response_strips_whitespace() -> None:
     assert parse_single_yes_no_response("  yes  \n") == 1.0
 
 
+def test_parse_single_yes_no_response_strips_trailing_punctuation() -> None:
+    assert parse_single_yes_no_response("yes.") == 1.0
+    assert parse_single_yes_no_response("no.") == 0.0
+    assert parse_single_yes_no_response("Yes!") == 1.0
+    assert parse_single_yes_no_response("no?") == 0.0
+
+
+def test_parse_yes_no_response_strips_trailing_punctuation() -> None:
+    parsed = parse_yes_no_response("C1: yes.\nC2: no!", labels=["C1", "C2"])
+    assert parsed == {"C1": 1.0, "C2": 0.0}
+
+
 def test_parse_single_yes_no_response_rejects_invalid() -> None:
     with pytest.raises(ValueError, match="bare 'yes' or 'no'"):
         parse_single_yes_no_response("maybe")

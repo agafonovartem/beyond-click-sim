@@ -123,7 +123,8 @@ Six policies are compared, spanning the main families of collaborative filtering
 | `ItemKNNPolicy` | Memory-based CF (item-item cosine similarity) | `k`, `n_neighbors=20`, `seed` |
 | `ALSPolicy` | Matrix factorization via ALS | `k`, `n_factors=64`, `iterations=20`, `seed` |
 | `BPRPolicy` | MF via Bayesian Personalized Ranking | `k`, `n_factors=64`, `learning_rate=0.01`, `regularization=0.01`, `iterations=100`, `seed` |
-| `LightGCNPolicy` | Graph CF (LightGCN, He et al. 2020) | `k`, `n_factors=64`, `n_layers=3`, `learning_rate=0.001`, `regularization=1e-4`, `iterations=200`, `seed` |
+| `LightGCNTorchPolicy` | Graph CF (LightGCN, He et al. 2020), PyTorch/PyG backend | `k`, `n_factors=64`, `n_layers=3`, `learning_rate=0.001`, `regularization=1e-4`, `iterations=1000` (mini-batch epochs), `batch_size=2048`, `device="auto"`, `seed` |
+| `LightGCNPolicy` | Same model, pure-NumPy full-batch backend — **reference/fallback only, not in the roster** | `k`, `n_factors=64`, `n_layers=3`, `learning_rate=0.001`, `regularization=1e-4`, `iterations=200` (full-batch updates), `seed` |
 
 All policy classes implement the `Policy` ABC:
 - `fit(train_interactions, *, items, ...)` → `Self` — trains the model on the train split
@@ -274,118 +275,60 @@ The runner builds each task once (fitting all 6 policies on the train split), th
 
 **No validation split.** Q3 requires no hyperparameter tuning at evaluation time — policies are fixed, and the scorer uses `temperature=0.0`. The val split is always empty.
 
-**L2 regularization on initial embeddings only (LightGCN).** Per LightGCN paper Section 3.3, regularization is applied to `E0` (the initial embedding matrix), not to the propagated `E_final`. This is critical for correct gradient computation and is implemented accordingly in `LightGCNPolicy`.
+**L2 regularization on initial embeddings only (LightGCN).** Per LightGCN paper Section 3.3, regularization is applied to `E0` (the initial embedding matrix), not to the propagated `E_final`. This is critical for correct gradient computation and is implemented accordingly in both backends. In `LightGCNTorchPolicy` the penalty covers the layer-0 embeddings of each batch triple over a mean BPR loss, matching the author-endorsed reference implementation; note that the NumPy backend sums the loss over all pairs instead, which makes the same nominal `regularization=1e-4` contribute ~0.01% of the gradient there.
 
 **Cross-policy deduplication (itemwise mode).** When the same item appears in multiple policies' recommendation lists for the same user, the LLM is called only once per `(user, item)` pair and the score is broadcast. This is correct because the itemwise scorer is context-independent of which policy recommended the item.
 
 **Proportional smoke capping.** In smoke mode, the group cap (`max_llm_groups=25`) is distributed proportionally across policies so every policy stays represented in the result. Without this, a smoke run could accidentally exclude some policies entirely.
 
+### Variant: Preference Target (Q3-preference)
+
+A second protocol runs the identical pipeline against a **positive-preference** target instead of the interaction target. It lives in a separate runner package, `runners/in_distribution/policy_ranking_agreement_preference/`, and writes to `outputs/in_distribution/policy_ranking_agreement_preference/`.
+
+**Motivation.** Under the interaction target, a policy's real utility is the rate at which its recommendations were interacted with at all. `target_interact` is `1` for every observed interaction, so this measures engagement and cannot distinguish a recommendation the user rated 5 from one they rated 1. The preference variant asks the narrower question: do simulators rank policies the same way real data does when "good recommendation" means the user actually *liked* the item?
+
+**What changes:**
+
+| | Interaction (default) | Preference variant |
+|---|---|---|
+| `target_source_column` (ml-1m) | `target_interact` | `target_like_ge4` (rating ≥ 4) |
+| `target_source_column` (steam) | `target_interact` | `target_played_120` (playtime ≥ 120 min) |
+| LLM scorer | `LLMInteractionYesNoScorer` | `LLMPreferenceYesNoScorer` |
+| Agent4Rec scorer | `Agent4RecYesNoScorer` | `Agent4RecPreferenceYesNoScorer` |
+| Task name | `{dataset}_policy_ranking[_eval_users{N}]_seed{s}` | `{dataset}_policy_ranking_preference[_eval_users{N}]_seed{s}` |
+
+**What does not change:** the filter (`min_interactions=10`), splitter (80/20, empty val), the six-policy roster, `POLICY_K = 10`, per-dataset history/candidate prompt columns, train-only item enrichment, held-out history masking, utility aggregation (`mean_score`), and the agreement metrics (Kendall's τ main, Spearman's ρ). Because policies never read a target column, each policy recommends the **same items** under both protocols — only the labels attached to those recommendations differ. This makes the two protocols directly comparable on identical candidate rows.
+
+**Both the ground truth and the elicited question move together.** The simulator is asked whether the user's response would meet the dataset's positive-preference target (`"The user would rate the candidate movie at least 4 out of 5."` / `"The user would play the candidate game for at least 120 minutes in total."` — worded identically to the preference-prediction task family). Asking an interaction question while grading against a preference label would make the agreement number uninterpretable. This holds in both batch and itemwise scoring: itemwise preference scoring uses `POLICY_RANKING_PREFERENCE_ITEMWISE_*` prompts rather than the interaction itemwise prompts.
+
+**Interpretation caveats:**
+
+- Preference targets are **strictly sparser** than interaction targets (an item must be interacted with *and* liked). Real per-policy utilities are correspondingly lower, so utility magnitudes are not comparable across the two protocols — only the induced policy orderings are.
+- The popularity baseline changes meaning. `PopularityScorer` sums the task target per item, so under this protocol item "popularity" is the count of train interactions that met the preference target, not the raw interaction count. Under the interaction protocol `target_interact` is all-ones, making it a pure interaction count.
+- Issue #11 in `issues.md` (yes/no scorers emit binary scores, so simulated utility is a mean of 0/1 votes) applies unchanged here.
+
+**CLI example:**
+
+```bash
+python -m runners.in_distribution.policy_ranking_agreement_preference.run \
+  --tasks ml-1m_policy_ranking_preference_eval_users1000_seed0 \
+  --methods popularity_scorer
+```
+
 ---
 
 ## Cold Start
 
-TODO: Verify later after exp runs
+The cold-start scenario is specified in **`cold_start_spec.md`** — that file is
+the single canonical source. It covers the user-partition split, the fixed
+target frame (`target_like_ge4`, C=5, eligibility at pool_k), the two negative
+strategies (`negu` / `negpop`), the split_seed / sampling_seed roles, the
+group-id uniqueness contract and parquet metadata columns, and the metric
+caveats (group size = 1+m; LLM binary-score ranking).
 
-### Scientific Question
+Do not copy the spec into this document; the previous duplicated section is
+how the docs drifted out of sync with the code.
 
-Can an LLM given only a short user profile — items the user interacted with before any training data was collected — predict per-candidate relevance competitively with classical low-data baselines (Popularity, ItemKNN)?
-
-This experiment isolates **Normal User Cold-Start**: users are entirely absent from training. Every candidate scored is for a user the model has never seen. Items remain warm (all items in cold users' profiles and evaluation sets exist in the training item catalog).
-
-### Split Design
-
-Users are partitioned into three non-overlapping groups; none of a cold user's interactions appear in `train`:
-
-| Group | Fraction | Role |
-|---|---|---|
-| Warm users | 0.7 | All interactions → `train` |
-| Val-cold users | 0.1 | Held out; evaluated on val |
-| Test-cold users | 0.2 | Held out; evaluated on test |
-
-Within each cold user, interactions are sorted by `timestamp` ascending (ties broken by `item_id`). The first k form `online_session_history` — the scorer's only view of the user. Post-k interactions become the evaluation target. Cold users with ≤ k interactions in total are dropped from evaluation.
-
-The k-axis produces a curve rather than a single point: running for `k ∈ {1, 3, 5}` shows how each additional profile item affects cold-user relevance prediction.
-
-### Dataset and Split Setup
-
-**Datasets:** MovieLens-1M (`ml-1m`) only. Steam lacks wall-clock timestamps and is unsupported.
-
-**Filtering:** `MinUserInteractionsFilter(min_interactions=10)`
-
-**Split:** `ColdUserHoldoutSplitter(k=k, train_fraction=0.7, val_fraction=0.1, test_fraction=0.2, seed=seed)`
-
-**Candidate sampling:** `CappedUserInteractionCandidateSampler(negative_ratio=negative_ratio, total_items=20, seed=seed)`. Exclusion set covers the full cold user history (profile + val + test positives), so no observed item is drawn as a negative.
-
-**Task name format:** `{dataset}_cold_start_k{k}_cap20_m{negative_ratio}_seed{seed}`
-
-Total tasks: 3 k-values × 5 negative ratios × 5 seeds = **75 tasks** (ml-1m only).
-
-`DEFAULT_TASK_NAMES`: `k ∈ {1, 3, 5}`, `negative_ratio=1`, `seed ∈ {0, 1, 2}` — 9 tasks.
-
-**Task builder module:** `runners/in_distribution/cold_start/task_builders.py`
-
-### Scorer Protocol
-
-Each scorer receives a different frame for fitting:
-
-| Scorer | Fit data | Why |
-|---|---|---|
-| `PopularityScorer` | `task.train` | Item counts from warm users only |
-| `LLMInteractionYesNoScorer` | `task.online_session_history` | Cold user's k-item visible profile; `task.train` has no cold-user rows |
-| `ColdItemKNNScorer` | `fit_train(task.train)` then `fit(task.online_session_history)` | Sim matrix from warm co-occurrence; aggregation profiles from cold user history |
-
-`task.val` is used for threshold calibration by Popularity and ItemKNN (threshold is fixed on val, not re-tuned on test). `task.test` is the evaluation target for all scorers.
-
-### Output Artifacts
-
-Each run writes to a timestamped directory under `outputs/in_distribution/cold_start/`:
-
-| File | Produced by | Contents |
-|---|---|---|
-| `manifest.json` | All | Method, scorer config (`fit_on`, `k`, `n_neighbors` for ItemKNN; prompt columns for LLM), decision rule, task manifest, git commit |
-| `metrics.json` | Pointwise methods | `val` + `test` metrics: `macro_by_user_group_mean` (headline), `macro_by_group`, `micro`; threshold |
-| `metrics_ranking.json` | Ranking methods | `val` + `test` ranking: `NDCG@{1,3,5,10}`, `HR@{1,3,5,10}` |
-| `predictions.parquet` | All | Row-level scores and predictions for val and test |
-| `llm_errors.jsonl` | LLM methods only | Failed LLM call records (candidate group, attempt count, errors) |
-
-### Runner
-
-**Entry point:** `runners/in_distribution/cold_start/run.py`
-
-```bash
-python -m runners.in_distribution.cold_start.run \
-    [--tasks TASK1,TASK2,...] \
-    [--methods METHOD1,METHOD2,...] \
-    [--output-dir PATH]
-```
-
-Default: 9 `DEFAULT_TASK_NAMES`, method `popularity_f1_threshold`, output `outputs/in_distribution/cold_start/`.
-
-**Available methods:**
-
-| Method name | Scorer | Description |
-|---|---|---|
-| `popularity_f1_threshold` | `PopularityScorer` | Val-threshold pointwise; F1 headline |
-| `popularity_ranking` | `PopularityScorer` | Raw-score ranking; NDCG headline |
-| `item_knn_cold_start` | `ColdItemKNNScorer` | Val-threshold pointwise; F1 headline |
-| `item_knn_cold_start_smoke` | `ColdItemKNNScorer` | Same, capped at 25 candidate groups |
-| `item_knn_cold_start_ranking` | `ColdItemKNNScorer` | Raw-score ranking; NDCG headline |
-| `item_knn_cold_start_ranking_smoke` | `ColdItemKNNScorer` | Same, capped at 25 candidate groups |
-| `llm_yes_no_ollama_llama31_8b_smoke` | `LLMInteractionYesNoScorer` | Ollama, LLaMA 3.1 8B, 25 groups |
-| `llm_yes_no_ollama_llama31_8b_full` | `LLMInteractionYesNoScorer` | Ollama, LLaMA 3.1 8B, all groups |
-| `llm_yes_no_vllm_llama33_70b_smoke` | `LLMInteractionYesNoScorer` | vLLM, LLaMA 3.3 70B, 25 groups |
-| `llm_yes_no_vllm_llama33_70b_full` | `LLMInteractionYesNoScorer` | vLLM, LLaMA 3.3 70B, all groups |
-| `llm_yes_no_vllm_qwen36_27b_smoke` | `LLMInteractionYesNoScorer` | vLLM, Qwen 3.6 27B, 25 groups |
-| `llm_yes_no_vllm_qwen36_27b_full` | `LLMInteractionYesNoScorer` | vLLM, Qwen 3.6 27B, all groups |
-
-LLM prompt columns for ml-1m: history = `item_title`, `item_genres`, `rating`; candidate = `item_title`, `item_genres`.
-
-### Key Design Decisions
-
-**Temporal split within cold users is mandatory.** The k earliest temporal interactions form the profile; post-k interactions are the evaluation target. Random sampling within a cold user's sequence is invalid — it would allow future interactions to contaminate the visible profile.
-
-**`task.train` must not be passed to the LLM scorer.** That frame contains only warm-user rows; the LLM would construct empty per-cold-user histories and ignore the profile entirely. `task.online_session_history` is the only correct fit source for cold-user context.
-
-**`ColdItemKNNScorer` needs two separate fit steps.** Item-item cosine similarity is built from warm train co-occurrence; aggregation profiles come from `online_session_history`. Merging the frames would corrupt the similarity matrix with cold-user counts. Mean aggregation (not sum) keeps raw scores scale-comparable across k values so the k-curve is interpretable.
-
-**Threshold calibration uses val cold users, not test.** Popularity and ItemKNN output real-valued scores. The threshold is selected on val via `find_best_user_group_threshold` using `macro_by_user_group_mean_f1` — the same aggregation as the headline test metric — then fixed before test evaluation.
+Runner entry point: `runners/in_distribution/cold_start/run.py`
+(task registry: `runners/in_distribution/cold_start/task_builders.py`,
+180 builders; deployment: `scripts/COLD_START_POD_QUEUE_RUNBOOK.md`).
