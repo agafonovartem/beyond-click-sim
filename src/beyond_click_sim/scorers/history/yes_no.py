@@ -449,6 +449,14 @@ class LLMPreferenceYesNoScorer(LLMInteractionYesNoScorer):
         ]
 
 
+_YES_NO_TRAILING_PUNCT = ".,!?;:"
+
+
+def sanitize_yes_no_answer(text: str) -> str:
+    """Normalize a yes/no token: strip, lower, drop trailing sentence punctuation."""
+    return text.strip().lower().rstrip(_YES_NO_TRAILING_PUNCT).strip()
+
+
 def parse_yes_no_response(text: str, *, labels: Sequence[str]) -> dict[str, float]:
     """Parse strict `Ck: yes/no` responses into numeric scores."""
 
@@ -467,7 +475,7 @@ def parse_yes_no_response(text: str, *, labels: Sequence[str]) -> dict[str, floa
         if label in parsed:
             raise ValueError(f"Duplicate candidate label: {label!r}")
 
-        answer = raw_answer.lower()
+        answer = sanitize_yes_no_answer(raw_answer)
         if answer == "yes":
             parsed[label] = 1.0
         elif answer == "no":
@@ -485,9 +493,10 @@ def parse_single_yes_no_response(text: str) -> float:
     """Parse a bare yes/no response into a numeric score (1.0 or 0.0).
 
     Accepts a response that is exactly the word 'yes' or 'no' (case-insensitive,
-    surrounding whitespace stripped). Raises ValueError for anything else.
+    surrounding whitespace stripped, trailing sentence punctuation ignored).
+    Raises ValueError for anything else.
     """
-    answer = text.strip().lower()
+    answer = sanitize_yes_no_answer(text)
     if answer == "yes":
         return 1.0
     if answer == "no":
