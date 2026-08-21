@@ -21,10 +21,28 @@ fi
 total=$(echo "$first" | sed -E 's/.*-of-0*([0-9]+)\.safetensors/\1/')
 count=$(ls "$DIR"/model-*-of-*.safetensors 2>/dev/null | wc -l | tr -d ' ')
 
-if [ "$count" -eq "$total" ]; then
-    echo "complete: $count/$total shards"
-    exit 0
-else
+if [ "$count" -ne "$total" ]; then
     echo "incomplete: $count/$total shards"
     exit 1
 fi
+
+# Shard count alone is not enough. hf download fetches files concurrently, so an
+# interrupted download can leave all shards present while the much smaller tokenizer
+# files are still missing. That combination passed this check and then crashed vLLM at
+# startup with a misleading sentencepiece error ("Either model_file or model_proto must
+# be specified"), because transformers falls back to the slow tokenizer when
+# tokenizer.json is absent. Verify the small files too.
+for required in config.json tokenizer_config.json; do
+    if [ ! -f "$DIR/$required" ]; then
+        echo "incomplete: $count/$total shards but $required is missing"
+        exit 1
+    fi
+done
+
+if [ ! -f "$DIR/tokenizer.json" ] && [ ! -f "$DIR/tokenizer.model" ]; then
+    echo "incomplete: $count/$total shards but no tokenizer.json or tokenizer.model"
+    exit 1
+fi
+
+echo "complete: $count/$total shards + tokenizer"
+exit 0

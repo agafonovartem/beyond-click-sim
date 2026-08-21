@@ -19,7 +19,9 @@ from tqdm import tqdm
 from beyond_click_sim.scorers.agent4rec.prompts import (
     AGENT4REC_PLAYTIME_TASTE_SYSTEM_PROMPT,
     AGENT4REC_TASTE_PROMPT_VERSION,
+    AGENT4REC_COAT_TASTE_SYSTEM_PROMPT,
     AGENT4REC_TASTE_SYSTEM_PROMPT,
+    agent4rec_coat_taste_user_prompt,
     agent4rec_playtime_taste_user_prompt,
     agent4rec_taste_modify_user_prompt,
 )
@@ -28,7 +30,7 @@ from beyond_click_sim.scorers.history.selection import UserHistory
 
 AGENT4REC_PROFILE_COMPONENTS = ("taste", "traits")
 _SUPPORTED_AGENT4REC_PROFILE_COMPONENTS = frozenset(AGENT4REC_PROFILE_COMPONENTS)
-_SUPPORTED_TASTE_PROMPT_KINDS = frozenset({"rating", "playtime"})
+_SUPPORTED_TASTE_PROMPT_KINDS = frozenset({"rating", "playtime", "coat_rating"})
 AGENT4REC_DIVERSITY_TOP_MASS = 0.80
 _TASTE_CACHE_THREAD_LOCKS: dict[Path, threading.Lock] = {}
 _TASTE_CACHE_THREAD_LOCKS_GUARD = threading.Lock()
@@ -90,6 +92,25 @@ AGENT4REC_GAME_DIVERSITY_DESCRIPTIONS = {
 }
 
 
+AGENT4REC_COAT_CONFORMITY_DESCRIPTIONS = {
+    1: "A Dedicated Follower who gives ratings that heavily rely on how other shoppers rated the same coats, rarely expressing independent opinions. Usually give ratings that are same as historical ratings. ",
+    2: "A Balanced Evaluator who considers both how other shoppers rated a coat and personal preferences when giving ratings. Sometimes give ratings that are different from historical rating.",
+    3: "A Maverick Critic who completely ignores how other shoppers rated a coat and evaluates coats solely based on own taste. Usually give ratings that are a lot different from historical ratings.",
+}
+
+# Caveat that must travel with this table, not just sit in a comment: on Coat the
+# genre string is "gender|style|colour", so the gender token is a third of every
+# user's token mass by construction. A shopper who browses both gender sections
+# therefore scores as more "diverse" than one who does not, independently of how
+# varied their style or colour taste is. These descriptions say "styles and
+# colours", which is what the trait claims but only part of what it measures.
+AGENT4REC_COAT_DIVERSITY_DESCRIPTIONS = {
+    1: "An Exceedingly Discerning Selective Shopper who considers coats with a level of selectivity that borders on exclusivity. The coat choices are meticulously curated to match personal taste, leaving no room for even a hint of variety.",
+    2: "A Niche Explorer who occasionally looks beyond a favourite style or colour and mostly sticks to preferred coat types.",
+    3: "A Wardrobe Trailblazer, a relentless seeker of the unusual in coats. The coat choices span styles and colours so widely that they defy categorization.",
+}
+
+
 class Agent4RecProfileGenerator:
     """Build Agent4Rec-style profiles from fitted train rows and histories."""
 
@@ -105,6 +126,7 @@ class Agent4RecProfileGenerator:
         tag_column: str | None = None,
         title_column: str = "item_title",
         summary_column: str | None = None,
+        include_activity: bool = True,
         include_conformity: bool = True,
         activity_counts: Mapping[Any, int] | None = None,
         activity_descriptions: dict[int, str] | None = None,
@@ -154,6 +176,7 @@ class Agent4RecProfileGenerator:
         self.tag_column = tag_column
         self.title_column = title_column
         self.summary_column = summary_column
+        self.include_activity = include_activity
         self.include_conformity = include_conformity
         self.activity_counts = (
             None if activity_counts is None else dict(activity_counts)
@@ -388,6 +411,7 @@ class Agent4RecProfileGenerator:
             "tag_column": self.tag_column,
             "title_column": self.title_column,
             "summary_column": self.summary_column,
+            "include_activity": self.include_activity,
             "include_conformity": self.include_conformity,
             "activity_source": (
                 "fit_frame_row_counts"
@@ -431,9 +455,13 @@ class Agent4RecProfileGenerator:
         diversity_high = float(diversity_num.quantile(0.66))
 
         self.trait_thresholds_ = {
-            "activity": {"p60": activity_low, "p90": activity_high},
             "diversity": {"p33": diversity_low, "p66": diversity_high},
         }
+        if self.include_activity:
+            self.trait_thresholds_["activity"] = {
+                "p60": activity_low,
+                "p90": activity_high,
+            }
         if self.include_conformity:
             item_mean_rating = X.groupby(self.item_column, sort=False)[
                 self.rating_column
@@ -460,17 +488,18 @@ class Agent4RecProfileGenerator:
         traits: dict[Any, dict[str, int]] = {}
         for user_id in activity_num.index:
             traits[user_id] = {
-                "activity": _three_tier_group(
-                    float(activity_num.loc[user_id]),
-                    low=activity_low,
-                    high=activity_high,
-                ),
                 "diversity": _three_tier_group(
                     float(diversity_num.loc[user_id]),
                     low=diversity_low,
                     high=diversity_high,
                 ),
             }
+            if self.include_activity:
+                traits[user_id]["activity"] = _three_tier_group(
+                    float(activity_num.loc[user_id]),
+                    low=activity_low,
+                    high=activity_high,
+                )
             if self.include_conformity:
                 traits[user_id]["conformity"] = _three_tier_group(
                     float(conformity_deviation.loc[user_id]),
@@ -639,6 +668,13 @@ class Agent4RecProfileGenerator:
                 playtime_games=playtime_games,
             )
             system_prompt = AGENT4REC_PLAYTIME_TASTE_SYSTEM_PROMPT
+        elif self.taste_prompt_kind == "coat_rating":
+            # Same 1-5 buckets as "rating"; the wording differs because the
+            # movie suite asks a "movie taste analyst" about "movies".
+            user_prompt = agent4rec_coat_taste_user_prompt(
+                rating_coats=self._rating_movies(history),
+            )
+            system_prompt = AGENT4REC_COAT_TASTE_SYSTEM_PROMPT
         else:
             raise RuntimeError(f"Unsupported taste_prompt_kind: {self.taste_prompt_kind}")
         return [
@@ -757,7 +793,7 @@ class Agent4RecProfileGenerator:
         }
 
     def _taste_cache_history_values(self, history: UserHistory) -> dict[str, Any]:
-        if self.taste_prompt_kind == "rating":
+        if self.taste_prompt_kind in ("rating", "coat_rating"):
             values = {
                 "history_ratings": [
                     _json_safe(value)

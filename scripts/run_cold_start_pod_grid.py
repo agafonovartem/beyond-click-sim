@@ -178,6 +178,12 @@ def build_zip(zip_path: Path, *, methods: list[str]) -> None:
         "__pycache__",
         ".mypy_cache",
         "node_modules",
+        # Result archives and scratch, none of it importable by the runners. Left in,
+        # tmp_outputs alone added ~900MB to every pod's upload.
+        "tmp_outputs",
+        "notebooks",
+        "logs",
+        "_to_delete",
     }
     exclude_names = {".env", ".DS_Store"}
     need_taste = any(method_requires_taste_cache(m) for m in methods)
@@ -211,6 +217,12 @@ def build_zip(zip_path: Path, *, methods: list[str]) -> None:
                     continue
                 if name.endswith((".pyc", ".pyo")):
                     continue
+                # Every .zip in this repo is an output/artifact archive parked at the
+                # root (outputs_backup*.zip are ~2.9GB each); nothing imports one.
+                # Excluding `outputs/` as a directory does not catch them, which is how
+                # the code archive reached 6.2GB before this check.
+                if name.endswith(".zip"):
+                    continue
                 full = Path(dirpath) / name
                 zf.write(full, arcname=full.relative_to(root).as_posix())
                 count += 1
@@ -234,6 +246,11 @@ unzip -q -o {REMOTE_ZIP}
 /opt/conda/bin/python3 -m venv .venv
 .venv/bin/pip install -q --upgrade pip
 .venv/bin/pip install -q {deps}
+# Install the package itself editable so `beyond_click_sim` resolves as an installed
+# distribution rather than relying solely on PYTHONPATH. --no-deps keeps the pinned
+# set above authoritative: pyproject pulls torch/optuna, which the runners never
+# import for these listwise methods and which would add gigabytes per pod.
+.venv/bin/pip install -q -e . --no-deps
 mkdir -p {ABLATION_REL.as_posix()}
 export PYTHONPATH="{REMOTE_REPO}/src:{REMOTE_REPO}"
 .venv/bin/python - <<'PY'
@@ -325,7 +342,9 @@ def upload_manifests(grid_id: str, pods: list[str]) -> None:
         )
 
 
-def launch_worker_on_pod(pod: str, grid_id: str, *, poll_seconds: float) -> None:
+def launch_worker_on_pod(
+    pod: str, grid_id: str, *, poll_seconds: float, max_slots: int | None = None
+) -> None:
     session = worker_session_name(grid_id, pod)
     remote_manifest = f"{REMOTE_REPO}/outputs/ablation/_grids/{grid_id}/pods/{pod}.json"
     remote_state = f"{REMOTE_REPO}/outputs/ablation/_grids/{grid_id}/pods/{pod}.state.json"
@@ -345,7 +364,13 @@ def launch_worker_on_pod(pod: str, grid_id: str, *, poll_seconds: float) -> None
         f"--manifest {shlex.quote(remote_manifest)} "
         f"--state {shlex.quote(remote_state)} "
         f"--poll-seconds {poll_seconds} "
-        f"> {shlex.quote(remote_log)} 2>&1"
+        # Concurrency has to track the pod's serving topology, not the pod count. A
+        # litellm-fronted pod has four engines to absorb a listwise job's 240 worker
+        # threads; a tensor-parallel pod has one, so the same slot count buries it.
+        + (f"--max-slots {int(max_slots)} " if max_slots is not None else "")
+        + (
+            f"> {shlex.quote(remote_log)} 2>&1"
+        )
     )
     remote = (
         f"tmux new-session -d -s {shlex.quote(session)} "
@@ -380,7 +405,9 @@ def cmd_launch(args: argparse.Namespace) -> int:
             raise RuntimeError(
                 f"{pod}: no healthy LLM endpoint (last={endpoint} http={code!r})"
             )
-        launch_worker_on_pod(pod, grid_id, poll_seconds=args.poll_seconds)
+        launch_worker_on_pod(
+            pod, grid_id, poll_seconds=args.poll_seconds, max_slots=args.max_slots
+        )
     # Brief settle + status snapshot
     time.sleep(3)
     return cmd_status(argparse.Namespace(grid_id=grid_id))
@@ -472,8 +499,33 @@ def cmd_retry_failed(args: argparse.Namespace) -> int:
         if not state or "jobs" not in state:
             log(f"{pod}: no state; skipping")
             continue
+        # Only touch pods that actually have something to retry. Killing a worker we
+        # then decline to relaunch strands the pod: its in-flight job sessions keep
+        # running but nothing schedules the rest.
+        if not any(
+            isinstance(raw, dict) and raw.get("status") == "failed"
+            for raw in state["jobs"].values()
+        ):
+            continue
+        # Stop the worker BEFORE rewriting state, then re-read. A live worker holds the
+        # job table in memory and rewrites the state file every poll, so a reset
+        # uploaded underneath it is silently clobbered and the job stays failed with its
+        # old attempt count. Job sessions (csj_*) are independent and keep running; the
+        # relaunched worker adopts them from state. Every pod killed here is appended to
+        # `affected`, so every pod killed is relaunched below.
+        kubectl_exec(
+            pod,
+            f"tmux kill-session -t {shlex.quote(worker_session_name(grid_id, pod))} "
+            "2>/dev/null || true",
+            check=False,
+            timeout=30,
+        )
+        state = fetch_pod_state(pod, grid_id) or state
         reset_ids = reset_failed_jobs(state)
         if not reset_ids:
+            # Worker changed the picture between the two reads; it is already dead, so
+            # it still must be relaunched.
+            affected.append(pod)
             continue
         write_pod_state(pod, grid_id, state)
         log(f"{pod}: reset {len(reset_ids)} failed jobs -> pending: {reset_ids}")
@@ -491,7 +543,9 @@ def cmd_retry_failed(args: argparse.Namespace) -> int:
             raise RuntimeError(
                 f"{pod}: no healthy LLM endpoint (last={endpoint} http={code!r})"
             )
-        launch_worker_on_pod(pod, grid_id, poll_seconds=args.poll_seconds)
+        launch_worker_on_pod(
+            pod, grid_id, poll_seconds=args.poll_seconds, max_slots=args.max_slots
+        )
     log(f"retry-failed: reset {total_reset} jobs on pods {affected}")
     time.sleep(3)
     return cmd_status(argparse.Namespace(grid_id=grid_id))
@@ -902,6 +956,16 @@ def parse_args() -> argparse.Namespace:
         help="download: pull completed results even if some jobs permanently failed",
     )
     p.add_argument("--poll-seconds", type=float, default=DEFAULT_POLL_SECONDS)
+    p.add_argument(
+        "--max-slots",
+        type=int,
+        default=None,
+        help=(
+            "launch/retry-failed: concurrent jobs per pod. Default None keeps the "
+            "worker's own MAX_TASKS_PER_POD. Lower it for tensor-parallel pods "
+            "serving a single engine."
+        ),
+    )
     return p.parse_args()
 
 

@@ -6,6 +6,7 @@ import pandas as pd
 
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import (
+    Agent4RecListwiseRankingScorer,
     Agent4RecPreferenceListwiseRankingScorer,
     Agent4RecProfileGenerator,
 )
@@ -36,6 +37,10 @@ from runners.in_distribution.cold_start.methods.agent4rec_yes_no import (
     agent4rec_taste_cache_path,
 )
 from runners.in_distribution.cold_start.methods.llm_listwise_ranking import (
+    INTERACTION_PROTOCOL,
+    INTERACTION_TARGET_SOURCE_COLUMN,
+    PREFERENCE_PROTOCOL,
+    PREFERENCE_TARGET_SOURCE_COLUMN,
     TARGET_DESCRIPTIONS,
 )
 from runners.in_distribution.interaction_prediction.methods.common import (
@@ -385,8 +390,9 @@ def _run_traits_taste_candidate_summary(
     model: str,
     max_candidate_groups: int | None,
     suffix: str,
-    extra_body: dict | None = QWEN_EXTRA_BODY,
+    extra_body: dict | None = None,
 ) -> dict[str, object]:
+    resolved_extra_body = QWEN_EXTRA_BODY if extra_body is None else extra_body
     return run_method(
         task,
         output_dir,
@@ -395,7 +401,7 @@ def _run_traits_taste_candidate_summary(
         model=model,
         max_candidate_groups=max_candidate_groups,
         max_workers=VLLM_MAX_WORKERS,
-        extra_body=extra_body,
+        extra_body=resolved_extra_body,
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
@@ -412,8 +418,9 @@ def _run_traits_taste_sumboth(
     model: str,
     max_candidate_groups: int | None,
     suffix: str,
-    extra_body: dict | None = QWEN_EXTRA_BODY,
+    extra_body: dict | None = None,
 ) -> dict[str, object]:
+    resolved_extra_body = QWEN_EXTRA_BODY if extra_body is None else extra_body
     return run_method(
         task,
         output_dir,
@@ -422,7 +429,7 @@ def _run_traits_taste_sumboth(
         model=model,
         max_candidate_groups=max_candidate_groups,
         max_workers=VLLM_MAX_WORKERS,
-        extra_body=extra_body,
+        extra_body=resolved_extra_body,
         profile_components=("traits", "taste"),
         taste_client_name=OPENAI_CLIENT,
         taste_model=GPT4O_MINI_TASTE_MODEL,
@@ -453,19 +460,40 @@ def run_method(
     summary_usage: Agent4RecSummaryUsage = "candidate",
     max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
     min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
+    ranking_target: str = "preference",
 ) -> dict[str, object]:
-    """Run Agent4Rec direct preference ranking for cold-start val/test groups."""
+    """Run Agent4Rec direct listwise ranking for cold-start val/test groups."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
+    target_source_column = str(task.manifest.get("target_source_column"))
+    if ranking_target == "preference":
+        expected_source = PREFERENCE_TARGET_SOURCE_COLUMN
+        protocol = PREFERENCE_PROTOCOL
+    elif ranking_target == "interaction":
+        expected_source = INTERACTION_TARGET_SOURCE_COLUMN
+        protocol = INTERACTION_PROTOCOL
+    else:
+        raise ValueError(f"Unsupported ranking_target: {ranking_target!r}")
+    if target_source_column != expected_source:
+        raise ValueError(
+            "Task target mismatch for Agent4Rec listwise runner: "
+            f"ranking_target={ranking_target!r} requires "
+            f"target_source_column={expected_source!r}, got "
+            f"{target_source_column!r}."
+        )
     try:
-        target_description = TARGET_DESCRIPTIONS[dataset_name]
         candidate_columns = DATASET_CANDIDATE_COLUMNS[dataset_name]
         column_labels = dict(DATASET_COLUMN_LABELS[dataset_name])
     except KeyError as error:
         raise ValueError(
             f"Unsupported cold-start Agent4Rec listwise dataset: {dataset_name!r}"
         ) from error
+    target_description = (
+        TARGET_DESCRIPTIONS[dataset_name]
+        if ranking_target == "preference"
+        else None
+    )
 
     uses_taste = "taste" in profile_components
     resolved_summary_usage = resolve_agent4rec_summary_usage(summary_usage)
@@ -535,21 +563,49 @@ def run_method(
             ITEM_SUMMARY_COLUMN if resolved_summary_usage["profile"] else None
         ),
     )
-    scorer = Agent4RecPreferenceListwiseRankingScorer(
-        client=make_llm_client(client_name),
-        model=model,
-        target_description=target_description,
-        profile_generator=profile_generator,
-        candidate_description_columns=candidate_columns,
-        column_labels=column_labels,
-        json_list_columns=(),
-        max_history_items=max_history_items,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        extra_body=extra_body,
-    ).fit(X_history, y_history, profile_user_ids=profile_user_ids)
+    scorer_kwargs = {
+        "client": make_llm_client(client_name),
+        "model": model,
+        "profile_generator": profile_generator,
+        "candidate_description_columns": candidate_columns,
+        "column_labels": column_labels,
+        "json_list_columns": (),
+        "max_history_items": max_history_items,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "extra_body": extra_body,
+    }
+    if ranking_target == "preference":
+        scorer = Agent4RecPreferenceListwiseRankingScorer(
+            target_description=target_description,
+            **scorer_kwargs,
+        )
+    else:
+        scorer = Agent4RecListwiseRankingScorer(**scorer_kwargs)
+    scorer = scorer.fit(X_history, y_history, profile_user_ids=profile_user_ids)
     if uses_taste:
         scorer.build_taste(X_eval)
+
+    scorer_manifest = {
+        "class": scorer.__class__.__name__,
+        "fit_on": "online_session_history",
+        "k": task.k,
+        "client_name": client_name,
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "max_history_items": max_history_items,
+        "candidate_description_columns": list(candidate_columns),
+        "column_labels": column_labels,
+        "json_list_columns": [],
+        "profile_generator": scorer.profile_generator.manifest(),
+        "extra_body": extra_body,
+        "summary_usage": summary_usage,
+        "item_summaries": item_summary_metadata,
+        "ranking_target": ranking_target,
+    }
+    if target_description is not None:
+        scorer_manifest["target_description"] = target_description
 
     return evaluate_listwise_scorer(
         task=task,
@@ -566,23 +622,7 @@ def run_method(
         max_workers=max_workers,
         max_error_rate=max_error_rate,
         min_groups_before_check=min_groups_before_check,
-        scorer_manifest={
-            "class": scorer.__class__.__name__,
-            "fit_on": "online_session_history",
-            "k": task.k,
-            "client_name": client_name,
-            "model": model,
-            "target_description": target_description,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "max_history_items": max_history_items,
-            "candidate_description_columns": list(candidate_columns),
-            "column_labels": column_labels,
-            "json_list_columns": [],
-            "profile_generator": scorer.profile_generator.manifest(),
-            "extra_body": extra_body,
-            "summary_usage": summary_usage,
-            "item_summaries": item_summary_metadata,
-        },
+        scorer_manifest=scorer_manifest,
         repo_root=repo_root(),
+        protocol=protocol,
     )

@@ -84,6 +84,53 @@ The skeleton's `default` roster comes from each dataset's lowest-seed artifact;
 `_review_notes` per dataset list which policies got *different* params across seeds — that
 is the signal for whether per-seed `seed<N>` override sections are warranted.
 
+## Coat is tuned under a different protocol
+
+The `coat` section of `preference.json` does **not** come from the workflow above. It is
+produced by `runners/in_distribution/policy_tuning_rerank/run.py`, and the differences are
+not cosmetic — do not reason about that section using the ml-1m rules.
+
+| | ml-1m / steam | coat |
+| --- | --- | --- |
+| tuner | `tasks/policy_tuning.py` | `tasks/policy_tuning_rerank.py` |
+| candidates | free retrieval over the catalog | re-rank the user's own 16-item held-out pool |
+| validation rows | inner 25% split of outer train | the held-out MCAR half — **also the evaluation set** |
+| objective | `macro_by_user_group_mean.ndcg@10` | `mean_hit_rate` (= precision@k, the runner's own utility) |
+| `iterations` | pinned at 300 | tuned, like any other hyperparameter |
+| grid size | 4-12 points per policy | 11-480; a full pass is a few minutes on 290x300 |
+| unlabelled candidates | zero-filled | impossible; the join is strict and raises |
+| artifact | `{dataset}_{target}_seed{n}.json` | `{dataset}_{target}_rerank_users{N}_seed{n}.json` |
+| config emission | `--emit-config` writes the file | `--print-config` prints a block for hand-merge |
+
+Coat forces all of this. Its train half holds 22.74 rows per user, so a 25% inner split
+leaves 5.68 candidates against `POLICY_K = 5` — a top-5 covering 88% of the pool, where no
+setting can distinguish itself. Scoring free retrieval instead is worse, not a fallback:
+with 5.68 labelled cells among 300 items, the zero-fill would fabricate ~98% of the
+objective. The only usable validation labels Coat has are the uniformly-assigned ones, and
+those are the labels the experiment reports against.
+
+**So the Coat roster is selected on its own evaluation labels, and its real utilities are
+optimistically biased.** The bias is measured rather than asserted: a diagnostic pass
+(`--tuning-user-fraction 0.5`) selects on half the users, scores the selection on both
+halves, and subtracts the same gap averaged over the policy's whole grid — which removes
+the two halves' base-rate difference and leaves the selection bias alone. A policy with
+nothing to select reports exactly zero, which is the correct answer and the estimator's
+self-check. Numbers live in the artifact's `curse_summary` and in the section's
+`_review_notes`. One thing that measurement does *not* cover: the search boxes themselves
+were revised once against the diagnostic half, after every policy first selected on a
+boundary. Selecting the grid is a layer above selecting within it.
+
+`iterations` is tuned rather than pinned because 300 is a budget chosen for ml-1m, and
+carrying it to a matrix a thousand times smaller assumes the answer. It matters: once the
+budget was free, BPR and LightGCN both went to the ceiling of `{100, 300, 1000}`, and BPR
+then preferred the *smallest* model on offer having wanted the largest while pinned —
+capacity and training budget are not separable questions here. ALS is the sharper case: its
+`iterations` is absent from the ml-1m grid entirely, so it had been running the class
+default of 20 unexamined.
+
+Both artifacts are kept. `emit_configs` must never be pointed at Coat — it rebuilds the
+whole config file from artifacts and would drop the hand-maintained ml-1m section.
+
 ## Caveats (read before trusting a run)
 
 - **The staleness guardrail is weaker than with artifacts.** Artifact identity was
@@ -91,7 +138,10 @@ is the signal for whether per-seed `seed<N>` override sections are warranted.
   when the dataset/filter/splitter changes. The config *is* the selection record — treat
   edits like experiment changes (commit message, `tuned_from`, `comment`).
 - **Pick from validation-side evidence only.** The tuning artifacts contain inner-val
-  metrics; never choose params using test-side outputs.
+  metrics; never choose params using test-side outputs. **Coat is the documented
+  exception** — it has no third partition, so its validation labels *are* its evaluation
+  labels. See the section above; the resulting bias is measured and recorded, and any
+  reported number from that roster has to carry it.
 - **Name-based identity changes output schemas.** The `policy` column in
   `predictions.parquet`, utility dicts, and manifests carry config names (`als_f32`), not
   class names. Downstream analysis must key on these; outputs produced before this change

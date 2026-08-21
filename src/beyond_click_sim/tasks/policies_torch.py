@@ -27,6 +27,7 @@ matching `SEARCH_SPACES` key.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, Self
 
 import torch
@@ -368,3 +369,34 @@ class LightGCNTorchPolicy(Policy):
             )
 
         return pd.DataFrame(rows, columns=output_columns)
+
+    def rank_candidates(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+        *,
+        train_interactions: pd.DataFrame | None = None,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+    ) -> list[Any]:
+        """Score candidates by the LightGCN user-item dot product.
+
+        `self._embedding_` is already layer-propagated at fit time, so unlike
+        the NumPy class there is no forward pass to repeat per user. Cold users
+        and items unseen in training carry no signal and fall back to the seeded
+        shuffle.
+        """
+
+        user_row = self._user_idx_.get(user_id)
+        if user_row is None:
+            return self._seeded_permutation(user_id, candidate_items)
+
+        embedding_users = self._embedding_[: self._n_users_]
+        embedding_items = self._embedding_[self._n_users_ :]
+        user_vector = embedding_users[user_row]
+        scores = {}
+        for item in candidate_items:
+            idx = self._item_idx_.get(item)
+            if idx is not None:
+                scores[item] = float(embedding_items[idx] @ user_vector)
+        return self._order_by_score(user_id, candidate_items, scores)

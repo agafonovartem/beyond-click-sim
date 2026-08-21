@@ -7,15 +7,30 @@
 # restarts the vLLM/litellm tmux sessions so it can be used to recover a pod after
 # a reload without re-downloading a large model.
 #
+# For a model too large for one GPU, deploy a single tensor-parallel instance
+# instead and skip the proxy, since there is nothing to load-balance across:
+#   GPU_COUNT=1 TENSOR_PARALLEL_SIZE=4 SKIP_LITELLM=1 deploy_pod.sh <pod>
+# That serves the model on port 8000, which is the `vllm_local` client default.
+#
 # Usage: deploy_pod.sh <pod_name>
 # Env overrides: GPU_COUNT (default 4), PROXY_PORT (default 8080),
-#                MODEL_NAME (default Qwen/Qwen3.6-27B)
+#                MODEL_NAME (default Qwen/Qwen3.6-27B),
+#                TENSOR_PARALLEL_SIZE (default 1), SKIP_LITELLM (default 0),
+#                VLLM_HEALTH_TIMEOUT (default 900s), HF_TOKEN (gated repos only)
 set -euo pipefail
 
 POD="$1"
 GPU_COUNT="${GPU_COUNT:-4}"
 PROXY_PORT="${PROXY_PORT:-8080}"
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3.6-27B}"
+TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
+SKIP_LITELLM="${SKIP_LITELLM:-0}"
+# Extra names the vLLM server should also answer to, space separated. Llama-3.3-70B
+# needs "llama-3.3-70b-instruct" because that is the id the cold-start method registry
+# sends, while MODEL_NAME is the download path meta-llama/Llama-3.3-70B-Instruct.
+SERVED_MODEL_ALIASES="${SERVED_MODEL_ALIASES:-}"
+VLLM_HEALTH_TIMEOUT="${VLLM_HEALTH_TIMEOUT:-900}"
+HF_TOKEN="${HF_TOKEN:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { echo "[$POD] $*"; }
@@ -67,7 +82,7 @@ if model_complete; then
 else
     for attempt in 1 2 3; do
         log "running install.sh for $MODEL_NAME (attempt $attempt/3)"
-        kubectl exec "$POD" -- bash -lc "cd ~ && tmux kill-session -t install 2>/dev/null; tmux new-session -d -s install \"MODEL_NAME='$MODEL_NAME' bash install.sh > install.log 2>&1\""
+        kubectl exec "$POD" -- bash -lc "cd ~ && tmux kill-session -t install 2>/dev/null; tmux new-session -d -s install \"MODEL_NAME='$MODEL_NAME' HF_TOKEN='$HF_TOKEN' bash install.sh > install.log 2>&1\""
         while kubectl exec "$POD" -- bash -lc 'tmux has-session -t install' 2>/dev/null; do
             sleep 15
         done
@@ -80,17 +95,23 @@ else
     model_complete || { log "ERROR: model download still incomplete after 3 install attempts"; exit 1; }
 fi
 
-log "launching $GPU_COUNT vLLM instance(s) for $MODEL_NAME"
+log "launching $GPU_COUNT vLLM instance(s) for $MODEL_NAME (tensor-parallel $TENSOR_PARALLEL_SIZE)"
 for ((gpu = 0; gpu < GPU_COUNT; gpu++)); do
-    kubectl exec "$POD" -- bash -lc "cd ~ && tmux kill-session -t vllm$gpu 2>/dev/null; tmux new-session -d -s vllm$gpu \"MODEL_NAME='$MODEL_NAME' bash run_llm.sh $gpu > vllm$gpu.log 2>&1\""
+    kubectl exec "$POD" -- bash -lc "cd ~ && tmux kill-session -t vllm$gpu 2>/dev/null; tmux new-session -d -s vllm$gpu \"MODEL_NAME='$MODEL_NAME' TENSOR_PARALLEL_SIZE='$TENSOR_PARALLEL_SIZE' SERVED_MODEL_ALIASES='$SERVED_MODEL_ALIASES' bash run_llm.sh $gpu > vllm$gpu.log 2>&1\""
 done
 
 for ((gpu = 0; gpu < GPU_COUNT; gpu++)); do
     port=$((8000 + gpu))
     log "waiting for vllm gpu $gpu (port $port) to become healthy"
-    wait_for_health "$port" "vllm$gpu" "/health" 900 || exit 1
+    wait_for_health "$port" "vllm$gpu" "/health" "$VLLM_HEALTH_TIMEOUT" || exit 1
     log "vllm gpu $gpu healthy"
 done
+
+if [ "$SKIP_LITELLM" = "1" ]; then
+    log "SKIP_LITELLM=1 — serving vLLM directly on port 8000, no proxy"
+    log "pod deployment complete"
+    exit 0
+fi
 
 log "launching litellm proxy on port $PROXY_PORT"
 kubectl exec "$POD" -- bash -lc "cd ~ && tmux kill-session -t litellm 2>/dev/null; tmux new-session -d -s litellm 'bash run_litellm.sh $PROXY_PORT > litellm.log 2>&1'"

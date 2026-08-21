@@ -41,6 +41,12 @@ from scripts.cold_start_pod_grid_lib import (  # noqa: E402
     write_json_atomic,
 )
 
+# Raised well above the client default of 120s. Requests are not slow here, they are
+# queued: one TP engine at --max-num-seqs=16 against a listwise job's 240 worker
+# threads means most requests wait far longer than they execute, and a client timeout
+# is recorded as an LLM error rather than as backlog.
+VLLM_TIMEOUT_SECONDS = 1800
+
 
 def log(msg: str) -> None:
     ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -108,6 +114,7 @@ def start_job_tmux(
     log_path: Path,
     base_url: str,
     repo: Path,
+    vllm_timeout_seconds: int = VLLM_TIMEOUT_SECONDS,
 ) -> None:
     tmux_kill_session(session)
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -116,6 +123,10 @@ def start_job_tmux(
         f"source .venv/bin/activate && "
         f'export PYTHONPATH="{repo}/src:{repo}" && '
         f"export BEYOND_CLICK_SIM_VLLM_LOCAL_BASE_URL={shlex.quote(base_url)} && "
+        # A tensor-parallel pod serves one engine at --max-num-seqs=16 while a listwise
+        # job drives up to VLLM_MAX_WORKERS=240 threads, so requests queue deeply and
+        # the 120s client default times them out — counted as LLM errors, not backlog.
+        f"export BEYOND_CLICK_SIM_VLLM_LOCAL_TIMEOUT_SECONDS={shlex.quote(str(vllm_timeout_seconds))} && "
         f"mkdir -p {shlex.quote(str(output_rel))} && "
         f"python -m runners.in_distribution.cold_start.run "
         f"--methods {shlex.quote(method)} "

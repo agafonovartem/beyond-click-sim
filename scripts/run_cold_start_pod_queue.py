@@ -45,7 +45,9 @@ def required_metric_files(method: str) -> tuple[str, ...]:
     if method.startswith(
         (
             "llm_preference_listwise_ranking_",
+            "llm_listwise_ranking_",
             "agent4rec_preference_listwise_ranking_",
+            "agent4rec_listwise_ranking_",
         )
     ):
         return ("metrics_ranking.json",)
@@ -60,6 +62,17 @@ def method_requires_item_stats_tasks(method: str) -> bool:
 
 def method_requires_taste_cache(method: str) -> bool:
     return "_traits_taste_" in method
+
+
+def method_target_kind(method: str) -> str:
+    if method.startswith(
+        (
+            "llm_listwise_ranking_",
+            "agent4rec_listwise_ranking_",
+        )
+    ):
+        return "interact"
+    return "like"
 
 
 def task_names_for_method(method: str = METHOD) -> list[str]:
@@ -79,9 +92,11 @@ def task_names_for_method(method: str = METHOD) -> list[str]:
 
     strategies = ["uniform"]  # add "popularity_matched" for the full grid
     use_item_rating_stats = method_requires_item_stats_tasks(method)
+    target_kind = method_target_kind(method)
     return [
         cold_start_task_name(
             "ml-1m",
+            target_kind,
             k,
             m,
             strategy,

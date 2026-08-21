@@ -140,3 +140,83 @@ class RandomFractionSplitter(Splitter):
         if not parts:
             return template.iloc[0:0].copy().reset_index(drop=True)
         return pd.concat(parts, ignore_index=True)
+
+
+class SourcePartitionSplitter(Splitter):
+    """Partition rows by a provenance column instead of sampling them.
+
+    Coat's split is given by data collection rather than by a random draw: the
+    uniformly-assigned (MCAR) half is the evaluation set, and the self-selected
+    (MNAR) half is what policies may learn from. Nothing is sampled, so the
+    result is byte-identical under every seed — `seed` is accepted only to
+    satisfy the `Splitter` interface.
+
+    Any (user, item) pair present in *both* halves is removed from train. On
+    Coat that is 366 cells, where a participant was randomly shown a coat they
+    had already chosen and rated themselves. Leaving them in train would leak an
+    evaluation label straight into policy fitting, and the count is recorded on
+    the instance so it reaches the task manifest.
+
+    `val` is always empty: this protocol selects no thresholds.
+    """
+
+    def __init__(
+        self,
+        *,
+        source_column: str = "source",
+        train_value: str = "self_selected",
+        test_value: str = "random",
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+        seed: int = 0,
+    ) -> None:
+        super().__init__(seed=seed)
+        self.source_column = source_column
+        self.train_value = train_value
+        self.test_value = test_value
+        self.user_column = user_column
+        self.item_column = item_column
+        self.dropped_overlap_rows_: int | None = None
+        self.dropped_overlap_pairs_: int | None = None
+
+    def split(self, interactions: pd.DataFrame) -> SplitFrames:
+        for column in (self.source_column, self.user_column, self.item_column):
+            if column not in interactions.columns:
+                raise ValueError(
+                    f"SourcePartitionSplitter requires column {column!r}; "
+                    f"got {sorted(interactions.columns)}"
+                )
+
+        sources = set(interactions[self.source_column].dropna().unique())
+        unexpected = sources - {self.train_value, self.test_value}
+        if unexpected:
+            raise ValueError(
+                "SourcePartitionSplitter would silently drop rows with "
+                f"unhandled {self.source_column!r} values: {sorted(unexpected)}"
+            )
+
+        test = interactions[interactions[self.source_column] == self.test_value]
+        train = interactions[interactions[self.source_column] == self.train_value]
+
+        test_pairs = set(
+            zip(test[self.user_column], test[self.item_column], strict=True)
+        )
+        keep = [
+            pair not in test_pairs
+            for pair in zip(train[self.user_column], train[self.item_column], strict=True)
+        ]
+        kept = train[pd.Series(keep, index=train.index)]
+
+        self.dropped_overlap_rows_ = int(len(train) - len(kept))
+        self.dropped_overlap_pairs_ = int(
+            len(
+                set(zip(train[self.user_column], train[self.item_column], strict=True))
+                & test_pairs
+            )
+        )
+
+        return SplitFrames(
+            train=kept.reset_index(drop=True),
+            val=interactions.iloc[0:0].copy().reset_index(drop=True),
+            test=test.reset_index(drop=True),
+        )
