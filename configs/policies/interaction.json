@@ -152,6 +152,191 @@
           "tuned_from": "artifacts/ml-1m_target_interact_seed0.json"
         }
       ]
+    },
+    "steam": {
+      "_review_notes": [
+        "ALSPolicy: selected params differ across seeds (seed0={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.1}, seed1={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.1}, seed2={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.1}, seed3={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.1}, seed4={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.1}, seed5={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.01}, seed6={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.01}, seed7={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.1}, seed8={'alpha': 2.0, 'n_factors': 16, 'regularization': 0.1}). Decide: keep one default, or add seed<N> override sections.",
+        "BPRPolicy: same params selected on all 9 seeds.",
+        "ItemKNNPolicy: same params selected on all 9 seeds.",
+        "LightGCNTorchPolicy: same params selected on all 9 seeds.",
+        "PopularityPolicy: same params selected on all 9 seeds.",
+        "RandomPolicy: same params selected on all 9 seeds.",
+        "Suboptimal variants: chosen from the recorded grid of artifacts/steam_target_interact_seed*.json (9 complete seeds). Hard constraint: every pair on a policy's ladder, including the tuned pick, has a paired 95% CI on the across-seed objective difference that excludes zero AND orders identically on 9/9 seeds. Among the triples meeting that, the one maximising the tightest rung was taken. '_mean=X' is the across-seed mean of macro_by_user_group_mean.ndcg@10, matching the ml-1m convention.",
+        "Ladder rungs in tuning ndcg@10, each the drop from the level above, top down \u2014 ALSPolicy: 0.0205/0.0200/0.0209; BPRPolicy: 0.0562/0.0501/0.0316; ItemKNNPolicy: 0.0238/0.0046/0.0099; LightGCNTorchPolicy: 0.0195/0.0419/0.0068.",
+        "CAVEAT: separability above is measured on the tuning validation split (57333 users, ndcg@10). The experiment scores mean_hit_rate on 1000 eval users, where a paired bootstrap on the ml-1m 15-policy run resolves adjacent rungs only from about 0.010 upward. ItemKNNPolicy (2 rungs at 0.0099 and 0.0046) and LightGCNTorchPolicy (1 rung at 0.0068) are expected to produce near-ties in the run; their grids have no wider-spaced alternative. ALSPolicy and BPRPolicy clear the bar on every rung."
+      ],
+      "default": [
+        {
+          "class": "ALSPolicy",
+          "name": "ALSPolicy",
+          "params": {
+            "alpha": 5.0,
+            "n_factors": 32,
+            "regularization": 0.1
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "BPRPolicy",
+          "name": "BPRPolicy",
+          "params": {
+            "iterations": 300,
+            "learning_rate": 0.001,
+            "n_factors": 64,
+            "regularization": 0.001
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "ItemKNNPolicy",
+          "name": "ItemKNNPolicy",
+          "params": {
+            "n_neighbors": 10
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "LightGCNTorchPolicy",
+          "name": "LightGCNTorchPolicy",
+          "params": {
+            "iterations": 300,
+            "n_layers": 3,
+            "regularization": 0.0001
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "PopularityPolicy",
+          "comment": "baseline (no hyperparameters to tune)",
+          "name": "PopularityPolicy",
+          "params": {},
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "RandomPolicy",
+          "comment": "baseline (no hyperparameters to tune)",
+          "name": "RandomPolicy",
+          "params": {},
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "ALSPolicy",
+          "name": "ALSPolicy_mean=0.54",
+          "params": {
+            "alpha": 20.0,
+            "n_factors": 64,
+            "regularization": 0.01
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "ALSPolicy",
+          "name": "ALSPolicy_mean=0.56",
+          "params": {
+            "alpha": 2.0,
+            "n_factors": 64,
+            "regularization": 0.1
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "ALSPolicy",
+          "name": "ALSPolicy_mean=0.58",
+          "params": {
+            "alpha": 10.0,
+            "n_factors": 32,
+            "regularization": 0.1
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "BPRPolicy",
+          "name": "BPRPolicy_mean=0.31",
+          "params": {
+            "iterations": 300,
+            "learning_rate": 0.005,
+            "n_factors": 32,
+            "regularization": 0.001
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "BPRPolicy",
+          "name": "BPRPolicy_mean=0.35",
+          "params": {
+            "iterations": 300,
+            "learning_rate": 0.005,
+            "n_factors": 64,
+            "regularization": 0.001
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "BPRPolicy",
+          "name": "BPRPolicy_mean=0.4",
+          "params": {
+            "iterations": 300,
+            "learning_rate": 0.002,
+            "n_factors": 32,
+            "regularization": 0.001
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "ItemKNNPolicy",
+          "name": "ItemKNNPolicy_mean=0.556",
+          "params": {
+            "n_neighbors": 50
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "ItemKNNPolicy",
+          "name": "ItemKNNPolicy_mean=0.566",
+          "params": {
+            "n_neighbors": 100
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "ItemKNNPolicy",
+          "name": "ItemKNNPolicy_mean=0.571",
+          "params": {
+            "n_neighbors": 20
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "LightGCNTorchPolicy",
+          "name": "LightGCNTorchPolicy_mean=0.53",
+          "params": {
+            "iterations": 300,
+            "n_layers": 3,
+            "regularization": 0.01
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "LightGCNTorchPolicy",
+          "name": "LightGCNTorchPolicy_mean=0.54",
+          "params": {
+            "iterations": 300,
+            "n_layers": 2,
+            "regularization": 0.01
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        },
+        {
+          "class": "LightGCNTorchPolicy",
+          "name": "LightGCNTorchPolicy_mean=0.58",
+          "params": {
+            "iterations": 300,
+            "n_layers": 3,
+            "regularization": 0.001
+          },
+          "tuned_from": "artifacts/steam_target_interact_seed0.json"
+        }
+      ]
     }
   },
   "schema_version": 1,
