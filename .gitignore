@@ -34,7 +34,7 @@ artifacts/*
 !/outputs/in_distribution/regression_prediction/*eval_users1000*/metrics*.json
 !/outputs/in_distribution/cold_start/
 /outputs/in_distribution/cold_start/*
-!/outputs/in_distribution/cold_start/*eval_users1000*/
+!/outputs/in_distribution/cold_start/*eval_1000*/
 /outputs/in_distribution/cold_start/*/*
-!/outputs/in_distribution/cold_start/*eval_users1000*/manifest.json
-!/outputs/in_distribution/cold_start/*eval_users1000*/metrics*.json
+!/outputs/in_distribution/cold_start/*eval_1000*/manifest.json
+!/outputs/in_distribution/cold_start/*eval_1000*/metrics*.json

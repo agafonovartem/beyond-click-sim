@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from runners.in_distribution.cold_start.methods import METHOD_RUNNERS  # noqa: E402
 from runners.in_distribution.cold_start.methods import (  # noqa: E402
+    agent4rec_interaction_listwise_ranking,
     agent4rec_listwise_ranking,
 )
 from runners.in_distribution.llm_error_budget import (  # noqa: E402
@@ -47,7 +48,9 @@ class FakeClient:
         self.completions = completions
 
 
-def _cold_task(*, val_groups: int = 1, test_groups: int = 2) -> ColdStartTask:
+def _cold_task(
+    *, val_groups: int = 1, test_groups: int = 2, target_source_column: str = "target_like_ge4"
+) -> ColdStartTask:
     history = pd.DataFrame(
         [
             {
@@ -123,6 +126,7 @@ def _cold_task(*, val_groups: int = 1, test_groups: int = 2) -> ColdStartTask:
         ),
         manifest={
             "dataset": "ml-1m",
+            "target_source_column": target_source_column,
             "k": 2,
             "sampling_seed": 7,
             "negative_strategy": "uniform",
@@ -250,6 +254,27 @@ def test_smoke_limit_applies_independently_to_val_and_test(
         "test": 25,
         "val": 25,
     }
+
+
+def test_agent4rec_listwise_runner_rejects_mismatched_target_kind(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client = FakeClient(["1. C1\n2. C2"] * 3)
+    monkeypatch.setattr(agent4rec_listwise_ranking, "make_llm_client", lambda _: client)
+    with pytest.raises(ValueError, match="Task target mismatch"):
+        agent4rec_listwise_ranking.run_method(
+            _cold_task(target_source_column="target_like_ge4"),
+            tmp_path,
+            method_name="agent4rec_listwise_ranking_test",
+            client_name="fake",
+            model="fake-model",
+            max_candidate_groups=None,
+            max_workers=1,
+            max_llm_attempts=1,
+            profile_components=("traits",),
+            summary_usage="candidate",
+            ranking_target="interaction",
+        )
 
 
 def test_taste_uses_history_only_and_non_summary_cache(
@@ -478,3 +503,36 @@ def test_wrappers_and_registry_cover_methods(monkeypatch, tmp_path: Path) -> Non
         "agent4rec_preference_listwise_ranking_vllm_llama33_70b_traits_taste_gpt4o_mini_sumboth_full",
     }
     assert expected <= METHOD_RUNNERS.keys()
+
+
+def test_interaction_wrappers_and_registry_cover_methods(monkeypatch, tmp_path: Path) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_method(
+        _task: ColdStartTask, _output_dir: Path, **kwargs: object
+    ) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(
+        agent4rec_interaction_listwise_ranking.preference_listwise,
+        "run_method",
+        fake_run_method,
+    )
+    task = _cold_task(target_source_column="target_interact")
+    agent4rec_interaction_listwise_ranking.run_qwen36_27b_traits_smoke(task, tmp_path)
+    agent4rec_interaction_listwise_ranking.run_qwen3_8b_traits_taste_gpt4o_mini_sumboth_full(
+        task, tmp_path
+    )
+
+    assert calls[0]["method_name"] == "agent4rec_listwise_ranking_vllm_qwen36_27b_traits_smoke"
+    assert calls[0]["ranking_target"] == "interaction"
+    assert calls[1]["summary_usage"] == "both"
+    assert calls[1]["ranking_target"] == "interaction"
+    assert (
+        "agent4rec_listwise_ranking_vllm_qwen36_27b_traits_smoke" in METHOD_RUNNERS
+    )
+    assert (
+        "agent4rec_listwise_ranking_vllm_qwen3_8b_traits_taste_gpt4o_mini_sumboth_full"
+        in METHOD_RUNNERS
+    )

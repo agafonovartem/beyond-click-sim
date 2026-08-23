@@ -30,7 +30,7 @@ from runners.in_distribution.llm_error_budget import LLMErrorRateExceededError
 
 
 SCORE_MAPPING = "score = n_candidates - rank"
-PROTOCOL = "direct_listwise_preference_ranking"
+DEFAULT_PROTOCOL = "direct_listwise_preference_ranking"
 
 
 def evaluate_listwise_scorer(
@@ -51,6 +51,7 @@ def evaluate_listwise_scorer(
     min_groups_before_check: int,
     scorer_manifest: dict[str, object],
     repo_root: Path,
+    protocol: str = DEFAULT_PROTOCOL,
 ) -> dict[str, object]:
     """Evaluate a fitted listwise scorer without pointwise thresholding."""
 
@@ -157,7 +158,7 @@ def evaluate_listwise_scorer(
 
     manifest = {
         "method": method_name,
-        "protocol": PROTOCOL,
+        "protocol": protocol,
         "scorer": scorer_manifest,
         "decision_rule": {
             "ranking": {
@@ -180,7 +181,7 @@ def evaluate_listwise_scorer(
     ranking_result = {
         "method": method_name,
         "task": task.name,
-        "protocol": PROTOCOL,
+        "protocol": protocol,
         "main_metric": LISTWISE_MAIN_METRIC,
         "ranking_evaluation": {
             "ks": list(RANKING_KS),

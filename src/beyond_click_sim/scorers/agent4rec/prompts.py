@@ -66,8 +66,17 @@ def agent4rec_system_prompt(
     diversity: str | None,
     domain_name: str = "movie",
     taste_label: str = "movie tastes",
+    persona: str | None = None,
 ) -> str:
-    """Build an Agent4Rec-style system prompt from available profile parts."""
+    """Build an Agent4Rec-style system prompt from available profile parts.
+
+    `persona` is an optional dataset-supplied sentence describing who the user
+    is -- demographics rather than behaviour. Agent4Rec's own traits are all
+    derived from rating behaviour, so there was no slot for this; Coat is the
+    first dataset carrying participant covariates worth stating. It renders
+    between the role-play prefix and the trait lines, and defaults to None so
+    every existing caller is unaffected.
+    """
 
     has_activity = bool(activity)
     has_conformity = bool(conformity)
@@ -77,9 +86,10 @@ def agent4rec_system_prompt(
     if not has_traits and use_original_movie_wording:
         return AGENT4REC_FORCED_ITEMS_SYSTEM_PROMPT_TEMPLATE.format(taste=taste or "")
     if not has_traits:
+        persona_line = f"\n{persona}" if persona else ""
         return (
             f"Assume you are a user browsing {domain_name} recommendation system "
-            f"who has the following characteristics: \nYour {taste_label} are: "
+            f"who has the following characteristics: {persona_line}\nYour {taste_label} are: "
             f"{taste or ''}. "
         )
 
@@ -90,6 +100,8 @@ def agent4rec_system_prompt(
             domain_name=domain_name,
         )
     ]
+    if persona:
+        parts.append(f"\n{persona}")
     explanations: list[str] = []
     if activity:
         parts.append(f"\nYour activity trait is described as: {activity}")
@@ -366,6 +378,7 @@ def agent4rec_rating_user_prompt(
 
 AGENT4REC_TASTE_PROMPT_VERSION = "agent4rec_modify_v1"
 AGENT4REC_PLAYTIME_TASTE_PROMPT_VERSION = "agent4rec_playtime_v1"
+AGENT4REC_COAT_TASTE_PROMPT_VERSION = "agent4rec_coat_v1"
 
 AGENT4REC_TASTE_SYSTEM_PROMPT = """
 I want you to act as an agent. You will act as a movie taste analyst roleplaying the user using the first person pronoun "I".
@@ -373,6 +386,10 @@ I want you to act as an agent. You will act as a movie taste analyst roleplaying
 
 AGENT4REC_PLAYTIME_TASTE_SYSTEM_PROMPT = """
 I want you to act as an agent. You will act as a game taste analyst roleplaying the user using the first person pronoun "I".
+"""
+
+AGENT4REC_COAT_TASTE_SYSTEM_PROMPT = """
+I want you to act as an agent. You will act as a coat taste analyst roleplaying the user using the first person pronoun "I".
 """
 
 AGENT4REC_TASTE_MODIFY_USER_PROMPT_TEMPLATE = """
@@ -431,6 +448,44 @@ Answer should not be a combination of above two parts and not contain other word
 """
 
 
+# Coat items carry three attributes and no name of any kind, which drives the
+# two departures from the movie template this mirrors:
+#
+#   * taste focuses on styles, colours and gender section rather than "genres",
+#     because those are the only attributes that exist;
+#   * the closing instruction cannot say "should not contain coat names" -- a
+#     coat's description IS its attributes, so that would forbid the answer. It
+#     asks for attribute patterns instead, which is what the movie wording was
+#     actually protecting against.
+AGENT4REC_COAT_TASTE_USER_PROMPT_TEMPLATE = """
+Given a user's rating history:
+
+user gives a rating of 1 for following coats: {rating_1_coats}
+user gives a rating of 2 for following coats: {rating_2_coats}
+user gives a rating of 3 for following coats: {rating_3_coats}
+user gives a rating of 4 for following coats: {rating_4_coats}
+user gives a rating of 5 for following coats: {rating_5_coats}
+
+My first request is "I need help creating coat taste for a user given the coat-rating history. (in no particular order)"  Generate as many TASTE-REASON pairs as possible, taste should focus on the coats' styles, colours, and which gender section they come from.
+Strictly follow the output format below:
+
+TASTE: <-descriptive taste->
+REASON: <-brief reason->
+
+TASTE: <-descriptive taste->
+REASON: <-brief reason->
+.....
+
+Secondly, analyze user tend to give what kinds of coats high ratings, and tend to give what kinds of coats low ratings.
+Strictly follow the output format below:
+HIGH RATINGS: <-conclusion of coats of high ratings(above 3)->
+LOW RATINGS: <-conclusion of coats of low ratings(below 2)->
+Answer should not be a combination of above two parts and not contain other words. Describe patterns of style, colour and gender section rather than listing individual coats.
+
+
+"""
+
+
 def agent4rec_taste_modify_user_prompt(
     *,
     rating_movies: Mapping[int, Sequence[str]],
@@ -457,6 +512,21 @@ def agent4rec_playtime_taste_user_prompt(
         low_playtime_games=_format_rating_movies(playtime_games.get("low", ())),
         medium_playtime_games=_format_rating_movies(playtime_games.get("medium", ())),
         high_playtime_games=_format_rating_movies(playtime_games.get("high", ())),
+    )
+
+
+def agent4rec_coat_taste_user_prompt(
+    *,
+    rating_coats: Mapping[int, Sequence[str]],
+) -> str:
+    """Build a Coat taste-generation prompt from 1-5 rating buckets."""
+
+    return AGENT4REC_COAT_TASTE_USER_PROMPT_TEMPLATE.format(
+        rating_1_coats=_format_rating_movies(rating_coats.get(1, ())),
+        rating_2_coats=_format_rating_movies(rating_coats.get(2, ())),
+        rating_3_coats=_format_rating_movies(rating_coats.get(3, ())),
+        rating_4_coats=_format_rating_movies(rating_coats.get(4, ())),
+        rating_5_coats=_format_rating_movies(rating_coats.get(5, ())),
     )
 
 

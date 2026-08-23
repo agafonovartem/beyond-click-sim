@@ -56,6 +56,7 @@ class Agent4RecYesNoScorer(Scorer):
         entity_name: str = "movie",
         entity_plural: str = "movies",
         decision_field: str = "WATCH",
+        persona_by_user: dict[Any, str] | None = None,
         prompt_style: str = "batch",
     ) -> None:
         if candidate_description_columns is None:
@@ -97,6 +98,7 @@ class Agent4RecYesNoScorer(Scorer):
         self.entity_name = entity_name
         self.entity_plural = entity_plural
         self.decision_field = decision_field
+        self.persona_by_user = dict(persona_by_user or {})
         self.prompt_style = prompt_style
         self.profile_by_user_: dict[Any, Agent4RecUserProfile] | None = None
         self.history_by_user_: dict[Any, UserHistory] | None = None
@@ -368,6 +370,7 @@ class Agent4RecYesNoScorer(Scorer):
         if taste is None:
             taste = _format_agent4rec_taste(profile.taste) or None
         return agent4rec_system_prompt(
+            persona=self.persona_by_user.get(profile.user_id),
             taste=taste,
             activity=profile.activity_description,
             conformity=profile.conformity_description,
@@ -470,7 +473,16 @@ def parse_agent4rec_watch_response(
     *,
     labels: Sequence[str],
 ) -> dict[str, float]:
-    """Parse Agent4Rec `ID/{MOVIE|GAME|ITEM}/WATCH/REASON` responses by label."""
+    """Parse Agent4Rec watch responses by candidate label.
+
+    Accepted line shapes, mapped by `C1`/`C2`/… rather than prompt order:
+
+    - `ID: C1; MOVIE: Title; WATCH: yes; REASON: ...`
+    - `C1: [1]; MOVIE: Title; WATCH: yes; REASON: ...`
+    - `C1: Title; WATCH: yes; REASON: ...`
+
+    `GAME`/`ITEM` may replace `MOVIE`. The entity name is not used for scoring.
+    """
 
     return parse_agent4rec_interaction_response(
         text,
@@ -515,6 +527,15 @@ def parse_agent4rec_preference_response(
     )
 
 
+def _normalize_agent4rec_response_text(text: str) -> str:
+    """Use real newlines when the model (or a pasted repr) used literal `\\n`."""
+
+    normalized = text.replace("\r\n", "\n")
+    if "\n" not in normalized and "\\n" in normalized:
+        return normalized.replace("\\n", "\n")
+    return normalized
+
+
 def _parse_agent4rec_binary_response(
     text: str,
     *,
@@ -526,10 +547,13 @@ def _parse_agent4rec_binary_response(
 
     if not labels:
         raise ValueError("labels must be non-empty")
+    text = _normalize_agent4rec_response_text(text)
+    # Entity name is optional: some models emit `C1: Title; WATCH: yes; REASON:`.
+    # Keep the title on the same line so a missing decision cannot swallow later
+    # candidates. Apostrophes and `\'` in titles are part of that unused field.
     pattern = re.compile(
         r"(?:^|\n)\s*(?:(?:ID|LABEL):\s*)?(C\d+)\s*(?::|;)\s*"
-        r"(?:\[[^\]]+\]\s*;?\s*)?"
-        r"(?:MOVIE|GAME|ITEM):\s*(.*?)\s*;?\s*"
+        r"(?:(?:\[[^\]]+\]\s*;?\s*)?(?:(?:MOVIE|GAME|ITEM):\s*)?[^\n]*?;\s*)?"
         + re.escape(decision_field)
         + r":\s*(.*?)\s*;?\s*"
         r"REASON:\s*(.*?)(?=\n\s*(?:(?:ID|LABEL):\s*)?C\d+\s*(?::|;)|\Z)",
@@ -541,7 +565,7 @@ def _parse_agent4rec_binary_response(
     duplicate_labels: list[str] = []
     unknown_labels: list[str] = []
 
-    for raw_label, _, raw_decision, _ in matches:
+    for raw_label, raw_decision, _ in matches:
         label = raw_label.strip().upper()
         if label not in expected_labels:
             unknown_labels.append(label)

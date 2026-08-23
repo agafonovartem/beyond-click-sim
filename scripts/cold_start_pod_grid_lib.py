@@ -55,8 +55,13 @@ PIP_DEPS = [
     "tqdm",
 ]
 
+# Both variants ship: `_sumboth` methods set use_history_item_summaries=True, which
+# selects the "_summary" cache file, while candidate-summary/traits-only variants use
+# the plain one. Shipping only the plain file sent every _sumboth run to OpenAI, which
+# the pods cannot reach.
 TASTE_CACHE_FILES = [
     "ml-1m_v1_seed0_gpt-4o-mini_agent4rec_modify_v1.jsonl",
+    "ml-1m_v1_seed0_gpt-4o-mini_agent4rec_modify_v1_summary.jsonl",
 ]
 
 _SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -181,11 +186,24 @@ def method_requires_taste_cache(method: str) -> bool:
     return "_traits_taste_" in method
 
 
+def method_target_kind(method: str) -> str:
+    if method.startswith(
+        (
+            "llm_listwise_ranking_",
+            "agent4rec_listwise_ranking_",
+        )
+    ):
+        return "interact"
+    return "like"
+
+
 def required_artifacts_for_method(method: str) -> tuple[str, ...]:
     if method.startswith(
         (
             "llm_preference_listwise_ranking_",
+            "llm_listwise_ranking_",
             "agent4rec_preference_listwise_ranking_",
+            "agent4rec_listwise_ranking_",
         )
     ):
         return ("manifest.json", "metrics_ranking.json")
@@ -218,6 +236,7 @@ def canonical_item_stats_task_names() -> list[str]:
     return [
         cold_start_task_name(
             "ml-1m",
+            "like",
             k,
             m,
             "uniform",
@@ -235,9 +254,11 @@ def task_names_for_method(method: str) -> list[str]:
     from runners.in_distribution.cold_start.task_builders import cold_start_task_name
 
     use_item_rating_stats = method_requires_item_stats_tasks(method)
+    target_kind = method_target_kind(method)
     return [
         cold_start_task_name(
             "ml-1m",
+            target_kind,
             k,
             m,
             "uniform",
@@ -280,6 +301,22 @@ def validate_method_task_compatibility(method: str, task: str) -> None:
     if (not reqs.requires_item_stats_tasks) and is_item_stats_task:
         # Allowed but unusual; for ablation LLM item_stats methods this won't fire.
         pass
+    # Target kind must agree too. The listwise runners compare the task's
+    # target_source_column against their own ranking_target and raise, so catching a
+    # mispairing here fails the whole grid at prepare time on the host instead of
+    # once per job out on the pods.
+    expected_target = method_target_kind(method)
+    if "_cold_interact_" in task:
+        task_target = "interact"
+    elif "_cold_like_" in task:
+        task_target = "like"
+    else:
+        raise ValueError(f"Cannot determine target kind from task name: {task!r}")
+    if task_target != expected_target:
+        raise ValueError(
+            f"Method {method} requires {expected_target}-target tasks; "
+            f"got {task_target}-target task {task}"
+        )
 
 
 def make_grid_id(methods: list[str], *, seed: str = "ablation") -> str:
@@ -412,22 +449,21 @@ def build_ablation_grid(
     grid_id = grid_id or make_grid_id(methods)
     assert_safe_name(grid_id, label="grid_id")
 
+    # Each method gets its own canonical 45 from task_names_for_method(), which reads
+    # both the plain-vs-item_stats family and the like-vs-interact target off the
+    # method name. A grid may therefore mix task families, and that is correct rather
+    # than a bug: `_full`/`_sumboth_full` belong on plain tasks while agent4rec and
+    # `_item_stats_*` methods need the item_stats columns. Forcing one shared task
+    # list here used to hand like-target tasks to interaction methods, which the
+    # listwise runners reject outright ("Task target mismatch").
     jobs = build_jobs(methods)
-    # Force item_stats Cartesian for this ablation: every method gets the same 45.
-    tasks = canonical_item_stats_task_names()
+    tasks = sorted({job.task for job in jobs})
     validate_tasks(tasks)
-    for method in methods:
-        if not method_requires_item_stats_tasks(method):
-            raise ValueError(
-                f"Ablation grid requires item_stats-capable methods; got {method}"
-            )
-    jobs = build_jobs(methods, tasks=tasks)
+    expected_jobs = sum(len(task_names_for_method(method)) for method in methods)
     assigned = assign_jobs_to_pods(jobs, grid_id=grid_id, pods=pods)
     all_jobs = [job for pod in pods for job in assigned[pod]]
-    if len(all_jobs) != len(methods) * len(tasks):
-        raise RuntimeError(
-            f"expected {len(methods) * len(tasks)} jobs, got {len(all_jobs)}"
-        )
+    if len(all_jobs) != expected_jobs:
+        raise RuntimeError(f"expected {expected_jobs} jobs, got {len(all_jobs)}")
 
     return {
         "grid_id": grid_id,

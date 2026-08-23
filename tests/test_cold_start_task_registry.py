@@ -18,7 +18,7 @@ from runners.in_distribution.cold_start.task_builders import (
 
 
 NAME_PATTERN = re.compile(
-    r"^(?P<dataset>ml-1m(?:_item_stats)?)_cold_like_k(?P<k>\d+)"
+    r"^(?P<dataset>ml-1m(?:_item_stats)?)_cold_(?P<target>like|interact)_k(?P<k>\d+)"
     r"_c(?P<c>\d+)_eval(?P<eval>\d+)_m(?P<m>\d+)"
     r"_(?P<strategy>negu|negpop)_split(?P<split>\d+)_sample(?P<sample>\d+)$"
 )
@@ -26,14 +26,15 @@ NAME_PATTERN = re.compile(
 
 def test_registry_covers_full_grid() -> None:
     expected = (
-        2  # plain + item_stats
+        2  # like + interact
+        * 2  # plain + item_stats
         * len(K_VALUES)
         * len(NEGATIVE_RATIOS)
         * len(NEGATIVE_STRATEGIES)
         * len(SAMPLING_SEEDS)
     )
     assert len(TASK_BUILDERS) == expected
-    assert len(TASK_BUILDERS) == 180
+    assert len(TASK_BUILDERS) == 360
 
 
 def test_task_names_parse_and_match_grid_constants() -> None:
@@ -49,10 +50,14 @@ def test_task_names_parse_and_match_grid_constants() -> None:
 
 
 def test_task_name_roundtrip() -> None:
-    name = cold_start_task_name("ml-1m", 3, 9, "popularity_matched", 2)
+    name = cold_start_task_name(
+        "ml-1m", "like", 3, 9, "popularity_matched", 2
+    )
     assert name == "ml-1m_cold_like_k3_c5_eval1000_m9_negpop_split0_sample2"
+    interact_name = cold_start_task_name("ml-1m", "interact", 3, 9, "uniform", 2)
+    assert interact_name == "ml-1m_cold_interact_k3_c5_eval1000_m9_negu_split0_sample2"
     stats_name = cold_start_task_name(
-        "ml-1m", 1, 1, "uniform", 0, use_item_rating_stats=True
+        "ml-1m", "like", 1, 1, "uniform", 0, use_item_rating_stats=True
     )
     assert stats_name == (
         "ml-1m_item_stats_cold_like_k1_c5_eval1000_m1_negu_split0_sample0"

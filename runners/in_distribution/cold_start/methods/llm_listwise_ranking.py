@@ -5,7 +5,10 @@ from pathlib import Path
 import pandas as pd
 
 from beyond_click_sim.llm_clients import make_llm_client
-from beyond_click_sim.scorers import LLMPreferenceListwiseRankingScorer
+from beyond_click_sim.scorers import (
+    LLMInteractionListwiseRankingScorer,
+    LLMPreferenceListwiseRankingScorer,
+)
 from beyond_click_sim.tasks import split_xy
 from beyond_click_sim.tasks.cold_start import ColdStartTask
 from runners.in_distribution.cold_start.methods._listwise import (
@@ -54,6 +57,10 @@ VLLM_LLAMA33_70B_MODEL = "llama-3.3-70b-instruct"
 TARGET_DESCRIPTIONS = {
     "ml-1m": "The user would rate the candidate movie at least 4 out of 5.",
 }
+PREFERENCE_TARGET_SOURCE_COLUMN = "target_like_ge4"
+INTERACTION_TARGET_SOURCE_COLUMN = "target_interact"
+PREFERENCE_PROTOCOL = "direct_listwise_preference_ranking"
+INTERACTION_PROTOCOL = "direct_listwise_interaction_ranking"
 MAX_HISTORY_ITEMS = 20
 TEMPERATURE = 0.0
 MAX_TOKENS = 1024
@@ -654,18 +661,39 @@ def run_method(
     summary_visibility: SummaryVisibility = "none",
     max_error_rate: float = DEFAULT_MAX_ERROR_RATE,
     min_groups_before_check: int = DEFAULT_MIN_GROUPS_BEFORE_CHECK,
+    ranking_target: str = "preference",
 ) -> dict[str, object]:
-    """Run direct listwise preference ranking on cold-start val/test groups."""
+    """Run direct listwise ranking on cold-start val/test groups."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
+    target_source_column = str(task.manifest.get("target_source_column"))
+    if ranking_target == "preference":
+        expected_source = PREFERENCE_TARGET_SOURCE_COLUMN
+        protocol = PREFERENCE_PROTOCOL
+    elif ranking_target == "interaction":
+        expected_source = INTERACTION_TARGET_SOURCE_COLUMN
+        protocol = INTERACTION_PROTOCOL
+    else:
+        raise ValueError(f"Unsupported ranking_target: {ranking_target!r}")
+    if target_source_column != expected_source:
+        raise ValueError(
+            "Task target mismatch for listwise runner: "
+            f"ranking_target={ranking_target!r} requires "
+            f"target_source_column={expected_source!r}, got "
+            f"{target_source_column!r}."
+        )
     try:
-        target_description = TARGET_DESCRIPTIONS[dataset_name]
         base_prompt_columns = DATASET_PROMPT_COLUMNS[dataset_name]
     except KeyError as error:
         raise ValueError(
             f"Unsupported cold-start listwise dataset: {dataset_name!r}"
         ) from error
+    target_description = (
+        TARGET_DESCRIPTIONS[dataset_name]
+        if ranking_target == "preference"
+        else None
+    )
     prompt_columns = maybe_add_item_rating_prompt_columns(
         dataset_name,
         base_prompt_columns,
@@ -718,19 +746,47 @@ def run_method(
         extra_frames={"online_session_history": task.online_session_history},
     )
 
-    scorer = LLMPreferenceListwiseRankingScorer(
-        client=make_llm_client(client_name),
-        model=model,
-        target_description=target_description,
-        history_description_columns=prompt_columns["history_description_columns"],
-        candidate_description_columns=prompt_columns["candidate_description_columns"],
-        column_labels=column_labels,
-        json_list_columns=(),
-        max_history_items=max_history_items,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        extra_body=extra_body,
-    ).fit(X_history, y_history, history_user_ids=history_user_ids.tolist())
+    scorer_kwargs = {
+        "client": make_llm_client(client_name),
+        "model": model,
+        "history_description_columns": prompt_columns["history_description_columns"],
+        "candidate_description_columns": prompt_columns["candidate_description_columns"],
+        "column_labels": column_labels,
+        "json_list_columns": (),
+        "max_history_items": max_history_items,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "extra_body": extra_body,
+    }
+    if ranking_target == "preference":
+        scorer = LLMPreferenceListwiseRankingScorer(
+            target_description=target_description,
+            **scorer_kwargs,
+        )
+    else:
+        scorer = LLMInteractionListwiseRankingScorer(**scorer_kwargs)
+    scorer = scorer.fit(X_history, y_history, history_user_ids=history_user_ids.tolist())
+
+    scorer_manifest = {
+        "class": scorer.__class__.__name__,
+        "fit_on": "online_session_history",
+        "k": task.k,
+        "client_name": client_name,
+        "model": model,
+        "max_history_items": max_history_items,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "prompt_columns": prompt_columns,
+        "column_labels": column_labels,
+        "json_list_columns": [],
+        "extra_body": extra_body,
+        "uses_item_stats": use_item_stats,
+        "summary_visibility": summary_visibility,
+        "item_summaries": item_summary_metadata,
+        "ranking_target": ranking_target,
+    }
+    if target_description is not None:
+        scorer_manifest["target_description"] = target_description
 
     return evaluate_listwise_scorer(
         task=task,
@@ -747,23 +803,7 @@ def run_method(
         max_workers=max_workers,
         max_error_rate=max_error_rate,
         min_groups_before_check=min_groups_before_check,
-        scorer_manifest={
-            "class": scorer.__class__.__name__,
-            "fit_on": "online_session_history",
-            "k": task.k,
-            "client_name": client_name,
-            "model": model,
-            "target_description": target_description,
-            "max_history_items": max_history_items,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "prompt_columns": prompt_columns,
-            "column_labels": column_labels,
-            "json_list_columns": [],
-            "extra_body": extra_body,
-            "uses_item_stats": use_item_stats,
-            "summary_visibility": summary_visibility,
-            "item_summaries": item_summary_metadata,
-        },
+        scorer_manifest=scorer_manifest,
         repo_root=repo_root(),
+        protocol=protocol,
     )

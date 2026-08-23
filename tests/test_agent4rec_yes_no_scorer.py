@@ -110,6 +110,16 @@ def test_parse_agent4rec_watch_response_maps_reordered_decisions_by_label() -> N
     assert parsed == {"C1": 1.0, "C2": 0.0}
 
 
+def test_parse_agent4rec_watch_response_accepts_colon_in_movie_field() -> None:
+    parsed = parse_agent4rec_watch_response(
+        "ID: C1; MOVIE: Austin Powers: The Spy Who Shagged Me (1999); WATCH: no; REASON: comedy\n"
+        "ID: C2; MOVIE: Bowfinger (1999); WATCH: yes; REASON: ok",
+        labels=["C1", "C2"],
+    )
+
+    assert parsed == {"C1": 0.0, "C2": 1.0}
+
+
 def test_parse_agent4rec_watch_response_accepts_qwen_label_prefix() -> None:
     parsed = parse_agent4rec_watch_response(
         "C1: [1]; MOVIE: A; WATCH: yes; REASON: ok\n"
@@ -118,6 +128,152 @@ def test_parse_agent4rec_watch_response_accepts_qwen_label_prefix() -> None:
     )
 
     assert parsed == {"C1": 1.0, "C2": 0.0}
+
+
+def test_parse_agent4rec_watch_response_accepts_unlabeled_title() -> None:
+    parsed = parse_agent4rec_watch_response(
+        "C1: Austin Powers: The Spy Who Shagged Me (1999); WATCH: no; REASON: comedy\n"
+        "C2: Bowfinger (1999); WATCH: yes; REASON: ok",
+        labels=["C1", "C2"],
+    )
+
+    assert parsed == {"C1": 0.0, "C2": 1.0}
+
+
+def test_parse_agent4rec_watch_response_accepts_unlabeled_title_with_apostrophe() -> None:
+    parsed = parse_agent4rec_watch_response(
+        "C1: General's Daughter, The (1999); WATCH: no; REASON: thriller\n"
+        "C2: Ghostbusters (1984); WATCH: yes; REASON: classic comedy",
+        labels=["C1", "C2"],
+    )
+
+    assert parsed == {"C1": 0.0, "C2": 1.0}
+
+
+def test_parse_agent4rec_watch_response_accepts_literal_backslash_n_and_escaped_apostrophe() -> None:
+    parsed = parse_agent4rec_watch_response(
+        "C1: General\\'s Daughter, The (1999); WATCH: no; REASON: thriller\\n"
+        "C2: Ghostbusters (1984); WATCH: yes; REASON: classic comedy",
+        labels=["C1", "C2"],
+    )
+
+    assert parsed == {"C1": 0.0, "C2": 1.0}
+
+
+def test_parse_agent4rec_watch_response_accepts_logged_qwen_unlabeled_title_response() -> None:
+    parsed = parse_agent4rec_watch_response(
+        "C1: Austin Powers: The Spy Who Shagged Me (1999); WATCH: no; REASON: Comedy genre does not align with my preference for family-friendly, romantic, or classic films.\n"
+        "C2: Bowfinger (1999); WATCH: no; REASON: Comedy genre does not align with my preference for family-friendly, romantic, or classic films.\n"
+        "C3: Toy Story 2 (1999); WATCH: yes; REASON: Animation and Comedy fit my taste for family-friendly comedies and feel-good content.\n"
+        "C4: 10 Things I Hate About You (1999); WATCH: yes; REASON: Romantic Comedy aligns perfectly with my preferred genres.\n"
+        "C5: Arachnophobia (1990); WATCH: no; REASON: Thriller and Sci-Fi elements do not align with my preference for family-friendly and feel-good movies.\n"
+        "C6: Shakespeare in Love (1998); WATCH: yes; REASON: Romantic Comedy and Drama fit my taste for romantic and feel-good films.\n"
+        "C7: Runaway Bride (1999); WATCH: yes; REASON: Romantic Comedy aligns perfectly with my preferred genres.\n"
+        "C8: General's Daughter, The (1999); WATCH: no; REASON: Thriller and Drama do not align with my preference for family-friendly and feel-good movies.\n"
+        "C9: Never Been Kissed (1999); WATCH: yes; REASON: Romantic Comedy aligns perfectly with my preferred genres.\n"
+        "C10: Ghostbusters (1984); WATCH: yes; REASON: Classic Comedy fits my taste for classic films and family-friendly humor.",
+        labels=[f"C{i}" for i in range(1, 11)],
+    )
+
+    assert parsed == {
+        "C1": 0.0,
+        "C2": 0.0,
+        "C3": 1.0,
+        "C4": 1.0,
+        "C5": 0.0,
+        "C6": 1.0,
+        "C7": 1.0,
+        "C8": 0.0,
+        "C9": 1.0,
+        "C10": 1.0,
+    }
+
+
+def test_parse_agent4rec_watch_response_accepts_logged_qwen_unlabeled_title_repr_escapes() -> None:
+    parsed = parse_agent4rec_watch_response(
+        "C1: Austin Powers: The Spy Who Shagged Me (1999); WATCH: no; REASON: Comedy genre does not align with my preference for family-friendly, romantic, or classic films.\\n"
+        "C2: Bowfinger (1999); WATCH: no; REASON: Comedy genre does not align with my preference for family-friendly, romantic, or classic films.\\n"
+        "C3: Toy Story 2 (1999); WATCH: yes; REASON: Animation and Comedy fit my taste for family-friendly comedies and feel-good content.\\n"
+        "C4: 10 Things I Hate About You (1999); WATCH: yes; REASON: Romantic Comedy aligns perfectly with my preferred genres.\\n"
+        "C5: Arachnophobia (1990); WATCH: no; REASON: Thriller and Sci-Fi elements do not align with my preference for family-friendly and feel-good movies.\\n"
+        "C6: Shakespeare in Love (1998); WATCH: yes; REASON: Romantic Comedy and Drama fit my taste for romantic and feel-good films.\\n"
+        "C7: Runaway Bride (1999); WATCH: yes; REASON: Romantic Comedy aligns perfectly with my preferred genres.\\n"
+        "C8: General\\'s Daughter, The (1999); WATCH: no; REASON: Thriller and Drama do not align with my preference for family-friendly and feel-good movies.\\n"
+        "C9: Never Been Kissed (1999); WATCH: yes; REASON: Romantic Comedy aligns perfectly with my preferred genres.\\n"
+        "C10: Ghostbusters (1984); WATCH: yes; REASON: Classic Comedy fits my taste for classic films and family-friendly humor.",
+        labels=[f"C{i}" for i in range(1, 11)],
+    )
+
+    assert parsed == {
+        "C1": 0.0,
+        "C2": 0.0,
+        "C3": 1.0,
+        "C4": 1.0,
+        "C5": 0.0,
+        "C6": 1.0,
+        "C7": 1.0,
+        "C8": 0.0,
+        "C9": 1.0,
+        "C10": 1.0,
+    }
+
+
+def test_parse_agent4rec_watch_response_accepts_reason_with_semicolon() -> None:
+    parsed = parse_agent4rec_watch_response(
+        "C1: Amadeus; WATCH: yes; REASON: Classic cinema with strong performances and emotional depth fitting my exclusive taste.\n"
+        "C2: Good Will Hunting; WATCH: no; REASON: Lacks the international or classic prestige I demand; too mainstream.\n"
+        "C3: Gandhi; WATCH: yes; REASON: Historical drama with profound themes and strong character focus aligns with my preferences.\n"
+        "C4: Dead Man Walking; WATCH: yes; REASON: Intense character-driven narrative with emotional depth and strong performances.\n"
+        "C5: Driving Miss Daisy; WATCH: no; REASON: Perceived as overly sentimental and lacking the intellectual rigor I require.\n"
+        "C6: To Kill a Mockingbird; WATCH: yes; REASON: Classic cinema with thought-provoking themes and exceptional character work.\n"
+        "C7: Like Water for Chocolate; WATCH: yes; REASON: International film with unique artistic style and emotional depth.\n"
+        "C8: Edward Scissorhands; WATCH: no; REASON: Too whimsical and fantasy-oriented; does not match my serious, realistic taste.\n"
+        "C9: Searching for Bobby Fischer; WATCH: no; REASON: Lacks the historical weight and international scope I prioritize.\n"
+        "C10: Sense and Sensibility; WATCH: yes; REASON: Classic period drama with strong performances and emotional resonance.",
+        labels=[f"C{i}" for i in range(1, 11)],
+    )
+
+    assert parsed == {
+        "C1": 1.0,
+        "C2": 0.0,
+        "C3": 1.0,
+        "C4": 1.0,
+        "C5": 0.0,
+        "C6": 1.0,
+        "C7": 1.0,
+        "C8": 0.0,
+        "C9": 0.0,
+        "C10": 1.0,
+    }
+
+
+def test_parse_agent4rec_watch_response_accepts_reason_with_semicolon_literal_backslash_n() -> None:
+    parsed = parse_agent4rec_watch_response(
+        "C1: Amadeus; WATCH: yes; REASON: Classic cinema with strong performances and emotional depth fitting my exclusive taste.\\n"
+        "C2: Good Will Hunting; WATCH: no; REASON: Lacks the international or classic prestige I demand; too mainstream.\\n"
+        "C3: Gandhi; WATCH: yes; REASON: Historical drama with profound themes and strong character focus aligns with my preferences.\\n"
+        "C4: Dead Man Walking; WATCH: yes; REASON: Intense character-driven narrative with emotional depth and strong performances.\\n"
+        "C5: Driving Miss Daisy; WATCH: no; REASON: Perceived as overly sentimental and lacking the intellectual rigor I require.\\n"
+        "C6: To Kill a Mockingbird; WATCH: yes; REASON: Classic cinema with thought-provoking themes and exceptional character work.\\n"
+        "C7: Like Water for Chocolate; WATCH: yes; REASON: International film with unique artistic style and emotional depth.\\n"
+        "C8: Edward Scissorhands; WATCH: no; REASON: Too whimsical and fantasy-oriented; does not match my serious, realistic taste.\\n"
+        "C9: Searching for Bobby Fischer; WATCH: no; REASON: Lacks the historical weight and international scope I prioritize.\\n"
+        "C10: Sense and Sensibility; WATCH: yes; REASON: Classic period drama with strong performances and emotional resonance.",
+        labels=[f"C{i}" for i in range(1, 11)],
+    )
+
+    assert parsed == {
+        "C1": 1.0,
+        "C2": 0.0,
+        "C3": 1.0,
+        "C4": 1.0,
+        "C5": 0.0,
+        "C6": 1.0,
+        "C7": 1.0,
+        "C8": 0.0,
+        "C9": 0.0,
+        "C10": 1.0,
+    }
 
 
 def test_parse_agent4rec_watch_response_accepts_game_field() -> None:
@@ -138,6 +294,16 @@ def test_parse_agent4rec_preference_response_maps_decisions_by_label() -> None:
     )
 
     assert parsed == {"C1": 1.0, "C2": 0.0}
+
+
+def test_parse_agent4rec_preference_response_accepts_unlabeled_title() -> None:
+    parsed = parse_agent4rec_preference_response(
+        "C1: Heat; PREFERENCE: no; REASON: below target\n"
+        "C2: Aladdin; PREFERENCE: yes; REASON: meets target",
+        labels=["C1", "C2"],
+    )
+
+    assert parsed == {"C1": 0.0, "C2": 1.0}
 
 
 def test_parse_agent4rec_watch_response_requires_all_decisions() -> None:

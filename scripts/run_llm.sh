@@ -16,10 +16,21 @@ PORT=$((8000 + GPU_ID))
 
 export MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3.6-27B}"
 export MODEL_PATH="$HOME/$MODEL_NAME"
-export TENSOR_PARALLEL_SIZE=1
-export DATA_PARALLEL_SIZE=1
+export TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
+export DATA_PARALLEL_SIZE="${DATA_PARALLEL_SIZE:-1}"
 export HF_HUB_DISABLE_XET="1"
 export HF_ENDPOINT="http://huggingface.proxy"
+
+# At the default TENSOR_PARALLEL_SIZE=1 this pins the instance to exactly one GPU,
+# which is what lets deploy_pod.sh run one instance per GPU behind litellm.
+# A model whose weights don't fit on a single card — Llama-3.3-70B is ~132GB against
+# an 80GB A100 — needs TP>1 instead, so the instance takes TENSOR_PARALLEL_SIZE
+# consecutive GPUs starting at GPU_ID: `TENSOR_PARALLEL_SIZE=4 run_llm.sh 0` serves
+# one model across all four GPUs on port 8000, with no litellm in front of it.
+DEVICES="$GPU_ID"
+for ((i = 1; i < TENSOR_PARALLEL_SIZE; i++)); do
+    DEVICES="$DEVICES,$((GPU_ID + i))"
+done
 
 # vllm serve requires the model as the first positional argument (not after --port),
 # and must point at the local download dir from install.sh's --local-dir download
@@ -37,7 +48,18 @@ case "$MODEL_NAME" in
         ;;
 esac
 
-CUDA_VISIBLE_DEVICES="$GPU_ID" vllm serve "$MODEL_PATH" --port "$PORT" --served-model-name "$MODEL_NAME" --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" --data-parallel-size "$DATA_PARALLEL_SIZE" --max-model-len 32000 --max-num-seqs=16 --enable-prefix-caching --gpu-memory-utilization 0.95 "${VLLM_EXTRA_ARGS[@]}"
+# vLLM's --served-model-name takes several names and answers to any of them,
+# reporting the first one in /v1/models. The cold-start method registry addresses
+# Llama-3.3-70B as "llama-3.3-70b-instruct", while MODEL_NAME here is the download
+# path "meta-llama/Llama-3.3-70B-Instruct" — without an alias every request the
+# runners make comes back 404 "The model does not exist". SERVED_MODEL_ALIASES is a
+# space-separated list of extra names; empty by default, so other models are unaffected.
+SERVED_MODEL_NAMES=("$MODEL_NAME")
+for served_alias in ${SERVED_MODEL_ALIASES:-}; do
+    SERVED_MODEL_NAMES+=("$served_alias")
+done
+
+CUDA_VISIBLE_DEVICES="$DEVICES" vllm serve "$MODEL_PATH" --port "$PORT" --served-model-name "${SERVED_MODEL_NAMES[@]}" --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" --data-parallel-size "$DATA_PARALLEL_SIZE" --max-model-len 32000 --max-num-seqs=16 --enable-prefix-caching --gpu-memory-utilization 0.95 "${VLLM_EXTRA_ARGS[@]}"
 
 # CUDA_VISIBLE_DEVICES=0 vllm serve --port 8000 $MODEL_NAME --tensor-parallel-size $TENSOR_PARALLEL_SIZE --data-parallel-size $DATA_PARALLEL_SIZE --max-model-len 32000 --max-num-seqs=16 --enable-prefix-caching --gpu-memory-utilization 0.95
 # CUDA_VISIBLE_DEVICES=1 vllm serve --port 8001 $MODEL_NAME --tensor-parallel-size $TENSOR_PARALLEL_SIZE --data-parallel-size $DATA_PARALLEL_SIZE --max-model-len 32000 --max-num-seqs=16 --enable-prefix-caching --gpu-memory-utilization 0.95

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from beyond_click_sim.data.adapters import MovieLens1MAdapter, SteamAdapter
+from beyond_click_sim.data.adapters import CoatAdapter, MovieLens1MAdapter, SteamAdapter
 from beyond_click_sim.data.adapters.movielens import default_movies_augmentation_path
 
 
@@ -30,6 +30,10 @@ def parse_args() -> argparse.Namespace:
     steam.add_argument("--raw-dir", type=Path, required=True)
     steam.add_argument("--out-dir", type=Path, required=True)
 
+    coat = subparsers.add_parser("coat", help="Canonicalize the Coat MNAR dataset.")
+    coat.add_argument("--raw-dir", type=Path, required=True)
+    coat.add_argument("--out-dir", type=Path, required=True)
+
     return parser.parse_args()
 
 
@@ -46,6 +50,8 @@ def main() -> None:
         )
     elif args.dataset == "steam":
         dataset = SteamAdapter().materialize(args.raw_dir, args.out_dir)
+    elif args.dataset == "coat":
+        dataset = CoatAdapter().materialize(args.raw_dir, args.out_dir)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
 

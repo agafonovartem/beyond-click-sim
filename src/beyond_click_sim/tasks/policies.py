@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from typing import Any, Self
 
 import numpy as np
@@ -165,6 +166,62 @@ class Policy(ABC):
         ]
 
 
+    def rank_candidates(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+        *,
+        train_interactions: pd.DataFrame | None = None,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+    ) -> list[Any]:
+        """Order the given items by this policy's score for this user, best first.
+
+        Unlike :meth:`recommend`, this does NOT filter train-seen items and does
+        NOT retrieve from the catalog — the caller owns the candidate set. The
+        return value is always a permutation of ``candidate_items``: a policy
+        with no signal for this user falls back to a seeded shuffle rather than
+        returning nothing, so the user never disappears from the evaluation
+        frame (and therefore from every *other* policy's utility via the
+        common-user intersection).
+
+        Implementations must break ties with a per-user seeded shuffle, never by
+        item id — ordering by id would leak one spurious ordering into every
+        policy at once.
+        """
+
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement rank_candidates()"
+        )
+
+    def _seeded_permutation(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+    ) -> list[Any]:
+        """A deterministic per-user shuffle of the candidates."""
+
+        items = list(candidate_items)
+        rng = random.Random(f"{self.seed}:{user_id}")
+        return rng.sample(items, len(items))
+
+    def _order_by_score(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+        scores: dict[Any, float],
+    ) -> list[Any]:
+        """Sort candidates by score descending, ties in seeded-shuffle order.
+
+        Shuffling first and then applying a *stable* sort means equal-scoring
+        items keep their shuffled order, which is what makes the tie-break
+        seeded rather than input-order dependent.
+        """
+
+        shuffled = self._seeded_permutation(user_id, candidate_items)
+        return sorted(shuffled, key=lambda item: -scores.get(item, 0.0))
+
+
 class RandomPolicy(Policy):
     """Recommend k random unseen items per user. Useful as a floor baseline.
 
@@ -221,6 +278,20 @@ class RandomPolicy(Policy):
             )
 
         return pd.DataFrame(rows, columns=output_columns)
+
+
+    def rank_candidates(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+        *,
+        train_interactions: pd.DataFrame | None = None,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+    ) -> list[Any]:
+        """A seeded per-user shuffle — the same idiom `recommend` samples with."""
+
+        return self._seeded_permutation(user_id, candidate_items)
 
 
 class PopularityPolicy(Policy):
@@ -314,6 +385,29 @@ class PopularityPolicy(Policy):
             )
 
         return pd.DataFrame(rows, columns=output_columns)
+
+
+    def rank_candidates(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+        *,
+        train_interactions: pd.DataFrame | None = None,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+    ) -> list[Any]:
+        """Order candidates by their position in the fitted popularity ordering.
+
+        Reusing `_sorted_items_` rather than recomputing means the tie-break is
+        byte-identical to `recommend`'s, so the two agree exactly rather than
+        only up to ties. Items absent from the fitted catalog sort last, in
+        seeded-shuffle order.
+        """
+
+        position = {item: i for i, item in enumerate(self._sorted_items_)}
+        unknown = len(position)
+        shuffled = self._seeded_permutation(user_id, candidate_items)
+        return sorted(shuffled, key=lambda item: position.get(item, unknown))
 
 
 class ItemKNNPolicy(Policy):
@@ -472,6 +566,50 @@ class ItemKNNPolicy(Policy):
         return pd.DataFrame(rows, columns=output_columns)
 
 
+    def rank_candidates(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+        *,
+        train_interactions: pd.DataFrame | None = None,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+    ) -> list[Any]:
+        """Score candidates by summed neighbour similarity from the user's seeds.
+
+        Mirrors `recommend`'s scoring, including zeroing the user's own seed
+        items, but keeps zero-scoring candidates instead of dropping them. A
+        user with no usable seeds scores every candidate 0 and therefore falls
+        back to the seeded shuffle.
+        """
+
+        if train_interactions is None:
+            raise ValueError(
+                "ItemKNNPolicy.rank_candidates needs train_interactions to "
+                "recover the user's positive seed items"
+            )
+        seed_items = self._seen_items_by_user(
+            self._positive_rows(train_interactions),
+            user_column=user_column,
+            item_column=item_column,
+        ).get(user_id, set())
+        seed_indices = [self._item_idx_[it] for it in seed_items if it in self._item_idx_]
+
+        scores: dict[Any, float] = {}
+        if seed_indices:
+            vector = np.zeros(self._n_items_, dtype=np.float64)
+            for seed_idx in seed_indices:
+                nbr_indices, nbr_sims = self._neighbors_[seed_idx]
+                np.add.at(vector, nbr_indices, nbr_sims)
+            for seed_idx in set(seed_indices):
+                vector[seed_idx] = 0.0
+            for item in candidate_items:
+                idx = self._item_idx_.get(item)
+                if idx is not None:
+                    scores[item] = float(vector[idx])
+        return self._order_by_score(user_id, candidate_items, scores)
+
+
 class ALSPolicy(Policy):
     """Recommend top-k items via Alternating Least Squares on binary interactions.
 
@@ -611,6 +749,49 @@ class ALSPolicy(Policy):
         return pd.DataFrame(rows, columns=output_columns)
 
 
+    def rank_candidates(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+        *,
+        train_interactions: pd.DataFrame | None = None,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+    ) -> list[Any]:
+        """Rank candidates with the fitted model's own scoring.
+
+        Delegating to `implicit`'s `recommend` over a restricted item set keeps
+        scoring identical to `recommend`'s rather than re-deriving a dot
+        product. Cold users and items unseen in training carry no signal, so
+        they fall back to the seeded shuffle.
+        """
+
+        user_row = self._user_idx_.get(user_id)
+        known = [
+            (item, self._item_position_[item])
+            for item in candidate_items
+            if item in self._item_position_
+        ]
+        if user_row is None or not known:
+            return self._seeded_permutation(user_id, candidate_items)
+
+        indices = [position for _, position in known]
+        ranked_indices, ranked_scores = self._model_.recommend(
+            user_row,
+            None,
+            N=len(indices),
+            filter_already_liked_items=False,
+            items=indices,
+        )
+        by_position = {position: item for item, position in known}
+        scores = {
+            by_position[int(idx)]: float(score)
+            for idx, score in zip(ranked_indices, ranked_scores)
+            if int(idx) in by_position
+        }
+        return self._order_by_score(user_id, candidate_items, scores)
+
+
 class BPRPolicy(Policy):
     """Recommend top-k items via Bayesian Personalized Ranking Matrix Factorization.
 
@@ -745,6 +926,49 @@ class BPRPolicy(Policy):
 
         return pd.DataFrame(rows, columns=output_columns)
 
+
+
+    def rank_candidates(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+        *,
+        train_interactions: pd.DataFrame | None = None,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+    ) -> list[Any]:
+        """Rank candidates with the fitted model's own scoring.
+
+        Delegating to `implicit`'s `recommend` over a restricted item set keeps
+        scoring identical to `recommend`'s rather than re-deriving a dot
+        product. Cold users and items unseen in training carry no signal, so
+        they fall back to the seeded shuffle.
+        """
+
+        user_row = self._user_idx_.get(user_id)
+        known = [
+            (item, self._item_position_[item])
+            for item in candidate_items
+            if item in self._item_position_
+        ]
+        if user_row is None or not known:
+            return self._seeded_permutation(user_id, candidate_items)
+
+        indices = [position for _, position in known]
+        ranked_indices, ranked_scores = self._model_.recommend(
+            user_row,
+            None,
+            N=len(indices),
+            filter_already_liked_items=False,
+            items=indices,
+        )
+        by_position = {position: item for item, position in known}
+        scores = {
+            by_position[int(idx)]: float(score)
+            for idx, score in zip(ranked_indices, ranked_scores)
+            if int(idx) in by_position
+        }
+        return self._order_by_score(user_id, candidate_items, scores)
 
 
 def _sigmoid(x):
@@ -976,4 +1200,52 @@ class LightGCNPolicy(Policy):
             )
 
         return pd.DataFrame(rows, columns=output_columns)
+
+    def _propagated_embeddings(self):
+        """Layer-averaged user/item embeddings, computed once and cached.
+
+        `recommend` recomputes this on every call, which is fine when it is
+        called once for all users. `rank_candidates` is called per user, so
+        without a cache the forward pass would run 290 times per policy.
+        """
+
+        cached = getattr(self, "_embedding_cache_", None)
+        if cached is None:
+            E = self._E0_.copy()
+            E_sum = self._E0_.copy()
+            for _ in range(self.n_layers):
+                E = self._A_norm_ @ E
+                E_sum += E
+            E_final = E_sum / (self.n_layers + 1)
+            cached = (E_final[:self._n_users_], E_final[self._n_users_:])
+            self._embedding_cache_ = cached
+        return cached
+
+    def rank_candidates(
+        self,
+        user_id: Any,
+        candidate_items: Sequence[Any],
+        *,
+        train_interactions: pd.DataFrame | None = None,
+        user_column: str = "user_id",
+        item_column: str = "item_id",
+    ) -> list[Any]:
+        """Score candidates by the LightGCN user-item dot product.
+
+        Cold users and items unseen in training carry no signal and fall back to
+        the seeded shuffle.
+        """
+
+        user_row = self._user_idx_.get(user_id)
+        if user_row is None:
+            return self._seeded_permutation(user_id, candidate_items)
+
+        E_users, E_items = self._propagated_embeddings()
+        user_vector = E_users[user_row]
+        scores = {}
+        for item in candidate_items:
+            idx = self._item_idx_.get(item)
+            if idx is not None:
+                scores[item] = float(E_items[idx] @ user_vector)
+        return self._order_by_score(user_id, candidate_items, scores)
 

@@ -20,6 +20,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from runners.in_distribution.cold_start.methods import METHOD_RUNNERS  # noqa: E402
+from runners.in_distribution.cold_start.methods import (  # noqa: E402
+    llm_interaction_listwise_ranking,
+)
 from runners.in_distribution.cold_start.methods import llm_listwise_ranking  # noqa: E402
 from runners.in_distribution.llm_error_budget import LLMErrorRateExceededError  # noqa: E402
 
@@ -46,7 +49,7 @@ class FakeClient:
         self.completions = completions
 
 
-def _cold_task() -> ColdStartTask:
+def _cold_task(*, target_source_column: str = "target_like_ge4") -> ColdStartTask:
     history_df = pd.DataFrame(
         [
             {
@@ -108,6 +111,7 @@ def _cold_task() -> ColdStartTask:
         ),
         manifest={
             "dataset": "ml-1m",
+            "target_source_column": target_source_column,
             "k": 3,
             "sampling_seed": 2,
             "negative_strategy": "uniform",
@@ -362,6 +366,25 @@ def test_cold_start_listwise_runner_aborts_on_error_budget_and_persists_errors(
     assert not (tmp_path / "metrics_ranking.json").exists()
 
 
+def test_cold_start_listwise_runner_rejects_mismatched_target_kind(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client = FakeClient(["C1\nC2"])
+    monkeypatch.setattr(llm_listwise_ranking, "make_llm_client", lambda _: client)
+    task = _cold_task(target_source_column="target_like_ge4")
+
+    with pytest.raises(ValueError, match="Task target mismatch"):
+        llm_listwise_ranking.run_method(
+            task,
+            tmp_path,
+            method_name="llm_listwise_ranking_vllm_qwen36_27b_test",
+            client_name="fake",
+            model="fake-model",
+            max_candidate_groups=None,
+            ranking_target="interaction",
+        )
+
+
 def test_cold_start_listwise_wrappers_and_registry(monkeypatch, tmp_path: Path) -> None:
     calls: list[dict[str, object]] = []
 
@@ -583,3 +606,36 @@ def test_additional_backbones_cover_full_listwise_ablation_grid(
             assert method_name in METHOD_RUNNERS
 
     assert len(calls) == 16
+
+
+def test_cold_start_interaction_listwise_wrappers_and_registry(
+    monkeypatch, tmp_path: Path
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def _fake_run_method(*_args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(
+        llm_interaction_listwise_ranking.preference_listwise,
+        "run_method",
+        _fake_run_method,
+    )
+    task = SimpleNamespace()
+
+    llm_interaction_listwise_ranking.run_qwen36_27b_smoke(task, tmp_path)
+    llm_interaction_listwise_ranking.run_qwen36_35b_a3b_sumboth_full(task, tmp_path)
+    llm_interaction_listwise_ranking.run_qwen3_8b_item_stats_sumboth_full(task, tmp_path)
+
+    assert calls[0]["method_name"] == "llm_listwise_ranking_vllm_qwen36_27b_smoke"
+    assert calls[0]["ranking_target"] == "interaction"
+    assert calls[1]["method_name"] == "llm_listwise_ranking_vllm_qwen36_35b_a3b_sumboth_full"
+    assert calls[1]["summary_visibility"] == "both"
+    assert calls[2]["method_name"] == "llm_listwise_ranking_vllm_qwen3_8b_item_stats_sumboth_full"
+    assert calls[2]["use_item_stats"] is True
+    assert calls[2]["ranking_target"] == "interaction"
+
+    assert "llm_listwise_ranking_vllm_qwen36_27b_smoke" in METHOD_RUNNERS
+    assert "llm_listwise_ranking_vllm_qwen36_35b_a3b_sumboth_full" in METHOD_RUNNERS
+    assert "llm_listwise_ranking_vllm_qwen3_8b_item_stats_sumboth_full" in METHOD_RUNNERS

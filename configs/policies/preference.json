@@ -1,5 +1,74 @@
 {
   "datasets": {
+    "coat": {
+      "_review_notes": [
+        "Tuned under the re-ranking protocol (rerank_pool): policies fit on the runner's full train frame (6594 rows) and re-rank each user's held-out MCAR pool, scored by mean_hit_rate at k=5. This is NOT the ml-1m workflow \u2014 see docs/policy_configs.md.",
+        "LEAKAGE: hyperparameters were selected on 290 of the 290 users whose labels also form the reference ordering of the re-ranking run. Real utilities of tuned policies are optimistically biased; RandomPolicy and PopularityPolicy have nothing to select and carry no such bias, so a tuned policy overtaking them is partly an artifact of that selection.",
+        "search_spaces_sha256=bf98960857e11b6d49d6afa7192340f3e9efbb193d6ff4b0f7c9a1e1b600ee40, search_space_revision=4. The boxes were revised once against the diagnostic half after every policy first selected on a boundary; choosing the grid is a layer of selection above choosing within it, and the measured curse below covers only the latter.",
+        "Selections still on a grid boundary, i.e. reported at a handicap: LightGCNTorchPolicy iterations=3000 (max of [300, 1000, 3000]), n_factors=4 (min of [4, 8, 16]), n_layers=4 (max of [2, 3, 4]), regularization=0.0001 (min of [0.0001, 0.001, 0.01]). Every edge points the same way \u2014 fewer factors, more smoothing \u2014 so these policies are degenerating toward popularity on a 290x300 matrix rather than sitting at an interior optimum."
+      ],
+      "default": [
+        {
+          "class": "ALSPolicy",
+          "comment": "grid search over 480 points, mean_hit_rate=0.2724",
+          "name": "ALSPolicy",
+          "params": {
+            "alpha": 20.0,
+            "iterations": 50,
+            "n_factors": 4,
+            "regularization": 0.01
+          },
+          "tuned_from": "artifacts/coat_target_like_ge4_rerank_users290_seed0.json"
+        },
+        {
+          "class": "BPRPolicy",
+          "comment": "grid search over 135 points, mean_hit_rate=0.2628",
+          "name": "BPRPolicy",
+          "params": {
+            "iterations": 1000,
+            "learning_rate": 0.002,
+            "n_factors": 8,
+            "regularization": 0.1
+          },
+          "tuned_from": "artifacts/coat_target_like_ge4_rerank_users290_seed0.json"
+        },
+        {
+          "class": "ItemKNNPolicy",
+          "comment": "grid search over 11 points, mean_hit_rate=0.2421",
+          "name": "ItemKNNPolicy",
+          "params": {
+            "n_neighbors": 150
+          },
+          "tuned_from": "artifacts/coat_target_like_ge4_rerank_users290_seed0.json"
+        },
+        {
+          "class": "LightGCNTorchPolicy",
+          "comment": "grid search over 81 points, mean_hit_rate=0.2621",
+          "name": "LightGCNTorchPolicy",
+          "params": {
+            "iterations": 3000,
+            "n_factors": 4,
+            "n_layers": 4,
+            "regularization": 0.0001
+          },
+          "tuned_from": "artifacts/coat_target_like_ge4_rerank_users290_seed0.json"
+        },
+        {
+          "class": "PopularityPolicy",
+          "comment": "baseline (no hyperparameters to tune)",
+          "name": "PopularityPolicy",
+          "params": {},
+          "tuned_from": "artifacts/coat_target_like_ge4_rerank_users290_seed0.json"
+        },
+        {
+          "class": "RandomPolicy",
+          "comment": "baseline (no hyperparameters to tune)",
+          "name": "RandomPolicy",
+          "params": {},
+          "tuned_from": "artifacts/coat_target_like_ge4_rerank_users290_seed0.json"
+        }
+      ]
+    },
     "ml-1m": {
       "_review_notes": [
         "ALSPolicy: selected params differ across seeds (seed0={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.01}, seed1={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.01}, seed2={'alpha': 10.0, 'n_factors': 32, 'regularization': 0.1}, seed3={'alpha': 10.0, 'n_factors': 32, 'regularization': 0.1}, seed4={'alpha': 10.0, 'n_factors': 32, 'regularization': 0.01}, seed5={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.1}, seed6={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.01}, seed7={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.01}, seed8={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.1}, seed9={'alpha': 5.0, 'n_factors': 32, 'regularization': 0.1}). Decide: keep one default, or add seed<N> override sections.",

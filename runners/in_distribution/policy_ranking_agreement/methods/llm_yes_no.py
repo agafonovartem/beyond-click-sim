@@ -59,7 +59,7 @@ TEMPERATURE = 0.0
 MAX_TOKENS = 256
 MAX_LLM_ATTEMPTS = 5
 OLLAMA_MAX_WORKERS = 1
-VLLM_MAX_WORKERS = 128
+VLLM_MAX_WORKERS = 32
 
 # ---------------------------------------------------------------------------
 # Prompt columns per dataset — same as Q1/Q2
