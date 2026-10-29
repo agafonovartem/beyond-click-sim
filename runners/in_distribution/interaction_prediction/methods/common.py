@@ -209,12 +209,12 @@ def ranking_metrics_with_failed_groups_as_zero(
 
     Filling failed groups with score=0 would evaluate them as random ties, which
     is too generous for "LLM did not answer". This helper instead assigns zero
-    hit-rate/NDCG to any candidate group containing missing scores, then macro
+    hit-rate/NDCG/recall to any candidate group containing missing scores, then macro
     averages those zero-valued groups with successfully scored groups.
     """
 
     records: list[dict[str, Any]] = []
-    metric_keys = [f"{name}@{k}" for k in ks for name in ("hit_rate", "ndcg")]
+    metric_keys = [f"{name}@{k}" for k in ks for name in ("hit_rate", "ndcg", "recall")]
     for group_id, group in X.groupby(candidate_group_column, sort=False):
         group_scores = scores.loc[group.index]
         group_y = y.loc[group.index]
@@ -294,7 +294,7 @@ def _aggregate_failure_as_zero_ranking_records(
     tie_policy: str,
     group_by_user: bool = False,
 ) -> dict[str, float | int | str]:
-    metric_keys = [f"{name}@{k}" for k in ks for name in ("hit_rate", "ndcg")]
+    metric_keys = [f"{name}@{k}" for k in ks for name in ("hit_rate", "ndcg", "recall")]
     if group_by_user:
         metrics = {
             key: float(per_group.groupby("user_id", sort=False)[key].mean().mean())

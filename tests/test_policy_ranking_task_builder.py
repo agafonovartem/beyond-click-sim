@@ -79,6 +79,7 @@ def _make_builder(*, policies=None, history_context_columns=(), eval_sampler=Non
             val_fraction=0.0,
             test_fraction=0.3,
             seed=0,
+            shuffle=True,
         ),
         policies=policies,
         history_context_columns=history_context_columns,

@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from beyond_click_sim.data.canonical import CanonicalDataset
+from beyond_click_sim.scorers.constant import select_user_history_rows
 from beyond_click_sim.tasks import (
     AlignmentInteractionTaskBuilder,
     CappedUserInteractionCandidateSampler,
@@ -30,6 +31,7 @@ def test_alignment_interaction_task_builder_creates_candidate_sets(
             val_fraction=0.0,
             test_fraction=0.25,
             seed=0,
+            shuffle=True,
         ),
         sampler=NonInteractionCandidateSampler(negative_ratio=2, seed=0),
     ).build(dataset)
@@ -94,6 +96,33 @@ def test_alignment_interaction_task_builder_creates_candidate_sets(
     assert task.manifest["rows"] == {"train": 6, "val": 0, "test": 6}
 
 
+def test_alignment_task_preserves_temporal_history_through_feature_joins(
+    tmp_path: Path,
+) -> None:
+    dataset = _write_toy_canonical_dataset(tmp_path)
+    interactions = dataset.load_interactions()
+    interactions["timestamp"] = interactions.groupby("user_id").cumcount(ascending=False)
+    interactions.to_parquet(dataset.interactions_path, index=False)
+
+    task = AlignmentInteractionTaskBuilder(
+        name="toy-chronological-alignment",
+        dataset_filter=MinUserInteractionsFilter(min_interactions=4),
+        splitter=RandomFractionSplitter(0.75, 0.0, 0.25),
+        sampler=NonInteractionCandidateSampler(negative_ratio=1, seed=0),
+        history_context_columns=("rating",),
+    ).build(dataset)
+
+    history_by_user = select_user_history_rows(task.train, max_history_items=2)
+    for user_id, history in history_by_user.items():
+        observed = interactions[interactions.user_id == user_id].sort_values("timestamp")
+        assert task.train.loc[task.train.user_id == user_id, "item_id"].tolist() == (
+            observed.head(3).item_id.tolist()
+        )
+        assert history.item_id.tolist() == observed.head(3).tail(2).item_id.tolist()
+        candidates = task.test[(task.test.user_id == user_id) & ~task.test.sampled]
+        assert candidates.item_id.tolist() == observed.tail(1).item_id.tolist()
+
+
 def test_alignment_interaction_task_builder_keeps_history_context_train_only(
     tmp_path: Path,
 ) -> None:
@@ -107,6 +136,7 @@ def test_alignment_interaction_task_builder_keeps_history_context_train_only(
             val_fraction=0.0,
             test_fraction=0.25,
             seed=0,
+            shuffle=True,
         ),
         sampler=NonInteractionCandidateSampler(negative_ratio=2, seed=0),
         history_context_columns=("rating",),
@@ -147,6 +177,7 @@ def test_alignment_task_propagates_canonical_item_summaries_only(
                 val_fraction=0.0,
                 test_fraction=0.25,
                 seed=0,
+                shuffle=True,
             ),
             sampler=NonInteractionCandidateSampler(negative_ratio=2, seed=0),
         ).build(dataset)
@@ -210,6 +241,7 @@ def test_alignment_interaction_task_builder_serializes_sequential_filter(
             val_fraction=0.0,
             test_fraction=0.25,
             seed=0,
+            shuffle=True,
         ),
         sampler=NonInteractionCandidateSampler(negative_ratio=1, seed=0),
     ).build(dataset)
@@ -247,6 +279,7 @@ def test_alignment_interaction_task_builder_keeps_val_test_negatives_disjoint(
             val_fraction=0.25,
             test_fraction=0.25,
             seed=0,
+            shuffle=True,
         ),
         sampler=NonInteractionCandidateSampler(negative_ratio=2, seed=0),
     ).build(dataset)
@@ -599,6 +632,7 @@ def test_alignment_task_manifest_records_candidate_group_cap(tmp_path: Path) -> 
             val_fraction=0.25,
             test_fraction=0.25,
             seed=0,
+            shuffle=True,
         ),
         sampler=CappedUserInteractionCandidateSampler(
             negative_ratio=1,

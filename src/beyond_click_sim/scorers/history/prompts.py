@@ -5,6 +5,35 @@ from typing import Literal
 
 HistoryPromptFamily = Literal["simulator", "openp5_style"]
 
+LLMRANK_PROMPT_VERSION = "llmrank_recency_bootstrap_v1"
+LLMRANK_SYSTEM_PROMPT = """You are simulating a user's relative preferences in a recommender system.
+Given the user's chronological interaction history and candidate items, rank all candidates from most likely to least likely to be interacted with next.
+Use only the provided history and candidate information.
+The history is context only: never include history items in the ranking.
+Do not explain or show your reasoning.
+Return only the candidate labels in ranked order, one label per line."""
+
+LLMRANK_USER_PROMPT_TEMPLATE = """User interaction history, in chronological order (oldest to newest):
+{history}
+
+Note that the user's most recent interaction in this history is {recent_history_label}.
+
+Candidate items:
+{candidates}
+
+Rank every candidate from most likely to least likely to be interacted with next by this user.
+
+Required output format:
+The complete set of allowed candidate labels is:
+{output_labels}
+Return exactly one ranked line for each candidate label.
+There are exactly {candidate_count} candidates, so your response must contain exactly {candidate_count} non-empty lines.
+Use each candidate label exactly once.
+Before returning, silently verify that every allowed label appears exactly once. If a label is missing or duplicated, correct the list.
+Do not output item names or history items.
+Do not include rank numbers, punctuation, explanations, or analysis.
+The first character of your response must be C."""
+
 SIMULATOR_PROMPT_VERSION = "simulator_v1"
 OPENP5_STYLE_PROMPT_VERSION = "openp5_style_iid_v1"
 OPENP5_STYLE_PROMPT_SOURCE = (
