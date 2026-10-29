@@ -85,11 +85,35 @@ from runners.in_distribution.interaction_prediction.methods.popularity import (
     run as run_popularity,
     run_ranking as run_popularity_ranking,
 )
+from runners.in_distribution.interaction_prediction.methods.llmrank import (
+    run_qwen3_8b_with_item_stats_smoke as run_llmrank_qwen3_8b_smoke,
+    run_qwen3_8b_with_item_stats_full as run_llmrank_qwen3_8b_full,
+    run_qwen36_27b_with_item_stats_smoke as run_llmrank_qwen36_27b_smoke,
+    run_qwen36_27b_with_item_stats_full as run_llmrank_qwen36_27b_full,
+)
+
+
+from runners.in_distribution.interaction_prediction.methods import llmsrec_syn
+from runners.in_distribution.interaction_prediction.methods import recagent_yes_no
 
 
 MethodRunner = Callable[[Task, Path], dict[str, object]]
 
 METHOD_RUNNERS: dict[str, MethodRunner] = {
+    "recagent_yes_no_litellm_qwen3_8b_smoke": recagent_yes_no.run_qwen3_8b_smoke,
+    "recagent_yes_no_litellm_qwen3_8b_full": recagent_yes_no.run_qwen3_8b_full,
+    "recagent_yes_no_litellm_qwen36_27b_smoke": recagent_yes_no.run_qwen36_27b_smoke,
+    "recagent_yes_no_litellm_qwen36_27b_full": recagent_yes_no.run_qwen36_27b_full,
+    "llmsrec_syn_openai_smoke": llmsrec_syn.run_openai_smoke,
+    "llmsrec_syn_openai_full": llmsrec_syn.run_openai_full,
+    "llmsrec_syn_litellm_qwen3_8b_smoke": llmsrec_syn.run_qwen3_8b_smoke,
+    "llmsrec_syn_litellm_qwen3_8b_full": llmsrec_syn.run_qwen3_8b_full,
+    "llmsrec_syn_litellm_qwen36_27b_smoke": llmsrec_syn.run_qwen36_27b_smoke,
+    "llmsrec_syn_litellm_qwen36_27b_full": llmsrec_syn.run_qwen36_27b_full,
+    "llmrank_litellm_qwen3_8b_with_item_stats_smoke": run_llmrank_qwen3_8b_smoke,
+    "llmrank_litellm_qwen3_8b_with_item_stats_full": run_llmrank_qwen3_8b_full,
+    "llmrank_litellm_qwen36_27b_with_item_stats_smoke": run_llmrank_qwen36_27b_smoke,
+    "llmrank_litellm_qwen36_27b_with_item_stats_full": run_llmrank_qwen36_27b_full,
     "popularity_f1_threshold": run_popularity,
     "popularity_ranking": run_popularity_ranking,
     "agent4rec_yes_no_ollama_llama31_8b_smoke": run_agent4rec_llama31_8b_smoke,

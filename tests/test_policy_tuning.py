@@ -56,6 +56,8 @@ def _frames():
                     "user_id": f"u{u}",
                     "item_id": f"i{(u * 3 + offset) % 12}",
                     "liked": int((u + offset) % 3 != 0),
+                    # Keep temporal histories overlapping so ItemKNN has candidates.
+                    "timestamp": (0, 1, 3, 2, 4, 5)[offset],
                 }
             )
     interactions = pd.DataFrame(rows).drop_duplicates(subset=["user_id", "item_id"])

@@ -147,6 +147,13 @@ def _ranking_values_for_group(
             total_positive=total_positive,
             k=k_eff,
         )
+        values[f"recall@{k}"] = _expected_recall_at_k(
+            sorted_true=sorted_true,
+            block_starts=block_starts,
+            block_ends=block_ends,
+            total_positive=total_positive,
+            k=k_eff,
+        )
 
     return values, has_ties
 
@@ -209,7 +216,29 @@ def _expected_ndcg_at_k(
     return expected_dcg / ideal_dcg
 
 
-def _probability_at_least_one_positive(*, total: int, positives: int, selected: int) -> float:
+def _expected_recall_at_k(
+    *,
+    sorted_true: np.ndarray,
+    block_starts: np.ndarray,
+    block_ends: np.ndarray,
+    total_positive: int,
+    k: int,
+) -> float:
+    if total_positive == 0 or k <= 0:
+        return 0.0
+
+    expected_hits = 0.0
+    for start, end in zip(block_starts, block_ends, strict=True):
+        if start >= k:
+            break
+        selected = min(end, k) - start
+        expected_hits += selected * float(sorted_true[start:end].sum()) / (end - start)
+    return expected_hits / total_positive
+
+
+def _probability_at_least_one_positive(
+    *, total: int, positives: int, selected: int
+) -> float:
     if positives <= 0 or selected <= 0:
         return 0.0
     if selected >= total or selected > total - positives:
@@ -224,7 +253,7 @@ def _aggregate_per_group_metrics(
     tie_policy: str,
     group_user_codes: np.ndarray | None = None,
 ) -> dict[str, float | int | str]:
-    metric_keys = [f"{name}@{k}" for k in ks for name in ("hit_rate", "ndcg")]
+    metric_keys = [f"{name}@{k}" for k in ks for name in ("hit_rate", "ndcg", "recall")]
     if group_user_codes is None:
         metrics = {key: float(per_group[key].mean()) for key in metric_keys}
         n_users = None

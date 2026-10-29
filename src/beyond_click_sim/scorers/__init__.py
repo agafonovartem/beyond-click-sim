@@ -20,6 +20,8 @@ from beyond_click_sim.scorers.agent4rec import (
     Agent4RecYesNoScorer,
 )
 from beyond_click_sim.scorers.history import (
+    LLMSRecSynScorer,
+    LLMRankScorer,
     LLMInteractionListwiseRankingScorer,
     LLMInteractionYesNoScorer,
     LLMPreferenceListwiseRankingScorer,
@@ -28,8 +30,12 @@ from beyond_click_sim.scorers.history import (
 )
 from beyond_click_sim.scorers.item_knn import ColdItemKNNScorer
 from beyond_click_sim.scorers.popularity import PopularityScorer
+from beyond_click_sim.scorers.recagent import RecAgentYesNoScorer
 
 __all__ = [
+    "RecAgentYesNoScorer",
+    "LLMSRecSynScorer",
+    "LLMRankScorer",
     "ColdItemKNNScorer",
     "ItemMeanRegressor",
     "ItemModeRegressor",

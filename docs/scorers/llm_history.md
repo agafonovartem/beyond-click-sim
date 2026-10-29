@@ -5,6 +5,11 @@ Runner wiring (adds dataset config, item-stats/summary modifications, CLI-facing
 
 This document is descriptive only — it explains what the code does, not whether the design is scientifically sound.
 
+The separate [LLMRank adaptation](llmrank_design.md) adds an explicit recency
+reminder and sums three rankings of shuffled candidate presentations. Its
+MovieLens runner requires temporal task provenance; it does not change the
+yes/no or ordinary listwise protocols described here.
+
 ## 1. What this scorer is
 
 This is the plain, non-persona LLM response simulator: given a user's **raw interaction history rows** (formatted as text, one line per row) and a set of **explicit candidate rows**, ask an OpenAI-compatible chat model to predict a response — yes/no interaction, yes/no positive-preference, a ranking, or a numeric rating.

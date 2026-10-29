@@ -1,5 +1,7 @@
 """History-conditioned LLM scorers."""
 
+from beyond_click_sim.scorers.history.llmrank import LLMRankScorer
+from beyond_click_sim.scorers.history.llmsrec_syn import LLMSRecSynScorer
 from beyond_click_sim.scorers.history.listwise import (
     LLMInteractionListwiseRankingScorer,
     LLMPreferenceListwiseRankingScorer,
@@ -17,6 +19,8 @@ from beyond_click_sim.scorers.history.yes_no import (
 )
 
 __all__ = [
+    "LLMSRecSynScorer",
+    "LLMRankScorer",
     "LLMInteractionListwiseRankingScorer",
     "LLMInteractionYesNoScorer",
     "LLMPreferenceListwiseRankingScorer",
