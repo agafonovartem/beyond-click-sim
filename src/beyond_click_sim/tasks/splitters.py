@@ -9,7 +9,14 @@ from beyond_click_sim.tasks.base import SplitFrames, Splitter
 
 
 class RandomFractionSplitter(Splitter):
-    """Randomly split rows globally or inside each group."""
+    """Split rows chronologically by default, or randomly with ``shuffle=True``.
+
+    Splitting is per user by default; ``group_column=None`` splits globally.
+    Temporal mode requires non-null numeric or datetime timestamps, preserves
+    input order for timestamp ties, and ignores seed and stratification. Equal
+    timestamps may span partitions. Random mode supports optional stratification
+    and does not require timestamps.
+    """
 
     def __init__(
         self,
@@ -19,6 +26,8 @@ class RandomFractionSplitter(Splitter):
         seed: int = 0,
         group_column: str | None = "user_id", # per-user interaction split, not user-level split
         stratify_column: str | None = None,
+        shuffle: bool = False,
+        timestamp_column: str = "timestamp",
     ) -> None:
         super().__init__(seed=seed)
         self.train_fraction = train_fraction
@@ -26,12 +35,35 @@ class RandomFractionSplitter(Splitter):
         self.test_fraction = test_fraction
         self.group_column = group_column
         self.stratify_column = stratify_column
+        self.shuffle = shuffle
+        self.timestamp_column = timestamp_column
 
     def split(self, interactions: pd.DataFrame) -> SplitFrames:
         self._validate_fractions()
         if interactions.empty:
             empty = interactions.copy()
             return SplitFrames(train=empty, val=empty.copy(), test=empty.copy())
+
+        if not self.shuffle:
+            if self.timestamp_column not in interactions.columns:
+                raise ValueError(
+                    f"Temporal splitting requires timestamp column "
+                    f"{self.timestamp_column!r}; use shuffle=True for random splitting."
+                )
+            timestamps = interactions[self.timestamp_column]
+            if timestamps.isna().any():
+                raise ValueError(
+                    f"Temporal splitting requires non-null timestamps in "
+                    f"{self.timestamp_column!r}."
+                )
+            if not (
+                pd.api.types.is_numeric_dtype(timestamps)
+                or pd.api.types.is_datetime64_any_dtype(timestamps)
+            ):
+                raise ValueError(
+                    f"Temporal splitting requires numeric or datetime timestamps "
+                    f"in {self.timestamp_column!r}."
+                )
 
         if self.group_column is None:
             return self._split_frame(interactions, random_state=self.seed)
@@ -73,6 +105,9 @@ class RandomFractionSplitter(Splitter):
         random_state: int,
         group_key: Any | None = None,
     ) -> SplitFrames:
+        if not self.shuffle:
+            frame = frame.sort_values(self.timestamp_column, kind="stable")
+
         train_val = frame
         test = self._empty_like(frame)
         if self.test_fraction > 0:
@@ -109,7 +144,7 @@ class RandomFractionSplitter(Splitter):
         group_key: Any | None,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         stratify = None
-        if self.stratify_column is not None:
+        if self.shuffle and self.stratify_column is not None:
             stratify = frame[self.stratify_column]
 
         try:
@@ -117,7 +152,7 @@ class RandomFractionSplitter(Splitter):
                 frame,
                 test_size=test_size,
                 random_state=random_state,
-                shuffle=True,
+                shuffle=self.shuffle,
                 stratify=stratify,
             )
         except ValueError as error:

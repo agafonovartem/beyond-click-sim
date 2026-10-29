@@ -26,6 +26,9 @@ dependencies = [
     "tqdm>=4.67.0",
 ]
 
+[project.optional-dependencies]
+recagent = ["sentence-transformers>=3.0,<6"]
+
 [build-system]
 requires = ["uv_build>=0.8.0,<0.9"]
 build-backend = "uv_build"

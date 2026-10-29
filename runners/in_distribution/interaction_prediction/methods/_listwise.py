@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
@@ -52,6 +53,8 @@ def evaluate_listwise_scorer(
     scorer_manifest: dict[str, object],
     repo_root: Path,
     source_metadata: dict[str, object] | None = None,
+    score_mapping: str = SCORE_MAPPING,
+    after_split_scored: Callable[[str], None] | None = None,
 ) -> dict[str, object]:
     """Evaluate direct listwise scores and a validation-selected threshold."""
 
@@ -62,6 +65,8 @@ def evaluate_listwise_scorer(
         max_attempts=max_llm_attempts,
         max_workers=max_workers,
     )
+    if after_split_scored is not None:
+        after_split_scored("val")
     test_scores, test_errors = _score_groups(
         scorer,
         X_test,
@@ -69,6 +74,8 @@ def evaluate_listwise_scorer(
         max_attempts=max_llm_attempts,
         max_workers=max_workers,
     )
+    if after_split_scored is not None:
+        after_split_scored("test")
     _write_errors(
         output_dir / "llm_errors.jsonl",
         [
@@ -166,7 +173,7 @@ def evaluate_listwise_scorer(
         "decision_rule": {
             "ranking": {
                 "kind": "complete_listwise_rank_parser",
-                "score_mapping": SCORE_MAPPING,
+                "score_mapping": score_mapping,
             },
             "pointwise": {
                 "kind": "threshold_on_validation",
@@ -210,7 +217,7 @@ def evaluate_listwise_scorer(
         "ranking_evaluation": {
             "ks": list(RANKING_KS),
             "tie_policy": RANKING_TIE_POLICY,
-            "score_mapping": SCORE_MAPPING,
+            "score_mapping": score_mapping,
         },
         "val": val_ranking["parsed_only"],
         "val_failure_as_zero_group": val_ranking["failure_as_zero_group"],
