@@ -5,6 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
+
+pytestmark = pytest.mark.usefixtures("agent4rec_item_artifact")
 
 from beyond_click_sim.tasks import Task, TaskSchema
 from runners.in_distribution.preference_prediction.methods import (
@@ -131,7 +134,9 @@ def test_preference_agent4rec_runner_records_target_and_profile(
     ]
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
-        "item_genres",
+        "item_rating_mean",
+        "item_rating_count",
+        "item_agent4rec_generated_genres",
         "item_summary",
     ]
     assert manifest["scorer"]["summary_usage"] == "candidate"
@@ -304,8 +309,8 @@ def test_preference_agent4rec_no_summary_wrappers_support_steam(
     ]
     assert [call["summary_usage"] for call in calls] == ["none", "none"]
     assert [call["candidate_description_columns"] for call in calls] == [
-        ("item_title", "item_genres_json", "item_tags_json"),
-        ("item_title", "item_genres_json", "item_tags_json"),
+        ("item_title", "item_genres_json", "item_tags_json", "item_interaction_count"),
+        ("item_title", "item_genres_json", "item_tags_json", "item_interaction_count"),
     ]
     assert [call["scorer_kwargs"] for call in calls] == [
         {

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import protect_output_directory
+
+from runners.in_distribution.agent4rec_items import (
+    MOVIE_CANDIDATE_COLUMNS, MOVIE_COLUMN_LABELS, prepare_agent4rec_task,
+)
 import re
 
 from beyond_click_sim.llm_clients import make_llm_client
@@ -13,7 +18,7 @@ from beyond_click_sim.scorers.agent4rec.prompts import AGENT4REC_TASTE_PROMPT_VE
 from beyond_click_sim.scorers.agent4rec.prompts import (
     AGENT4REC_PLAYTIME_TASTE_PROMPT_VERSION,
 )
-from beyond_click_sim.tasks import PREFIXED_ITEM_RATING_MEAN_COLUMN, Task
+from beyond_click_sim.tasks import Task
 from runners.in_distribution.item_summaries import (
     Agent4RecSummaryUsage,
     ITEM_SUMMARY_COLUMN,
@@ -103,19 +108,16 @@ OLLAMA_MAX_WORKERS = 1
 VLLM_MAX_WORKERS = 32
 
 DATASET_CANDIDATE_COLUMNS = {
-    "ml-1m": ("item_title", PREFIXED_ITEM_RATING_MEAN_COLUMN, "item_genres"),
-    "steam": ("item_title", "item_genres_json", "item_tags_json"),
+    "ml-1m": MOVIE_CANDIDATE_COLUMNS,
+    "steam": ("item_title", "item_genres_json", "item_tags_json", "item_interaction_count"),
 }
 DATASET_COLUMN_LABELS = {
-    "ml-1m": {
-        "item_title": "movie title",
-        PREFIXED_ITEM_RATING_MEAN_COLUMN: "History ratings",
-        "item_genres": "genres",
-    },
+    "ml-1m": dict(MOVIE_COLUMN_LABELS),
     "steam": {
         "item_title": "game title",
         "item_genres_json": "genres",
         "item_tags_json": "tags",
+        "item_interaction_count": "popularity (training interaction count)",
     },
 }
 DATASET_JSON_LIST_COLUMNS = {
@@ -561,6 +563,8 @@ def run_method(
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based yes/no scorer."""
 
+    protect_output_directory(output_dir)
+    task = prepare_agent4rec_task(task)
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
     if dataset_name not in DATASET_CANDIDATE_COLUMNS:

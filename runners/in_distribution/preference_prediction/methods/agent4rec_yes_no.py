@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from runners.in_distribution.agent4rec_items import MOVIE_CANDIDATE_COLUMNS, MOVIE_COLUMN_LABELS
 
 from beyond_click_sim.scorers import Agent4RecPreferenceYesNoScorer
 from beyond_click_sim.tasks import Task
@@ -46,18 +47,16 @@ QWEN36_27B_TRAITS_TASTE_NO_SUMMARY_METHOD_NAME = (
 )
 
 DATASET_CANDIDATE_COLUMNS = {
-    "ml-1m": ("item_title", "item_genres"),
-    "steam": ("item_title", "item_genres_json", "item_tags_json"),
+    "ml-1m": MOVIE_CANDIDATE_COLUMNS,
+    "steam": ("item_title", "item_genres_json", "item_tags_json", "item_interaction_count"),
 }
 DATASET_COLUMN_LABELS = {
-    "ml-1m": {
-        "item_title": "movie title",
-        "item_genres": "genres",
-    },
+    "ml-1m": dict(MOVIE_COLUMN_LABELS),
     "steam": {
         "item_title": "game title",
         "item_genres_json": "genres",
         "item_tags_json": "tags",
+        "item_interaction_count": "popularity (training interaction count)",
     },
 }
 

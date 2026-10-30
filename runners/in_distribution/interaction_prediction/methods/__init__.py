@@ -95,11 +95,21 @@ from runners.in_distribution.interaction_prediction.methods.llmrank import (
 
 from runners.in_distribution.interaction_prediction.methods import llmsrec_syn
 from runners.in_distribution.interaction_prediction.methods import recagent_yes_no
+from runners.in_distribution.interaction_prediction.methods import simuser_yes_no
+from runners.in_distribution.interaction_prediction.methods import dyta4rec
 
 
 MethodRunner = Callable[[Task, Path], dict[str, object]]
 
 METHOD_RUNNERS: dict[str, MethodRunner] = {
+    "dyta4rec_offline_rrf_litellm_qwen3_8b_smoke": dyta4rec.run_qwen3_8b_smoke,
+    "dyta4rec_offline_rrf_litellm_qwen3_8b_full": dyta4rec.run_qwen3_8b_full,
+    "dyta4rec_offline_rrf_litellm_qwen36_27b_smoke": dyta4rec.run_qwen36_27b_smoke,
+    "dyta4rec_offline_rrf_litellm_qwen36_27b_full": dyta4rec.run_qwen36_27b_full,
+    "simuser_zero_text_only_litellm_qwen3_8b_smoke": simuser_yes_no.run_qwen3_8b_smoke,
+    "simuser_zero_text_only_litellm_qwen3_8b_full": simuser_yes_no.run_qwen3_8b_full,
+    "simuser_zero_text_only_litellm_qwen36_27b_smoke": simuser_yes_no.run_qwen36_27b_smoke,
+    "simuser_zero_text_only_litellm_qwen36_27b_full": simuser_yes_no.run_qwen36_27b_full,
     "recagent_yes_no_litellm_qwen3_8b_smoke": recagent_yes_no.run_qwen3_8b_smoke,
     "recagent_yes_no_litellm_qwen3_8b_full": recagent_yes_no.run_qwen3_8b_full,
     "recagent_yes_no_litellm_qwen36_27b_smoke": recagent_yes_no.run_qwen36_27b_smoke,

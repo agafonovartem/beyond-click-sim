@@ -4,6 +4,7 @@ import argparse
 from datetime import UTC, datetime
 import json
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import compatible_result
 from time import perf_counter
 
 from runners.in_distribution.policy_ranking_agreement_rerank.methods import METHOD_RUNNERS
@@ -39,7 +40,7 @@ def is_completed(output_root: Path, task_name: str, method_name: str) -> bool:
     for d in output_root.glob(f"*_{task_name}_{method_name}"):
         if not d.is_dir():
             continue
-        if (d / "metrics.json").exists():
+        if (d / "metrics.json").exists() and compatible_result(d, method_name):
             return True
     return False
 

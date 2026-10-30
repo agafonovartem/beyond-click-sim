@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 import json
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import compatible_result
 from statistics import mean, stdev
 import traceback
 from typing import Any
@@ -93,7 +94,9 @@ def main(
                 f"RUN {run_index}/{total_runs} task={task_name} method={method_name}",
                 flush=True,
             )
-            if args.skip_existing and (output_dir / "metrics.json").exists():
+            if method_name.startswith("agent4rec_"):
+                output_dir = output_dir.with_name(output_dir.name + "_agent4rec_offline_v2")
+            if args.skip_existing and (output_dir / "metrics.json").exists() and compatible_result(output_dir, method_name):
                 metrics = read_existing_metrics(output_dir)
                 row = summarize_metrics(
                     task_name=task_name,

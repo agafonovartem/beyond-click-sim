@@ -17,11 +17,11 @@ from beyond_click_sim.scorers.agent4rec.prompts import (
 from beyond_click_sim.scorers.agent4rec.profiles import (
     Agent4RecProfileGenerator,
     Agent4RecUserProfile,
+    agent4rec_pattern_prompt,
 )
 from beyond_click_sim.scorers.base import Scorer
 from beyond_click_sim.scorers.history.selection import (
     UserHistory,
-    select_history_by_user,
 )
 from beyond_click_sim.scorers.history.yes_no import (
     parse_single_yes_no_response,
@@ -144,7 +144,7 @@ class Agent4RecYesNoScorer(Scorer):
                 if profile_user_ids is None
                 else X[X[self.user_column].isin(profile_user_ids)].copy()
             )
-            self.history_by_user_ = select_history_by_user(
+            self.history_by_user_ = self.profile_generator.select_taste_histories(
                 history_rows,
                 user_column=self.user_column,
                 item_column=self.profile_generator.item_column,
@@ -377,7 +377,7 @@ class Agent4RecYesNoScorer(Scorer):
             diversity=profile.diversity_description,
             domain_name=self.domain_name,
             taste_label=self.taste_label,
-        )
+        ) + agent4rec_pattern_prompt(profile)
 
     def _format_item_description(
         self,
@@ -389,6 +389,8 @@ class Agent4RecYesNoScorer(Scorer):
         for column in columns:
             value = getattr(row, column)
             if pd.isna(value) or value == "":
+                if column == "item_rating_mean":
+                    parts.append("<- quality (training mean rating):unavailable ->")
                 continue
             column_label = self.column_labels.get(column, column)
             formatted_value = _format_prompt_value(
@@ -434,6 +436,11 @@ class Agent4RecPreferenceYesNoScorer(Agent4RecYesNoScorer):
             raise ValueError("target_description must be non-empty")
         super().__init__(**kwargs)
         self.target_description = target_description
+
+    def _build_itemwise_user_prompt(self, *, candidate: str, taste: str | None) -> str:
+        return (f"Candidate {self.entity_name}: {candidate}\n"
+                f"Positive-preference target: {self.target_description}\n"
+                "Would this candidate meet the target for you? Answer only yes or no.")
 
     def _build_user_prompt(
         self,

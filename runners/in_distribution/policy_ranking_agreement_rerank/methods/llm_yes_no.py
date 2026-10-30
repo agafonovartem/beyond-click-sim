@@ -55,11 +55,10 @@ VLLM_MODEL_QWEN36_35B_A3B = "Qwen/Qwen3.6-35B-A3B"
 
 QWEN_EXTRA_BODY: dict = {"chat_template_kwargs": {"enable_thinking": False}}
 
-# Coat histories run 20-24 rows (24 self-selected minus that user's overlap
-# cells). The inherited cap of 20 would silently truncate 283 of 290 users, and
-# Coat has no timestamps, so the retained subset would be arbitrary.
-DATASET_MAX_HISTORY_ITEMS = {"coat": 24}
-MAX_HISTORY_ITEMS = 24
+# Coat uses the same reproducible 20-observation subset as Agent4Rec.
+# Sort by string item ID before selecting the history; no timestamps exist.
+DATASET_MAX_HISTORY_ITEMS = {"coat": 20}
+MAX_HISTORY_ITEMS = 20
 
 # A policy scored on a biased subset of its own slates lands in the wrong place
 # in the ordering, which is the whole measurement.
@@ -530,6 +529,10 @@ def _run(
     t = perf_counter()
     xy = task_xy(task)
     X_train, y_train = xy["train"]
+    if dataset_name == "coat":
+        X_train = X_train.assign(_coat_order=X_train.item_id.astype(str)).sort_values(
+            "_coat_order", kind="stable").drop(columns="_coat_order")
+        y_train = y_train.loc[X_train.index]
     X_test, y_test = xy["test"]
     _record(stage_times, "prepare_xy", t)
 

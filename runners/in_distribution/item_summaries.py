@@ -17,18 +17,12 @@ Agent4RecSummaryUsage = Literal["none", "profile", "candidate", "both"]
 
 
 def canonical_agent4rec_summary_usage(task: Task) -> Agent4RecSummaryUsage:
-    """Use candidate summaries when the canonical task carries them."""
+    """Primary MovieLens Agent4Rec requires summaries; explicit ablations opt out."""
 
-    manifest = getattr(task, "manifest", {})
-    item_enrichment = manifest.get("item_enrichment")
-    movie_summaries = (
-        item_enrichment.get("movie_summaries")
-        if isinstance(item_enrichment, dict)
-        else None
-    )
-    if isinstance(movie_summaries, dict) and movie_summaries.get("enabled") is True:
+    if task.manifest.get("dataset") == "ml-1m":
         return "candidate"
-    return "none"
+    enrichment = task.manifest.get("item_enrichment") or {}
+    return "candidate" if enrichment.get("movie_summaries", {}).get("enabled") else "none"
 
 
 def resolve_item_summary_visibility(

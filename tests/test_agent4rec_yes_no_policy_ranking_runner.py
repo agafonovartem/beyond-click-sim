@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
+pytestmark = pytest.mark.usefixtures("agent4rec_item_artifact")
+
 from beyond_click_sim.tasks import Task, TaskSchema
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -239,7 +241,9 @@ def test_policy_ranking_agent4rec_runner_manifest_structure(
     assert manifest["protocol"] == "policy_ranking"
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
-        "item_genres",
+        "item_rating_mean",
+        "item_rating_count",
+        "item_agent4rec_generated_genres",
         "item_summary",
     ]
     assert manifest["scorer"]["summary_usage"] == "candidate"
@@ -251,11 +255,13 @@ def test_policy_ranking_agent4rec_runner_manifest_structure(
 # ---------------------------------------------------------------------------
 
 
-def test_dataset_candidate_columns_ml1m_uses_title_and_genres_only() -> None:
+def test_dataset_candidate_columns_ml1m_uses_complete_profiles() -> None:
     # Policy ranking tasks do not add item_rating_mean (no item-stats enrichment step).
     assert agent4rec_yes_no.DATASET_CANDIDATE_COLUMNS["ml-1m"] == (
         "item_title",
-        "item_genres",
+        "item_rating_mean",
+        "item_rating_count",
+        "item_agent4rec_generated_genres",
     )
 
 
@@ -533,7 +539,7 @@ def test_policy_ranking_agent4rec_qwen_traits_taste_wrappers(
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
             "profile_components": ("traits", "taste"),
-            "taste_client_name": "openai",
+            "taste_client_name": "openai_vk_proxy",
             "taste_model": "gpt-4o-mini",
             "summary_usage": "candidate",
         },
@@ -545,7 +551,7 @@ def test_policy_ranking_agent4rec_qwen_traits_taste_wrappers(
             "max_workers": agent4rec_yes_no.VLLM_MAX_WORKERS,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
             "profile_components": ("traits", "taste"),
-            "taste_client_name": "openai",
+            "taste_client_name": "openai_vk_proxy",
             "taste_model": "gpt-4o-mini",
             "summary_usage": "candidate",
         },

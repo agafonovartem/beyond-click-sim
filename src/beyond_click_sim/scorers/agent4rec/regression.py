@@ -10,6 +10,7 @@ import pandas as pd
 from beyond_click_sim.scorers.agent4rec.profiles import (
     Agent4RecProfileGenerator,
     Agent4RecUserProfile,
+    agent4rec_pattern_prompt,
 )
 from beyond_click_sim.scorers.agent4rec.prompts import (
     agent4rec_rating_user_prompt,
@@ -18,7 +19,6 @@ from beyond_click_sim.scorers.agent4rec.prompts import (
 from beyond_click_sim.scorers.base import Scorer
 from beyond_click_sim.scorers.history.selection import (
     UserHistory,
-    select_history_by_user,
 )
 
 
@@ -116,7 +116,7 @@ class Agent4RecRegressor(Scorer):
                 if profile_user_ids is None
                 else X[X[self.user_column].isin(profile_user_ids)].copy()
             )
-            self.history_by_user_ = select_history_by_user(
+            self.history_by_user_ = self.profile_generator.select_taste_histories(
                 history_rows,
                 user_column=self.user_column,
                 item_column=self.profile_generator.item_column,
@@ -214,7 +214,7 @@ class Agent4RecRegressor(Scorer):
             activity=profile.activity_description,
             conformity=profile.conformity_description,
             diversity=profile.diversity_description,
-        )
+        ) + agent4rec_pattern_prompt(profile)
 
     def _format_item_description(
         self,
@@ -226,6 +226,8 @@ class Agent4RecRegressor(Scorer):
         for column in columns:
             value = row[column]
             if pd.isna(value) or value == "":
+                if column == "item_rating_mean":
+                    parts.append("<- quality (training mean rating):unavailable ->")
                 continue
             column_label = self.column_labels.get(column, column)
             formatted_value = _format_prompt_value(value)

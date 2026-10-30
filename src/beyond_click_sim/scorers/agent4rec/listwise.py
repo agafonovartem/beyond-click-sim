@@ -16,6 +16,11 @@ class Agent4RecListwiseRankingScorer(Agent4RecYesNoScorer):
 
     name = "agent4rec_listwise_ranking"
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if kwargs.get("prompt_style", "batch") != "batch":
+            raise ValueError("Agent4Rec listwise scorers require batch mode")
+        super().__init__(*args, **kwargs)
+
     def _build_user_prompt(
         self,
         *,

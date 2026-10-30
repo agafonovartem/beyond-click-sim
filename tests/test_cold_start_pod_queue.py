@@ -143,4 +143,8 @@ def test_queue_state_is_method_scoped_and_rechecks_done_artifacts(
     run_dir = tmp_path / "outputs" / f"run_{task}_{method}"
     run_dir.mkdir(parents=True)
     (run_dir / "metrics_ranking.json").write_text("{}", encoding="utf-8")
+    assert pod_queue.QueueState.load(state_path).tasks[task].status == "pending"
+    (run_dir / "manifest.json").write_text(json.dumps({
+        "scorer": {"profile_generator": {"implementation_version": "agent4rec_offline_v2"}}
+    }))
     assert pod_queue.QueueState.load(state_path).tasks[task].status == "downloaded"

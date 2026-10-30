@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import protect_output_directory
+
+from runners.in_distribution.agent4rec_items import (
+    prepare_agent4rec_task,
+)
 
 import pandas as pd
 
@@ -324,6 +329,8 @@ def run_method(
 ) -> dict[str, object]:
     """Run Agent4Rec direct preference ranking with validation calibration."""
 
+    protect_output_directory(output_dir)
+    task = prepare_agent4rec_task(task)
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
     try:

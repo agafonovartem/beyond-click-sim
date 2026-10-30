@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
+pytestmark = pytest.mark.usefixtures("agent4rec_item_artifact")
+
 from beyond_click_sim.tasks import TaskSchema
 from beyond_click_sim.tasks.cold_start import ColdStartTask
 
@@ -156,6 +158,7 @@ def _ml1m_cold_task(
         ),
         manifest={
             "dataset": dataset,
+            "target_source_column": "target_interact",
             "dataset_version": "v1",
             "splitter": {"seed": 42},
             "item_enrichment": {
@@ -356,7 +359,8 @@ def test_cold_start_agent4rec_runner_manifest_records_fit_on_history_and_k(
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
         "item_rating_mean",
-        "item_genres",
+        "item_rating_count",
+        "item_agent4rec_generated_genres",
         "item_summary",
     ]
     assert manifest["scorer"]["summary_usage"] == "candidate"
@@ -395,7 +399,7 @@ def test_cold_start_agent4rec_runner_default_card_includes_rating_mean_column(
     assert "item_rating_mean" in manifest["scorer"]["candidate_description_columns"]
 
     user_prompt = client.completions.calls[0]["messages"][1]["content"]
-    assert "History ratings" in user_prompt
+    assert "quality (training mean rating)" in user_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -846,26 +850,27 @@ def test_cold_start_agent4rec_runner_reports_failure_aware_metric_variants(
 # ---------------------------------------------------------------------------
 
 
-def test_cold_start_agent4rec_runner_fails_cleanly_on_plain_task(
+def test_cold_start_agent4rec_runner_derives_statistics_on_plain_task(
     tmp_path: Path, monkeypatch
 ) -> None:
     """The default card includes item_rating_mean; plain tasks lack it and
     must fail at setup, not inside the scoring retry loop."""
 
-    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: FakeClient([]))
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: FakeClient(["ID: C1; MOVIE: Lion King; WATCH: yes; REASON: ok\nID: C2; MOVIE: Godfather; WATCH: no; REASON: ok"] * 10))
     task = _ml1m_cold_task(include_item_rating_mean=False)
 
-    with pytest.raises(ValueError, match="item-stats task columns"):
-        agent4rec_yes_no.run_method(
-            task,
-            tmp_path,
-            method_name="test_plain_task",
-            client_name="fake",
-            model="fake-model",
-            max_candidate_groups=None,
-            scoring="batch",
-        )
+    agent4rec_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="test_plain_task",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        scoring="batch",
+    )
 
+    saved = pd.read_parquet(tmp_path / "predictions.parquet")
+    assert saved["score"].notna().all()
 
 def test_cold_start_agent4rec_runner_profile_summaries_require_taste(
     tmp_path: Path, monkeypatch

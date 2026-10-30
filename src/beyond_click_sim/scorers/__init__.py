@@ -31,8 +31,14 @@ from beyond_click_sim.scorers.history import (
 from beyond_click_sim.scorers.item_knn import ColdItemKNNScorer
 from beyond_click_sim.scorers.popularity import PopularityScorer
 from beyond_click_sim.scorers.recagent import RecAgentYesNoScorer
+from beyond_click_sim.scorers.dyta4rec import DyTA4RecConfig, DyTA4RecScorer
+from beyond_click_sim.scorers.simuser import SimUSERConfig, SimUSERYesNoScorer
 
 __all__ = [
+    "DyTA4RecConfig",
+    "DyTA4RecScorer",
+    "SimUSERConfig",
+    "SimUSERYesNoScorer",
     "RecAgentYesNoScorer",
     "LLMSRecSynScorer",
     "LLMRankScorer",

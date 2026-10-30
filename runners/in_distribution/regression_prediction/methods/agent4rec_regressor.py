@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import protect_output_directory
+
+from runners.in_distribution.agent4rec_items import (
+    MOVIE_CANDIDATE_COLUMNS, MOVIE_COLUMN_LABELS, prepare_agent4rec_task,
+)
 import re
 from typing import Any
 
 from beyond_click_sim.llm_clients import make_llm_client
 from beyond_click_sim.scorers import Agent4RecProfileGenerator, Agent4RecRegressor
 from beyond_click_sim.scorers.agent4rec.prompts import AGENT4REC_TASTE_PROMPT_VERSION
-from beyond_click_sim.tasks import PREFIXED_ITEM_RATING_MEAN_COLUMN, Task
+from beyond_click_sim.tasks import Task
 from runners.in_distribution.regression_prediction.config import (
     DATASET_TARGET_REGRESSION_CONFIG,
     MAX_HISTORY_ITEMS,
@@ -62,14 +67,10 @@ QWEN36_27B_MAX_WORKERS = 128
 QWEN3_8B_MAX_WORKERS = 128
 
 DATASET_CANDIDATE_COLUMNS = {
-    "ml-1m": ("item_title", PREFIXED_ITEM_RATING_MEAN_COLUMN, "item_genres"),
+    "ml-1m": MOVIE_CANDIDATE_COLUMNS,
 }
 DATASET_COLUMN_LABELS = {
-    "ml-1m": {
-        "item_title": "movie title",
-        PREFIXED_ITEM_RATING_MEAN_COLUMN: "History ratings",
-        "item_genres": "genres",
-    },
+    "ml-1m": dict(MOVIE_COLUMN_LABELS),
 }
 
 
@@ -699,6 +700,8 @@ def run_method(
 ) -> dict[str, object]:
     """Run the Agent4Rec profile-based discrete rating regressor."""
 
+    protect_output_directory(output_dir)
+    task = prepare_agent4rec_task(task)
     output_dir.mkdir(parents=True, exist_ok=True)
     if task.schema.candidate_group_column is not None:
         raise ValueError("Agent4Rec regression method requires observed-only task rows")

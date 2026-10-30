@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 import json
 import os
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import compatible_result
 from queue import Queue
 import traceback
 from typing import Any
@@ -146,7 +147,9 @@ def _run_one_task_method(
     max_workers: int,
 ) -> dict[str, Any]:
     output_dir = batch_root / task_name / method_name
-    if skip_existing and (output_dir / "metrics.json").exists():
+    if method_name.startswith("agent4rec_"):
+        output_dir = output_dir.with_name(output_dir.name + "_agent4rec_offline_v2")
+    if skip_existing and (output_dir / "metrics.json").exists() and compatible_result(output_dir, method_name):
         metrics = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
         row = summarize_metrics(
             task_name=task_name,
