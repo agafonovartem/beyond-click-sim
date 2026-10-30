@@ -122,9 +122,9 @@ def test_agent4rec_regressor_uses_profile_rating_prompt() -> None:
     first_messages = client.completions.calls[0]["messages"]
     system_prompt = first_messages[0]["content"]
     user_prompt = first_messages[1]["content"]
-    assert "Your activity trait is described as:" in system_prompt
-    assert "Your conformity trait is described as:" in system_prompt
-    assert "Your diversity trait is described as:" in system_prompt
+    assert "Your activity trait is described as:" not in system_prompt
+    assert "Your conformity trait is described as:" not in system_prompt
+    assert "Your diversity trait is described as:" not in system_prompt
     assert "##movie##" in user_prompt
     assert "<- Lion King -> <- History ratings:4.15 -> <- genres:Animation ->" in user_prompt
     assert "Predict the integer rating." in user_prompt

@@ -502,7 +502,17 @@ def read_json(path: Path) -> Any:
 
 
 def has_required_artifacts(path: Path, artifacts: Iterable[str]) -> bool:
-    return path.is_dir() and all((path / name).exists() for name in artifacts)
+    if not path.is_dir() or not all((path / name).exists() for name in artifacts):
+        return False
+    try:
+        manifest = json.loads((path / "manifest.json").read_text())
+    except (OSError, ValueError):
+        return "agent4rec_" not in path.name
+    method = manifest.get("method", "")
+    if method.startswith("agent4rec_") or "agent4rec_" in path.name:
+        from runners.in_distribution.agent4rec_version import compatible_result
+        return compatible_result(path, "agent4rec_")
+    return True
 
 
 def find_result_dir_for_token(

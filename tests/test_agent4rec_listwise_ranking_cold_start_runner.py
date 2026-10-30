@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
+pytestmark = pytest.mark.usefixtures("agent4rec_item_artifact")
+
 from beyond_click_sim.tasks import TaskSchema
 from beyond_click_sim.tasks.cold_start import ColdStartTask
 
@@ -166,10 +168,10 @@ def test_traits_runner_uses_history_profiles_and_ranking_only_artifacts(
     messages = client.completions.calls[0]["messages"]
     system_prompt = messages[0]["content"]
     user_prompt = messages[1]["content"]
-    assert "activity" in system_prompt.lower()
+    assert "activity" not in system_prompt.lower()
     assert "History Positive" not in user_prompt
     assert "Warm Train Only" not in user_prompt
-    assert "History ratings" in user_prompt
+    assert "quality (training mean rating)" in user_prompt
     assert "Canonical summary" in user_prompt
     assert "rate the candidate movie at least 4 out of 5" in user_prompt
 
@@ -194,7 +196,7 @@ def test_traits_runner_uses_history_profiles_and_ranking_only_artifacts(
         scorer["item_summaries"]["canonical_enrichment"]["movie_summaries"][
             "source_sha256"
         ]
-        == "fixture-sha256"
+        == manifest["task"]["manifest"]["agent4rec_item_profiles"]["source_sha256"]
     )
     assert "threshold" not in manifest["decision_rule"]
 

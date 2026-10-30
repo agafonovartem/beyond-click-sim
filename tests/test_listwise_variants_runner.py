@@ -6,6 +6,9 @@ import sys
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
+
+pytestmark = pytest.mark.usefixtures("agent4rec_item_artifact")
 
 from beyond_click_sim.tasks import Task, TaskSchema
 

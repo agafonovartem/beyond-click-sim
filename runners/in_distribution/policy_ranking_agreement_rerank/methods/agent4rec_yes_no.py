@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import re
+import pandas as pd
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import protect_output_directory
+
+from runners.in_distribution.agent4rec_items import (
+    prepare_agent4rec_task,
+)
 
 from beyond_click_sim.evaluation.policy_ranking import policy_ranking_agreement_metrics
 from beyond_click_sim.llm_clients import make_llm_client
@@ -73,8 +79,8 @@ MAX_TOKENS = 1000
 # See the llm_yes_no fork: Coat histories are 20-24 rows. This cap matters more
 # here than there -- Agent4Rec feeds history into taste generation, the only
 # route by which Coat's negative ratings reach the model at all.
-DATASET_MAX_HISTORY_ITEMS = {"coat": 24}
-MAX_HISTORY_ITEMS = 24
+DATASET_MAX_HISTORY_ITEMS = {"coat": 20}
+MAX_HISTORY_ITEMS = 20
 MIN_SCORE_COVERAGE = 0.90
 MAX_LLM_ATTEMPTS = 5
 TASTE_TEMPERATURE = 0.0
@@ -135,65 +141,14 @@ DATASET_TASTE_PROMPT_VERSION = {
     "coat": AGENT4REC_COAT_TASTE_PROMPT_VERSION,
 }
 
-# Coat is the first dataset carrying participant covariates worth stating in the
-# persona. Agent4Rec's own traits are all derived from rating behaviour, so this
-# is a different kind of profile information and is rendered as its own line.
-# Rendered per user and placed on its own line in the persona. Phrasing notes:
-# "women" -> "female" ("a women shopper" is ungrammatical); age is rendered as
-# "aged {x}" so that "under 20" and "over 60" read correctly; and the article
-# before the location is computed, because Coat's values are rural / suburban /
-# urban and "a urban area" is wrong.
-DATASET_PERSONA_TEMPLATE = {
-    "coat": (
-        "You are a {user_gender} shopper aged {user_age_group}, from "
-        "{article} {user_location} area, and you are {user_fashion_interest} "
-        "interested in fashion."
-    ),
-}
-_COAT_GENDER_WORDS = {"men": "male", "women": "female"}
 
-
-def _build_persona_by_user(dataset_name: str, frame) -> dict:
-    """Map each evaluated user to one persona sentence, or {} if unsupported."""
-
-    template = DATASET_PERSONA_TEMPLATE.get(dataset_name)
-    columns = DATASET_USER_COLUMNS.get(dataset_name)
-    if template is None or not columns:
-        return {}
-    missing = [c for c in columns if c not in frame.columns]
-    if missing:
-        raise ValueError(
-            f"{dataset_name} persona needs user columns {missing}, which are not "
-            "on the task frame; check DATASET_USER_COLUMNS against the builder's "
-            "feature columns"
-        )
-    personas: dict = {}
-    for row in frame[["user_id", *columns]].drop_duplicates("user_id").itertuples(index=False):
-        values = {c: getattr(row, c) for c in columns}
-        values["user_gender"] = _COAT_GENDER_WORDS.get(
-            values.get("user_gender"), values.get("user_gender")
-        )
-        location = str(values.get("user_location", ""))
-        values["article"] = "an" if location[:1].lower() in "aeiou" else "a"
-        personas[row.user_id] = template.format(**values)
-    return personas
-
-
-DATASET_USER_COLUMNS = {
-    "coat": (
-        "user_age_group",
-        "user_gender",
-        "user_location",
-        "user_fashion_interest",
-    ),
-}
 
 DATASET_TRAIT_CAVEATS = {
     "coat": {
         "activity": "disabled: varies only via overlap removal, not behaviour",
         "diversity": (
             "kept, but partly encodes which gender sections were browsed, since "
-            "the gender token is 1/3 of the genre-token mass by construction"
+            "distinct gender-section tokens contribute to the category union"
         ),
     },
 }
@@ -545,6 +500,8 @@ def run_method(
     `target_played_120` ground truth this run is scored against.
     """
 
+    protect_output_directory(output_dir)
+    task = prepare_agent4rec_task(task)
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
     if dataset_name not in DATASET_CANDIDATE_COLUMNS:
@@ -589,6 +546,10 @@ def run_method(
 
     xy = task_xy(task)
     X_train, y_train = xy["train"]
+    selected = Agent4RecProfileGenerator(taste_prompt_kind="coat_rating").select_taste_histories(
+        X_train, user_column="user_id", item_column="item_id", max_history_items=max_history_items)
+    X_train = pd.concat([h.rows for h in selected.values()])
+    y_train = y_train.loc[X_train.index]
     X_test, y_test = xy["test"]
 
     if scoring not in ("batch", "itemwise"):
@@ -677,7 +638,6 @@ def run_method(
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
-        persona_by_user=_build_persona_by_user(dataset_name, X_test),
         prompt_style=scoring,
         **DATASET_PROMPT_KWARGS[dataset_name],
     ).fit(X_train, y_train, profile_user_ids=profile_user_ids)
@@ -756,6 +716,7 @@ def run_method(
             "candidate_description_columns": list(candidate_columns),
             "column_labels": column_labels,
             "max_history_items": max_history_items,
+            "trait_evidence_policy": "same_selected_permitted_Coat_observations_as_taste",
             "temperature": temperature,
             "max_tokens": max_tokens,
             "profile_generator": scorer.profile_generator.manifest(),

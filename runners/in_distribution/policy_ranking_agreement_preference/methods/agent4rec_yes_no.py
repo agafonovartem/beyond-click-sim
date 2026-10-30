@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import protect_output_directory
+
+from runners.in_distribution.agent4rec_items import (
+    MOVIE_CANDIDATE_COLUMNS, MOVIE_COLUMN_LABELS, prepare_agent4rec_task,
+)
 
 from beyond_click_sim.evaluation.policy_ranking import policy_ranking_agreement_metrics
 from beyond_click_sim.llm_clients import make_llm_client
@@ -69,18 +74,16 @@ TASTE_MAX_TOKENS = None
 VLLM_MAX_WORKERS = 128
 
 DATASET_CANDIDATE_COLUMNS = {
-    "ml-1m": ("item_title", "item_genres"),
-    "steam": ("item_title", "item_genres_json", "item_tags_json"),
+    "ml-1m": MOVIE_CANDIDATE_COLUMNS,
+    "steam": ("item_title", "item_genres_json", "item_tags_json", "item_interaction_count"),
 }
 DATASET_COLUMN_LABELS = {
-    "ml-1m": {
-        "item_title": "movie title",
-        "item_genres": "genres",
-    },
+    "ml-1m": dict(MOVIE_COLUMN_LABELS),
     "steam": {
         "item_title": "game title",
         "item_genres_json": "genres",
         "item_tags_json": "tags",
+        "item_interaction_count": "popularity (training interaction count)",
     },
 }
 DATASET_PROFILE_GENERATOR_KWARGS = {
@@ -219,6 +222,8 @@ def run_method(
     `target_played_120` ground truth this run is scored against.
     """
 
+    protect_output_directory(output_dir)
+    task = prepare_agent4rec_task(task)
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
     if dataset_name not in DATASET_CANDIDATE_COLUMNS:

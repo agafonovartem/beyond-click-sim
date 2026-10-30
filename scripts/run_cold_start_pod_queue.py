@@ -385,7 +385,16 @@ echo NEED_SETUP
 
 
 def has_required_metric_files(path: Path) -> bool:
-    return all((path / filename).exists() for filename in REQUIRED_METRIC_FILES)
+    if not all((path / filename).exists() for filename in REQUIRED_METRIC_FILES):
+        return False
+    if METHOD.startswith("agent4rec_"):
+        # Keep standalone queue startup independent of the experiment runtime.
+        try:
+            manifest = json.loads((path / "manifest.json").read_text())
+            return manifest.get("scorer", {}).get("profile_generator", {}).get("implementation_version") == "agent4rec_offline_v2"
+        except (OSError, ValueError):
+            return False
+    return True
 
 
 def local_task_done(task: str) -> bool:
@@ -410,6 +419,13 @@ def remote_result_dir(pod: str, task: str) -> str | None:
     required_checks = " && ".join(
         f'[ -f "$d/{filename}" ]' for filename in REQUIRED_METRIC_FILES
     )
+    if METHOD.startswith("agent4rec_"):
+        version_check = (
+            "import json,sys; m=json.load(open(sys.argv[1])); "
+            "sys.exit(m.get('scorer',{}).get('profile_generator',{}).get('implementation_version') != 'agent4rec_offline_v2')"
+        )
+        required_checks += f" && python -c {shlex.quote(version_check)} \"$d/manifest.json\""
+
     # Do not shlex.quote inside the glob — quotes become literal characters.
     cmd = f"""
 set +e
@@ -433,6 +449,13 @@ def list_complete_result_dirs(pod: str) -> list[str]:
     required_checks = " && ".join(
         f'[ -f "$d/{filename}" ]' for filename in REQUIRED_METRIC_FILES
     )
+    if METHOD.startswith("agent4rec_"):
+        version_check = (
+            "import json,sys; m=json.load(open(sys.argv[1])); "
+            "sys.exit(m.get('scorer',{}).get('profile_generator',{}).get('implementation_version') != 'agent4rec_offline_v2')"
+        )
+        required_checks += f" && python -c {shlex.quote(version_check)} \"$d/manifest.json\""
+
     cmd = f"""
 set +e
 cd {REMOTE_OUTPUT} 2>/dev/null || exit 0

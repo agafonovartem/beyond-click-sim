@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 import fcntl
 import hashlib
@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import threading
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import pandas as pd
 from tqdm import tqdm
@@ -31,7 +32,8 @@ from beyond_click_sim.scorers.history.selection import UserHistory
 AGENT4REC_PROFILE_COMPONENTS = ("taste", "traits")
 _SUPPORTED_AGENT4REC_PROFILE_COMPONENTS = frozenset(AGENT4REC_PROFILE_COMPONENTS)
 _SUPPORTED_TASTE_PROMPT_KINDS = frozenset({"rating", "playtime", "coat_rating"})
-AGENT4REC_DIVERSITY_TOP_MASS = 0.80
+AGENT4REC_IMPLEMENTATION_VERSION = "agent4rec_offline_v2"
+AGENT4REC_TASTE_CACHE_VERSION = "taste_patterns_v2"
 _TASTE_CACHE_THREAD_LOCKS: dict[Path, threading.Lock] = {}
 _TASTE_CACHE_THREAD_LOCKS_GUARD = threading.Lock()
 
@@ -48,6 +50,10 @@ class Agent4RecUserProfile:
     activity_description: str | None = None
     conformity_description: str | None = None
     diversity_description: str | None = None
+    high_rating: str | None = None
+    low_rating: str | None = None
+    taste_reason: str | None = None
+    pattern_kind: str = "rating"
 
 
 @dataclass(frozen=True)
@@ -98,12 +104,9 @@ AGENT4REC_COAT_CONFORMITY_DESCRIPTIONS = {
     3: "A Maverick Critic who completely ignores how other shoppers rated a coat and evaluates coats solely based on own taste. Usually give ratings that are a lot different from historical ratings.",
 }
 
-# Caveat that must travel with this table, not just sit in a comment: on Coat the
-# genre string is "gender|style|colour", so the gender token is a third of every
-# user's token mass by construction. A shopper who browses both gender sections
-# therefore scores as more "diverse" than one who does not, independently of how
-# varied their style or colour taste is. These descriptions say "styles and
-# colours", which is what the trait claims but only part of what it measures.
+# Coat substitutes gender-section/style/colour categories for movie genres.
+# Union diversity therefore includes changes in gender section as well as style
+# and colour. This domain substitution is recorded in the scorer documentation.
 AGENT4REC_COAT_DIVERSITY_DESCRIPTIONS = {
     1: "An Exceedingly Discerning Selective Shopper who considers coats with a level of selectivity that borders on exclusivity. The coat choices are meticulously curated to match personal taste, leaving no room for even a hint of variety.",
     2: "A Niche Explorer who occasionally looks beyond a favourite style or colour and mostly sticks to preferred coat types.",
@@ -210,6 +213,8 @@ class Agent4RecProfileGenerator:
         self.taste_max_workers = taste_max_workers
         self.trait_thresholds_: dict[str, dict[str, float]] | None = None
         self.taste_cache_stats_: dict[str, Any] | None = None
+        self.trait_provenance_: dict[str, Any] = {}
+        self.history_provenance_: dict[str, Any] = {}
 
         if "taste" in self.profile_components:
             if self.taste_client is None:
@@ -248,9 +253,7 @@ class Agent4RecProfileGenerator:
         }
         traits = self._build_traits(X)
         missing_users = [
-            user_id
-            for user_id in requested_user_ids
-            if user_id not in traits
+            user_id for user_id in requested_user_ids if user_id not in traits
         ]
         if missing_users:
             raise ValueError(
@@ -284,8 +287,8 @@ class Agent4RecProfileGenerator:
         hits = 0
         misses = 0
         error_count = 0
-        cached_tastes: dict[Any, str] = {}
-        generated_tastes: dict[Any, str] = {}
+        cached_tastes: dict[Any, Agent4RecTasteProfile] = {}
+        generated_tastes: dict[Any, Agent4RecTasteProfile] = {}
         misses_to_generate: list[tuple[Any, UserHistory, str]] = []
 
         with self._taste_cache_lock(self.taste_cache_path):
@@ -311,7 +314,11 @@ class Agent4RecProfileGenerator:
                         raise ValueError(
                             f"Cached Agent4Rec taste is empty for user: {user_id!r}"
                         )
-                    cached_tastes[user_id] = taste
+                    if cached.get("cache_version") != AGENT4REC_TASTE_CACHE_VERSION:
+                        raise ValueError("Incompatible Agent4Rec taste cache version")
+                    cached_tastes[user_id] = parse_agent4rec_modify_taste_response(
+                        str(cached["raw_response"])
+                    )
                     hits += 1
                 else:
                     misses_to_generate.append((user_id, history, cache_key))
@@ -347,7 +354,7 @@ class Agent4RecProfileGenerator:
                             )
                             self._append_taste_cache_row(self.taste_cache_path, row)
                             cache[cache_key] = row
-                            generated_tastes[user_id] = parsed.taste
+                            generated_tastes[user_id] = parsed
                             progress.set_postfix(errors=error_count)
                             progress.update(1)
                     else:
@@ -372,7 +379,7 @@ class Agent4RecProfileGenerator:
                                 )
                                 self._append_taste_cache_row(self.taste_cache_path, row)
                                 cache[cache_key] = row
-                                generated_tastes[user_id] = parsed.taste
+                                generated_tastes[user_id] = parsed
                                 progress.set_postfix(errors=error_count)
                                 progress.update(1)
                 finally:
@@ -384,7 +391,8 @@ class Agent4RecProfileGenerator:
                     taste = generated_tastes[user_id]
                 updated_profiles[user_id] = self._with_taste(
                     updated_profiles[user_id],
-                    taste=taste,
+                    parsed=taste,
+                    pattern_kind=self.taste_prompt_kind,
                 )
 
         self.taste_cache_stats_ = {
@@ -402,6 +410,8 @@ class Agent4RecProfileGenerator:
 
         manifest: dict[str, Any] = {
             "class": type(self).__name__,
+            "implementation_version": AGENT4REC_IMPLEMENTATION_VERSION,
+            "cache_version": AGENT4REC_TASTE_CACHE_VERSION,
             "profile_components": list(self.profile_components),
             "user_column": self.user_column,
             "item_column": self.item_column,
@@ -418,12 +428,16 @@ class Agent4RecProfileGenerator:
                 if self.activity_counts is None
                 else "external_activity_counts"
             ),
-            "diversity_top_mass": AGENT4REC_DIVERSITY_TOP_MASS,
+            "diversity_definition": "distinct_genre_union_count",
+            "tier_rule": "value <= low: 1; value <= high: 2; otherwise: 3",
+            "trait_evidence": self.trait_provenance_,
+            "taste_evidence": self.history_provenance_,
             "trait_thresholds": self.trait_thresholds_,
         }
         if "taste" in self.profile_components:
             manifest["taste"] = {
                 "client_name": self.taste_client_name,
+                "client_identity": client_identity(self.taste_client),
                 "model": self.taste_model,
                 "temperature": self.taste_temperature,
                 "max_tokens": self.taste_max_tokens,
@@ -441,141 +455,158 @@ class Agent4RecProfileGenerator:
         return manifest
 
     def _build_traits(self, X: pd.DataFrame) -> dict[Any, dict[str, int]]:
-        required_columns = [self.user_column, self.item_column, self.genre_column]
-        if self.include_conformity:
-            required_columns.append(self.rating_column)
-        self._require_columns(X, required_columns)
+        self._require_columns(X, [self.user_column, self.item_column])
+        users = X[self.user_column].drop_duplicates().tolist()
+        traits: dict[Any, dict[str, int]] = {user: {} for user in users}
+        omissions: dict[str, dict[str, str]] = {str(user): {} for user in users}
+        self.trait_thresholds_ = {}
+        values_by_trait = {}
+        counts = X.groupby(self.user_column, sort=False).size()
+        item_means = None
 
-        activity_num = self._activity_num(X)
-        activity_low = float(activity_num.quantile(0.60))
-        activity_high = float(activity_num.quantile(0.90))
+        def assign(name, values, quantiles, enabled=True):
+            values = values.reindex(users).astype(float)
+            finite = values.where(
+                values.map(lambda x: pd.notna(x) and abs(x) != float("inf"))
+            )
+            valid = finite.dropna()
+            values_by_trait[name] = {str(k): _json_safe(v) for k, v in finite.items()}
+            reason = None
+            if not enabled:
+                reason = "disabled_by_task_or_configuration"
+            elif valid.empty:
+                reason = "missing_required_evidence"
+            elif valid.nunique() == 1:
+                reason = "constant_reference_population"
+            else:
+                low, high = (float(valid.quantile(q)) for q in quantiles)
+                self.trait_thresholds_[name] = {
+                    f"p{int(q * 100)}": v for q, v in zip(quantiles, (low, high))
+                }
+            for user in users:
+                if reason or pd.isna(finite.loc[user]):
+                    omissions[str(user)][name] = (
+                        "disabled_by_task_or_configuration"
+                        if not enabled
+                        else "missing_required_evidence"
+                        if pd.isna(finite.loc[user])
+                        else reason
+                    )
+                else:
+                    traits[user][name] = _three_tier_group(
+                        finite.loc[user], low=low, high=high
+                    )
 
-        diversity_num = self._agent4rec_diversity_count_by_user(X)
-        diversity_low = float(diversity_num.quantile(0.33))
-        diversity_high = float(diversity_num.quantile(0.66))
-
-        self.trait_thresholds_ = {
-            "diversity": {"p33": diversity_low, "p66": diversity_high},
+        activity = self._activity_num(X) if self.include_activity else counts
+        assign("activity", activity, (0.60, 0.90), self.include_activity)
+        assign("diversity", self._agent4rec_diversity_count_by_user(X), (0.33, 0.66))
+        conformity = pd.Series(float("nan"), index=users)
+        if self.include_conformity and self.rating_column in X:
+            ratings = pd.to_numeric(X[self.rating_column], errors="coerce")
+            ratings = ratings.where(ratings.between(1, 5))
+            rows = X[[self.user_column, self.item_column]].assign(_rating=ratings)
+            item_means = rows.groupby(self.item_column, sort=False)._rating.mean()
+            rows["_deviation"] = (ratings - rows[self.item_column].map(item_means)) ** 2
+            conformity = rows.groupby(self.user_column, sort=False)._deviation.mean()
+            # A partial rating history is not a complete conformity measurement.
+            missing = rows._rating.isna().groupby(rows[self.user_column]).any()
+            conformity.loc[missing[missing].index] = float("nan")
+        assign("conformity", conformity, (0.25, 0.80), self.include_conformity)
+        self.trait_provenance_ = {
+            "source": "permitted_fit_frame_before_taste_selection",
+            "population_users": len(users),
+            "population_rows": len(X),
+            "rows_by_user": {str(k): int(v) for k, v in counts.items()},
+            "values_by_trait": values_by_trait,
+            "omitted_traits": omissions,
+            "genre_source_column": self.genre_column,
+            "conformity_item_means": {}
+            if item_means is None
+            else {str(k): _json_safe(v) for k, v in item_means.items()},
+            "population_sha256": hashlib.sha256(
+                pd.util.hash_pandas_object(
+                    X[
+                        [
+                            c
+                            for c in (
+                                self.user_column,
+                                self.item_column,
+                                self.rating_column,
+                                self.genre_column,
+                            )
+                            if c in X
+                        ]
+                    ],
+                    index=False,
+                ).values.tobytes()
+            ).hexdigest(),
         }
-        if self.include_activity:
-            self.trait_thresholds_["activity"] = {
-                "p60": activity_low,
-                "p90": activity_high,
-            }
-        if self.include_conformity:
-            item_mean_rating = X.groupby(self.item_column, sort=False)[
-                self.rating_column
-            ].mean()
-            rows = X[[self.user_column, self.item_column, self.rating_column]].copy()
-            rows["_item_mean_rating_"] = rows[self.item_column].map(item_mean_rating)
-            rows["_squared_deviation_"] = (
-                rows[self.rating_column] - rows["_item_mean_rating_"]
-            ) ** 2
-            conformity_deviation = rows.groupby(self.user_column, sort=False)[
-                "_squared_deviation_"
-            ].mean()
-            conformity_low = float(conformity_deviation.quantile(0.25))
-            conformity_high = float(conformity_deviation.quantile(0.80))
-            self.trait_thresholds_["conformity"] = {
-                "p25": conformity_low,
-                "p80": conformity_high,
-            }
-        else:
-            conformity_deviation = None
-            conformity_low = None
-            conformity_high = None
-
-        traits: dict[Any, dict[str, int]] = {}
-        for user_id in activity_num.index:
-            traits[user_id] = {
-                "diversity": _three_tier_group(
-                    float(diversity_num.loc[user_id]),
-                    low=diversity_low,
-                    high=diversity_high,
-                ),
-            }
-            if self.include_activity:
-                traits[user_id]["activity"] = _three_tier_group(
-                    float(activity_num.loc[user_id]),
-                    low=activity_low,
-                    high=activity_high,
-                )
-            if self.include_conformity:
-                traits[user_id]["conformity"] = _three_tier_group(
-                    float(conformity_deviation.loc[user_id]),
-                    low=conformity_low,
-                    high=conformity_high,
-                )
         return traits
 
     def _activity_num(self, X: pd.DataFrame) -> pd.Series:
-        """Per-user activity numbers for trait binning.
-
-        Defaults to row counts within the fit frame. When `activity_counts`
-        was supplied (e.g. total raw interaction counts from the full dataset,
-        pre-split and pre-truncation), those fixed user properties are used
-        instead — this keeps the activity trait non-degenerate when the fit
-        frame holds only a short per-user profile (cold start with small k).
-        """
-
+        """Count permitted fit rows; explicit overrides must obey the same boundary."""
         if self.activity_counts is None:
             return X.groupby(self.user_column, sort=False).size()
-        frame_users = list(dict.fromkeys(X[self.user_column].tolist()))
-        missing = [user_id for user_id in frame_users if user_id not in self.activity_counts]
-        if missing:
-            raise ValueError(
-                f"activity_counts is missing {len(missing)} fit-frame users: "
-                f"{missing[:5]}"
-            )
         return pd.Series(
-            {user_id: float(self.activity_counts[user_id]) for user_id in frame_users}
+            {
+                user: self.activity_counts.get(user, float("nan"))
+                for user in X[self.user_column].drop_duplicates()
+            }
         )
 
     def _agent4rec_diversity_count_by_user(self, X: pd.DataFrame) -> pd.Series:
-        """Count dominant genres per user using Agent4Rec-style top-mass logic.
+        """Paper definition: cardinality of the union of observed canonical genres."""
+        counts = {}
+        for user, rows in X.groupby(self.user_column, sort=False):
+            parsed = (
+                [_split_genres(v) for v in rows[self.genre_column]]
+                if self.genre_column in rows
+                else []
+            )
+            counts[user] = (
+                len(set().union(*map(set, parsed)))
+                if parsed and all(parsed)
+                else float("nan")
+            )
+        return pd.Series(counts, dtype=float)
 
-        Genres are counted across the fitted history, converted to per-user
-        genre probabilities, sorted from most to least frequent, and retained
-        while cumulative probability is at most ``AGENT4REC_DIVERSITY_TOP_MASS``.
-        We clamp non-empty histories to at least one genre because the released
-        Agent4Rec condition can otherwise assign zero diversity to single-genre
-        users.
-        """
+    def select_taste_histories(self, X, *, user_column, item_column, max_history_items):
+        """Select taste evidence only; trait statistics continue to use the full fit frame."""
+        from beyond_click_sim.scorers.history.selection import select_history_by_user
 
-        rows: list[dict[str, Any]] = []
-        for row in X[[self.user_column, self.genre_column]].itertuples(index=False):
-            user_id = getattr(row, self.user_column)
-            for genre in _split_genres(getattr(row, self.genre_column)):
-                rows.append({self.user_column: user_id, "genre": genre})
-        if not rows:
-            raise ValueError("Cannot compute diversity: no genres found")
-        genre_rows = pd.DataFrame(rows)
-        user_order = list(dict.fromkeys(X[self.user_column].tolist()))
-        genre_counts = (
-            genre_rows.groupby([self.user_column, "genre"], sort=False)
-            .size()
-            .rename("count")
-            .reset_index()
+        timestamp = next(
+            (c for c in ("timestamp", "interaction_timestamp") if c in X), None
         )
-
-        diversity_counts: dict[Any, int] = {}
-        for user_id, user_genres in genre_counts.groupby(self.user_column, sort=False):
-            sorted_genres = user_genres.sort_values(
-                by=["count", "genre"],
-                ascending=[False, True],
-                kind="mergesort",
+        if timestamp:
+            if X[timestamp].isna().any():
+                raise ValueError("Missing timestamp in Agent4Rec taste evidence")
+            X = X.sort_values(timestamp, kind="stable")
+            rule = f"latest_by_{timestamp}_chronological_stable_ties"
+        elif self.taste_prompt_kind == "coat_rating":
+            # Coat is timestamp-free; both Coat runners use this deterministic subset.
+            X = (
+                X.assign(_agent4rec_item_order=X[item_column].astype(str))
+                .sort_values("_agent4rec_item_order", kind="stable")
+                .drop(columns="_agent4rec_item_order")
             )
-            ratios = sorted_genres["count"].astype(float) / float(
-                sorted_genres["count"].sum()
-            )
-            top_mass_genre_count = int(
-                (ratios.cumsum() <= AGENT4REC_DIVERSITY_TOP_MASS).sum()
-            )
-            diversity_counts[user_id] = max(1, top_mass_genre_count)
-
-        return pd.Series(
-            {user_id: diversity_counts.get(user_id, 0) for user_id in user_order}
+            rule = "last_items_in_stable_string_item_id_order_no_timestamps"
+        else:
+            # Materialized temporal tasks omit timestamps but preserve split order.
+            # Do not sort their rows by item id and destroy that chronology.
+            rule = "last_rows_in_preserved_training_order"
+        histories = select_history_by_user(
+            X,
+            user_column=user_column,
+            item_column=item_column,
+            max_history_items=max_history_items,
         )
+        self.history_provenance_ = {
+            "selection": rule,
+            "max_items": max_history_items,
+            "rows_by_user": {str(u): len(h.rows) for u, h in histories.items()},
+            "source": "permitted_fit_frame_only",
+        }
+        return histories
 
     def _with_traits(
         self,
@@ -609,20 +640,14 @@ class Agent4RecProfileGenerator:
         )
 
     @staticmethod
-    def _with_taste(
-        profile: Agent4RecUserProfile,
-        *,
-        taste: str,
-    ) -> Agent4RecUserProfile:
-        return Agent4RecUserProfile(
-            user_id=profile.user_id,
-            taste=taste,
-            activity_group=profile.activity_group,
-            conformity_group=profile.conformity_group,
-            diversity_group=profile.diversity_group,
-            activity_description=profile.activity_description,
-            conformity_description=profile.conformity_description,
-            diversity_description=profile.diversity_description,
+    def _with_taste(profile, *, parsed: Agent4RecTasteProfile, pattern_kind: str):
+        return replace(
+            profile,
+            taste=parsed.taste,
+            high_rating=parsed.high_rating,
+            low_rating=parsed.low_rating,
+            taste_reason=parsed.reason,
+            pattern_kind=pattern_kind,
         )
 
     def _generate_taste(
@@ -676,7 +701,29 @@ class Agent4RecProfileGenerator:
             )
             system_prompt = AGENT4REC_COAT_TASTE_SYSTEM_PROMPT
         else:
-            raise RuntimeError(f"Unsupported taste_prompt_kind: {self.taste_prompt_kind}")
+            raise RuntimeError(
+                f"Unsupported taste_prompt_kind: {self.taste_prompt_kind}"
+            )
+        if self.taste_prompt_kind in ("rating", "coat_rating"):
+            entity = "coats" if self.taste_prompt_kind == "coat_rating" else "movies"
+            lines = []
+            for _, row in history.rows.iterrows():
+                description = (
+                    self._history_item_description(row)
+                    if self.summary_column
+                    else str(row[self.title_column])
+                )
+                lines.append(
+                    f"user gives a rating of {int(row[self.rating_column])} for following {entity}: {description}"
+                )
+            instructions = user_prompt[user_prompt.index("My first request") :]
+            user_prompt = (
+                "Given a user's selected rating history in evidence order (oldest to newest when timestamps exist):\n"
+                "Ratings 3-5 are liked; ratings 1-2 are disliked.\n"
+                + "\n".join(lines)
+                + "\n\n"
+                + instructions
+            )
         return [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -698,7 +745,7 @@ class Agent4RecProfileGenerator:
             if pd.isna(raw_title) or str(raw_title).strip() == "":
                 continue
             rating = int(raw_rating)
-            if rating not in rating_movies:
+            if float(raw_rating) != rating or rating not in rating_movies:
                 raise ValueError(
                     "Agent4Rec taste generation expects ratings in 1..5. "
                     f"Got {raw_rating!r} for user {history.user_id!r}"
@@ -774,12 +821,13 @@ class Agent4RecProfileGenerator:
     ) -> dict[str, Any]:
         return {
             "cache_key": cache_key,
+            "cache_version": AGENT4REC_TASTE_CACHE_VERSION,
+            "generation": _json_safe(self._taste_cache_prompt_context(history)),
             "user_id": _json_safe(user_id),
             "history_item_ids": [_json_safe(item_id) for item_id in history.item_ids],
             **self._taste_cache_history_values(history),
             "history_titles": [
-                _json_safe(value)
-                for value in history.rows[self.title_column].tolist()
+                _json_safe(value) for value in history.rows[self.title_column].tolist()
             ],
             "taste": parsed.taste,
             "reason": parsed.reason,
@@ -824,12 +872,28 @@ class Agent4RecProfileGenerator:
             ]
         }
 
-    def _taste_cache_prompt_context(self, history: UserHistory) -> dict[str, Any] | None:
-        if not self.summary_column:
-            return None
+    def _taste_cache_prompt_context(self, history: UserHistory) -> dict[str, Any]:
+        columns = [
+            self.item_column,
+            self.title_column,
+            self.playtime_column
+            if self.taste_prompt_kind == "playtime"
+            else self.rating_column,
+        ]
+        if self.summary_column or self.taste_prompt_kind == "playtime":
+            columns += [self.genre_column, self.tag_column, self.summary_column]
+        columns = list(dict.fromkeys(c for c in columns if c and c in history.rows))
         return {
-            "summary_column": self.summary_column,
-            **self._taste_cache_summary_values(history),
+            "cache_version": AGENT4REC_TASTE_CACHE_VERSION,
+            "ordered_evidence": history.rows[columns].to_dict("records"),
+            "messages": self._taste_messages(history),
+            "prompt_version": self.taste_prompt_version,
+            "prompt_kind": self.taste_prompt_kind,
+            "client_name": self.taste_client_name,
+            "client_identity": client_identity(self.taste_client),
+            "model": self.taste_model,
+            "temperature": self.taste_temperature,
+            "max_tokens": self.taste_max_tokens,
         }
 
     @staticmethod
@@ -911,9 +975,9 @@ class Agent4RecProfileGenerator:
 
 
 def _three_tier_group(value: float, *, low: float, high: float) -> int:
-    if value < low:
+    if value <= low:
         return 1
-    if value < high:
+    if value <= high:
         return 2
     return 3
 
@@ -932,11 +996,7 @@ def _split_genres(value: Any) -> list[str]:
                 parsed = None
             if isinstance(parsed, list):
                 raw_parts = parsed
-                return [
-                    str(part).strip()
-                    for part in raw_parts
-                    if str(part).strip()
-                ]
+                return [str(part).strip() for part in raw_parts if str(part).strip()]
         separator = "|" if "|" in text else ","
         raw_parts = text.split(separator)
     return [str(part).strip() for part in raw_parts if str(part).strip()]
@@ -951,6 +1011,10 @@ def parse_agent4rec_modify_taste_response(text: str) -> Agent4RecTasteProfile:
     low_rating = "| ".join(re.findall(r"LOW (?:RATINGS|PLAYTIME):(.+)", text))
     if not taste.strip():
         raise ValueError("Agent4Rec taste response does not contain TASTE")
+    if not high_rating.strip() or not low_rating.strip():
+        raise ValueError(
+            "Agent4Rec taste response requires both HIGH and LOW pattern fields"
+        )
     return Agent4RecTasteProfile(
         taste=taste,
         reason=reason,
@@ -969,6 +1033,10 @@ def _chat_completion_text(response: Any) -> str:
 
 
 def _json_safe(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (datetime, pd.Timestamp)):
+        return value.isoformat()
     if hasattr(value, "item"):
         value = value.item()
     if isinstance(value, (list, tuple)):
@@ -979,3 +1047,30 @@ def _json_safe(value: Any) -> Any:
     except (TypeError, ValueError):
         pass
     return value
+
+
+def agent4rec_pattern_prompt(profile: Agent4RecUserProfile) -> str:
+    """Share the generated rating/playtime patterns across every response interface."""
+    if profile.high_rating is None and profile.low_rating is None:
+        return ""
+    label = "playtime" if profile.pattern_kind == "playtime" else "rating"
+    return (
+        f"\nYour high {label} patterns: {profile.high_rating or 'Insufficient evidence'}."
+        f"\nYour low {label} patterns: {profile.low_rating or 'Insufficient evidence'}."
+    )
+
+
+def client_identity(client: Any) -> dict[str, str | None]:
+    """Record endpoint identity without credentials, query parameters or API keys."""
+    endpoint = getattr(client, "base_url", None)
+    clean = None
+    if endpoint is not None:
+        parsed = urlsplit(str(endpoint))
+        host = parsed.hostname or ""
+        if parsed.port is not None:
+            host += f":{parsed.port}"
+        clean = urlunsplit((parsed.scheme, host, parsed.path, "", ""))
+    return {
+        "class": f"{type(client).__module__}.{type(client).__qualname__}",
+        "endpoint": clean,
+    }

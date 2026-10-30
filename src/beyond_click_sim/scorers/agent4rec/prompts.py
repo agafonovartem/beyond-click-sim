@@ -70,12 +70,8 @@ def agent4rec_system_prompt(
 ) -> str:
     """Build an Agent4Rec-style system prompt from available profile parts.
 
-    `persona` is an optional dataset-supplied sentence describing who the user
-    is -- demographics rather than behaviour. Agent4Rec's own traits are all
-    derived from rating behaviour, so there was no slot for this; Coat is the
-    first dataset carrying participant covariates worth stating. It renders
-    between the role-play prefix and the trait lines, and defaults to None so
-    every existing caller is unaffected.
+    `persona` is retained for API compatibility with explicit custom callers.
+    Registered Agent4Rec methods do not inject demographic personas.
     """
 
     has_activity = bool(activity)
@@ -376,9 +372,9 @@ def agent4rec_rating_user_prompt(
     )
 
 
-AGENT4REC_TASTE_PROMPT_VERSION = "agent4rec_modify_v1"
-AGENT4REC_PLAYTIME_TASTE_PROMPT_VERSION = "agent4rec_playtime_v1"
-AGENT4REC_COAT_TASTE_PROMPT_VERSION = "agent4rec_coat_v1"
+AGENT4REC_TASTE_PROMPT_VERSION = "agent4rec_modify_v2"
+AGENT4REC_PLAYTIME_TASTE_PROMPT_VERSION = "agent4rec_playtime_v2"
+AGENT4REC_COAT_TASTE_PROMPT_VERSION = "agent4rec_coat_v2"
 
 AGENT4REC_TASTE_SYSTEM_PROMPT = """
 I want you to act as an agent. You will act as a movie taste analyst roleplaying the user using the first person pronoun "I".
@@ -393,7 +389,7 @@ I want you to act as an agent. You will act as a coat taste analyst roleplaying 
 """
 
 AGENT4REC_TASTE_MODIFY_USER_PROMPT_TEMPLATE = """
-Given a user's rating history:
+Given a user's rating history (ratings 3-5 are liked; ratings 1-2 are disliked):
 
 user gives a rating of 1 for following movies: {rating_1_movies}
 user gives a rating of 2 for following movies: {rating_2_movies}
@@ -412,9 +408,10 @@ REASON: <-brief reason->
 .....
 
 Secondly, analyze user tend to give what kinds of movies high ratings, and tend to give what kinds of movies low ratings.
+Both HIGH and LOW fields are required. Use "Insufficient evidence" when a category has no examples.
 Strictly follow the output format below:
-HIGH RATINGS: <-conclusion of movies of high ratings(above 3)->
-LOW RATINGS: <-conclusion of movies of low ratings(below 2)->
+HIGH RATINGS: <-conclusion of movies of high ratings(ratings 3-5; liked)->
+LOW RATINGS: <-conclusion of movies of low ratings(ratings 1-2; disliked)->
 Answer should not be a combination of above two parts and not contain other words and should not contain movie names.
 
 
@@ -439,6 +436,7 @@ REASON: <-brief reason->
 .....
 
 Secondly, analyze what kinds of games the user tends to play for a long time, and what kinds of games the user owns but barely plays.
+Both HIGH and LOW fields are required. Use "Insufficient evidence" when a category has no examples.
 Strictly follow the output format below:
 HIGH PLAYTIME: <-conclusion of games with high or medium playtime->
 LOW PLAYTIME: <-conclusion of games with zero or low playtime->
@@ -458,7 +456,7 @@ Answer should not be a combination of above two parts and not contain other word
 #     asks for attribute patterns instead, which is what the movie wording was
 #     actually protecting against.
 AGENT4REC_COAT_TASTE_USER_PROMPT_TEMPLATE = """
-Given a user's rating history:
+Given a user's rating history (ratings 3-5 are liked; ratings 1-2 are disliked):
 
 user gives a rating of 1 for following coats: {rating_1_coats}
 user gives a rating of 2 for following coats: {rating_2_coats}
@@ -477,9 +475,10 @@ REASON: <-brief reason->
 .....
 
 Secondly, analyze user tend to give what kinds of coats high ratings, and tend to give what kinds of coats low ratings.
+Both HIGH and LOW fields are required. Use "Insufficient evidence" when a category has no examples.
 Strictly follow the output format below:
-HIGH RATINGS: <-conclusion of coats of high ratings(above 3)->
-LOW RATINGS: <-conclusion of coats of low ratings(below 2)->
+HIGH RATINGS: <-conclusion of coats of high ratings(ratings 3-5; liked)->
+LOW RATINGS: <-conclusion of coats of low ratings(ratings 1-2; disliked)->
 Answer should not be a combination of above two parts and not contain other words. Describe patterns of style, colour and gender section rather than listing individual coats.
 
 

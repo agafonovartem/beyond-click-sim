@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import protect_output_directory
+
+from runners.in_distribution.agent4rec_items import (
+    MOVIE_CANDIDATE_COLUMNS, MOVIE_COLUMN_LABELS, prepare_agent4rec_task,
+)
 
 import pandas as pd
 
 from beyond_click_sim.llm_clients import make_llm_client
+from beyond_click_sim.scorers import Agent4RecPreferenceYesNoScorer
 from beyond_click_sim.scorers import Agent4RecProfileGenerator, Agent4RecYesNoScorer
 from beyond_click_sim.scorers.agent4rec.prompts import AGENT4REC_TASTE_PROMPT_VERSION
-from beyond_click_sim.tasks import PREFIXED_ITEM_RATING_MEAN_COLUMN, split_xy
+from beyond_click_sim.tasks import split_xy
 from beyond_click_sim.tasks.cold_start import ColdStartTask
 from runners.in_distribution.llm_error_budget import (
     DEFAULT_MAX_ERROR_RATE,
@@ -84,14 +90,10 @@ VLLM_MAX_WORKERS = 128
 # title, train-only "History ratings" (item_rating_mean), genres. Requires an
 # item_stats task — plain tasks lack the column and fail fast in run_method.
 DATASET_CANDIDATE_COLUMNS: dict[str, tuple[str, ...]] = {
-    "ml-1m": ("item_title", PREFIXED_ITEM_RATING_MEAN_COLUMN, "item_genres"),
+    "ml-1m": MOVIE_CANDIDATE_COLUMNS,
 }
 DATASET_COLUMN_LABELS: dict[str, dict[str, str]] = {
-    "ml-1m": {
-        "item_title": "movie title",
-        PREFIXED_ITEM_RATING_MEAN_COLUMN: "History ratings",
-        "item_genres": "genres",
-    },
+    "ml-1m": dict(MOVIE_COLUMN_LABELS),
 }
 
 
@@ -681,17 +683,9 @@ def run_method(
     Fits on task.online_session_history (the cold user's k earliest interactions).
     task.train contains only warm users and provides no per-cold-user context.
 
-    The default item card includes train-only "History ratings"
-    (item_rating_mean, computed from warm task.train interactions only), matching
-    the interaction-prediction Agent4Rec default. Requires an item_stats task.
-
-    Activity defaults to fit-frame row counts (``activity_counts=None``). On the
-    k-item profile that makes every cold user equally active, so the activity
-    trait is degenerate — preferred over feeding full-dataset totals, which would
-    leak evaluation-period interaction volume into the system prompt. Pass
-    ``activity_counts=_full_dataset_activity_counts(...)`` only for an explicit
-    metadata-visibility ablation. Diversity/conformity still come from the
-    k-item profile.
+    Candidate quality/popularity come from warm training rows. User profiles
+    use only the cold user's permitted k observations. Activity is disabled;
+    external/lifetime counts are rejected. Other traits use the k-item profile.
 
     ``summary_usage="profile"|"both"`` puts profile-item summaries into the
     taste-generation prompt; the summaries cover only online_session_history
@@ -702,6 +696,18 @@ def run_method(
     """
     if scoring not in ("batch", "itemwise"):
         raise ValueError(f"scoring must be 'batch' or 'itemwise', got {scoring!r}")
+    if activity_counts is not None:
+        raise ValueError("Cold-start forbids external/lifetime activity counts")
+    source = task.manifest.get("target_source_column")
+    if source == "target_interact":
+        scorer_class, target_kwargs = Agent4RecYesNoScorer, {}
+    elif source == "target_like_ge4":
+        scorer_class = Agent4RecPreferenceYesNoScorer
+        target_kwargs = {"target_description": "The user would rate this movie 4 or 5 on a 1-5 scale."}
+    else:
+        raise ValueError(f"Unsupported cold-start Agent4Rec target: {source!r}")
+    protect_output_directory(output_dir)
+    task = prepare_agent4rec_task(task)
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
     if dataset_name not in DATASET_CANDIDATE_COLUMNS:
@@ -767,7 +773,8 @@ def run_method(
     # interactions and leaks lifetime activity metadata into the prompt.
     profile_generator = Agent4RecProfileGenerator(
         profile_components=profile_components,
-        activity_counts=activity_counts,
+        activity_counts=None,
+        include_activity=False,
         taste_client=taste_client,
         taste_client_name=taste_client_name,
         taste_model=taste_model,
@@ -780,7 +787,8 @@ def run_method(
             ITEM_SUMMARY_COLUMN if resolved_summary_usage["profile"] else None
         ),
     )
-    scorer = Agent4RecYesNoScorer(
+    scorer = scorer_class(
+        **target_kwargs,
         client=make_llm_client(client_name),
         model=model,
         profile_generator=profile_generator,
@@ -874,7 +882,8 @@ def run_method(
     manifest = {
         "method": method_name,
         "scorer": {
-            "class": "Agent4RecYesNoScorer",
+            "class": scorer.__class__.__name__,
+            "target_description": target_kwargs.get("target_description"),
             "fit_on": "online_session_history",
             "k": task.k,
             "client_name": client_name,

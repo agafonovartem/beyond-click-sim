@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from runners.in_distribution.agent4rec_version import protect_output_directory
+
+from runners.in_distribution.agent4rec_items import (
+    prepare_agent4rec_task,
+)
 
 import pandas as pd
 
@@ -464,6 +469,8 @@ def run_method(
 ) -> dict[str, object]:
     """Run Agent4Rec direct listwise ranking for cold-start val/test groups."""
 
+    protect_output_directory(output_dir)
+    task = prepare_agent4rec_task(task)
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_name = str(task.manifest["dataset"])
     target_source_column = str(task.manifest.get("target_source_column"))
@@ -551,6 +558,7 @@ def run_method(
     profile_generator = Agent4RecProfileGenerator(
         profile_components=profile_components,
         activity_counts=None,
+        include_activity=False,
         taste_client=taste_client,
         taste_client_name=taste_client_name,
         taste_model=taste_model,

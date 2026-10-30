@@ -461,10 +461,10 @@ def test_agent4rec_yes_no_scorer_uses_profile_prompt() -> None:
     assert len(client.completions.calls) == 1
     system_prompt = client.completions.calls[0]["messages"][0]["content"]
     user_prompt = client.completions.calls[0]["messages"][1]["content"]
-    assert "You excel at role-playing." in system_prompt
-    assert "Your activity trait is described as:" in system_prompt
-    assert "Your conformity trait is described as:" in system_prompt
-    assert "Your diversity trait is described as:" in system_prompt
+    assert "Assume you are a user" in system_prompt
+    assert "Your activity trait is described as:" not in system_prompt
+    assert "Your conformity trait is described as:" not in system_prompt
+    assert "Your diversity trait is described as:" not in system_prompt
     assert "##recommended list##" in user_prompt
     assert "C1. <- Lion King -> <- History ratings:4.15 -> <- genres:Animation ->" in user_prompt
     assert "C2. <- Godfather -> <- History ratings:4.57 -> <- genres:Crime ->" in user_prompt
@@ -523,7 +523,7 @@ def test_agent4rec_yes_no_scorer_itemwise_uses_bare_yes_no_prompt() -> None:
     assert len(client.completions.calls) == 1
     system_prompt = client.completions.calls[0]["messages"][0]["content"]
     user_prompt = client.completions.calls[0]["messages"][1]["content"]
-    assert "Your activity trait is described as:" in system_prompt
+    assert "Your activity trait is described as:" not in system_prompt
     assert "##candidate movie##" in user_prompt
     assert "Would you watch this movie?" in user_prompt
     assert "Answer with exactly one word: yes or no." in user_prompt
@@ -692,7 +692,7 @@ def test_agent4rec_yes_no_scorer_batch_parse_error_includes_raw_response() -> No
     assert scores.to_dict() == {"a": 1.0, "b": 0.0}
     system_prompt = client.completions.calls[0]["messages"][0]["content"]
     user_prompt = client.completions.calls[0]["messages"][1]["content"]
-    assert "Your activity trait is described as:" in system_prompt
+    assert "Your activity trait is described as:" not in system_prompt
     assert "Positive-preference target:" in user_prompt
     assert "rate the candidate movie at least 4 out of 5" in user_prompt
     assert "PREFERENCE: [yes or no]" in user_prompt
@@ -805,5 +805,5 @@ def test_agent4rec_yes_no_scorer_build_taste_then_scores_with_taste(tmp_path) ->
     assert "user gives a rating of 2 for following movies: Heat" in taste_messages[1]["content"]
     system_prompt = scoring_client.completions.calls[0]["messages"][0]["content"]
     user_prompt = scoring_client.completions.calls[0]["messages"][1]["content"]
-    assert "Beyond that, your movie tastes are: enjoy animated family movies." in system_prompt
+    assert "Your movie tastes are: enjoy animated family movies." in system_prompt
     assert "You only watch movies which align with your taste" in user_prompt

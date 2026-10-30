@@ -94,7 +94,7 @@ class TrackingFakeClient:
         self.completions = completions
 
 
-def test_diversity_counts_agent4rec_top_genre_mass_per_user() -> None:
+def test_diversity_counts_distinct_genre_union_per_user() -> None:
     X = pd.DataFrame(
         {
             "user_id": ["u1", "u1", "u1", "u2", "u2", "u2", "u3", "u3"],
@@ -115,7 +115,7 @@ def test_diversity_counts_agent4rec_top_genre_mass_per_user() -> None:
 
     diversity_num = Agent4RecProfileGenerator()._agent4rec_diversity_count_by_user(X)
 
-    assert diversity_num.to_dict() == {"u1": 2, "u2": 1, "u3": 1}
+    assert diversity_num.to_dict() == {"u1": 3, "u2": 2, "u3": 1}
 
 
 def test_build_traits_can_skip_conformity_for_steam_like_histories() -> None:
@@ -141,8 +141,8 @@ def test_build_traits_can_skip_conformity_for_steam_like_histories() -> None:
     profiles = generator.build_traits(X, pd.Series([1, 1, 1, 1]))
 
     assert set(profiles) == {"u1", "u2"}
-    assert profiles["u1"].activity_description is not None
-    assert profiles["u1"].diversity_description is not None
+    assert profiles["u1"].activity_description is None
+    assert profiles["u1"].diversity_description is None
     assert profiles["u1"].conformity_group is None
     assert profiles["u1"].conformity_description is None
     assert generator.trait_thresholds_ is not None
@@ -192,7 +192,7 @@ def test_build_traits_defaults_to_fit_frame_activity_counts() -> None:
     assert generator.manifest()["activity_source"] == "fit_frame_row_counts"
 
 
-def test_build_traits_raises_when_activity_counts_miss_fit_frame_users() -> None:
+def test_build_traits_omits_activity_when_evidence_is_missing() -> None:
     X = pd.DataFrame(
         {
             "user_id": ["u1", "u2"],
@@ -203,8 +203,9 @@ def test_build_traits_raises_when_activity_counts_miss_fit_frame_users() -> None
     )
     generator = Agent4RecProfileGenerator(activity_counts={"u1": 10})
 
-    with pytest.raises(ValueError, match="activity_counts"):
-        generator.build_traits(X, pd.Series([1, 1]))
+    profiles = generator.build_traits(X, pd.Series([1, 1]))
+    assert profiles["u2"].activity_group is None
+    assert "activity" in generator.manifest()["trait_evidence"]["omitted_traits"]["u2"]
 
 
 def test_parse_agent4rec_modify_taste_response_matches_original_join_style() -> None:

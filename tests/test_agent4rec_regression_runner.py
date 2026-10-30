@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
+pytestmark = pytest.mark.usefixtures("agent4rec_item_artifact")
+
 from beyond_click_sim.tasks import Task, TaskSchema
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +22,7 @@ from runners.in_distribution.regression_prediction.methods import agent4rec_regr
 def _enriched_task_stub() -> SimpleNamespace:
     return SimpleNamespace(
         manifest={
+            "dataset": "ml-1m",
             "item_enrichment": {
                 "movie_summaries": {"enabled": True},
             }
@@ -86,7 +89,8 @@ def test_agent4rec_regression_runner_writes_profile_manifest(
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
         "item_rating_mean",
-        "item_genres",
+        "item_rating_count",
+        "item_agent4rec_generated_genres",
     ]
     assert manifest["scorer"]["uses_item_stats"] is True
     assert (
@@ -96,7 +100,7 @@ def test_agent4rec_regression_runner_writes_profile_manifest(
 
     first_prompt = client.completions.calls[0]["messages"][1]["content"]
     assert "##movie##" in first_prompt
-    assert "<- Lion King -> <- History ratings:4.15 -> <- genres:Animation ->" in first_prompt
+    assert "<- quality (training mean rating):unavailable ->" in first_prompt
     assert "Use this format: RATING: [integer from 1 to 5]" in first_prompt
 
 
@@ -130,7 +134,8 @@ def test_agent4rec_regression_runner_can_add_candidate_summaries(
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
         "item_rating_mean",
-        "item_genres",
+        "item_rating_count",
+        "item_agent4rec_generated_genres",
         "item_summary",
     ]
     assert manifest["scorer"]["profile_generator"]["summary_column"] is None
@@ -141,7 +146,7 @@ def test_agent4rec_regression_runner_can_add_candidate_summaries(
         "history_item_summaries": False,
         "profile_item_summaries": False,
         "candidate_item_summaries": True,
-        "canonical_enrichment": task.manifest["item_enrichment"],
+        "canonical_enrichment": manifest["task"]["manifest"]["item_enrichment"],
     }
 
 
@@ -211,36 +216,38 @@ def test_agent4rec_regression_runner_writes_taste_manifest_and_cache(
         "misses": 1,
         "generated": 1,
         "max_workers": 1,
+        "errors": 0,
     }
 
 
-def test_agent4rec_regression_runner_requires_item_rating_mean(
+def test_agent4rec_regression_runner_derives_item_rating_mean_from_train(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         agent4rec_regressor,
         "make_llm_client",
-        lambda _: FakeClient([]),
+        lambda _: FakeClient(["RATING: 4"] * 10),
     )
     base_task = _toy_task()
     task = _toy_task(
         test=base_task.test.drop(columns=["item_rating_mean"]),
     )
 
-    with pytest.raises(ValueError, match="requires item-stats task columns"):
-        agent4rec_regressor.run_method(
-            task,
-            tmp_path,
-            method_name="agent4rec_regressor_test",
-            client_name="fake",
-            model="fake-model",
-            max_rows=None,
-            max_llm_attempts=1,
-            max_workers=1,
-            summary_usage="none",
-        )
+    agent4rec_regressor.run_method(
+        task,
+        tmp_path,
+        method_name="agent4rec_regressor_test",
+        client_name="fake",
+        model="fake-model",
+        max_rows=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        summary_usage="none",
+    )
 
+    saved = pd.read_parquet(tmp_path / "predictions.parquet")
+    assert saved["score"].notna().all()
 
 def test_agent4rec_regression_runner_rejects_profile_summaries_without_taste(
     tmp_path: Path,

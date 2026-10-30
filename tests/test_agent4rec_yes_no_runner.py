@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
+pytestmark = pytest.mark.usefixtures("agent4rec_item_artifact")
+
 from beyond_click_sim.tasks import Task, TaskSchema
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -180,11 +182,12 @@ def test_agent4rec_yes_no_runner_writes_profile_manifest(
     assert manifest["scorer"]["class"] == "Agent4RecYesNoScorer"
     assert manifest["scorer"]["profile_generator"]["profile_components"] == ["traits"]
     assert manifest["scorer"]["profile_generator"]["trait_thresholds"] is not None
-    assert manifest["scorer"]["profile_generator"]["diversity_top_mass"] == 0.8
+    assert manifest["scorer"]["profile_generator"]["diversity_definition"] == "distinct_genre_union_count"
     assert manifest["scorer"]["candidate_description_columns"] == [
         "item_title",
         "item_rating_mean",
-        "item_genres",
+        "item_rating_count",
+        "item_agent4rec_generated_genres",
     ]
     assert (
         manifest["decision_rule"]["parser_contract"]
@@ -199,9 +202,11 @@ def test_agent4rec_yes_no_runner_writes_profile_manifest(
 
     system_prompt = client.completions.calls[0]["messages"][0]["content"]
     user_prompt = client.completions.calls[0]["messages"][1]["content"]
-    assert "Your activity trait is described as:" in system_prompt
+    assert "Your activity trait is described as:" not in system_prompt
     assert "##recommended list##" in user_prompt
-    assert "C1. <- Lion King -> <- History ratings:4.15 -> <- genres:Animation ->" in user_prompt
+    assert "C1. <- Lion King ->" in user_prompt
+    assert "quality (training mean rating):unavailable" in user_prompt
+    assert "popularity (training rating count):0" in user_prompt
     assert "Use this format: ID: [candidate id]; MOVIE: [movie name]; WATCH: [yes or no]; REASON: [brief reason]" in user_prompt
 
 
@@ -314,6 +319,7 @@ def test_agent4rec_yes_no_runner_writes_taste_manifest_and_cache(
         "misses": 1,
         "generated": 1,
         "max_workers": 1,
+        "errors": 0,
     }
 
 
@@ -354,7 +360,7 @@ def test_agent4rec_yes_no_default_adds_summary_to_candidate_prompt(
         "history_item_summaries": False,
         "profile_item_summaries": False,
         "candidate_item_summaries": True,
-        "canonical_enrichment": _ml1m_summary_task().manifest["item_enrichment"],
+        "canonical_enrichment": manifest["task"]["manifest"]["item_enrichment"],
     }
 
 
@@ -428,11 +434,11 @@ def test_agent4rec_yes_no_profile_summaries_require_taste(tmp_path: Path) -> Non
         )
 
 
-def test_agent4rec_yes_no_runner_requires_item_rating_mean(
+def test_agent4rec_yes_no_runner_derives_item_rating_mean_from_train(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: FakeClient([]))
+    monkeypatch.setattr(agent4rec_yes_no, "make_llm_client", lambda _: FakeClient(["ID: C1; MOVIE: Lion King; WATCH: yes; REASON: ok"] * 10))
     task = Task(
         name="toy",
         train=pd.DataFrame(
@@ -466,19 +472,20 @@ def test_agent4rec_yes_no_runner_requires_item_rating_mean(
         manifest={"dataset": "ml-1m", "seed": 0},
     )
 
-    with pytest.raises(ValueError, match="requires item-stats task columns"):
-        agent4rec_yes_no.run_method(
-            task,
-            tmp_path,
-            method_name="agent4rec_yes_no_test",
-            client_name="fake",
-            model="fake-model",
-            max_candidate_groups=None,
-            max_llm_attempts=1,
-            max_workers=1,
-            summary_usage="none",
-        )
+    agent4rec_yes_no.run_method(
+        task,
+        tmp_path,
+        method_name="agent4rec_yes_no_test",
+        client_name="fake",
+        model="fake-model",
+        max_candidate_groups=None,
+        max_llm_attempts=1,
+        max_workers=1,
+        summary_usage="none",
+    )
 
+    saved = pd.read_parquet(tmp_path / "predictions.parquet")
+    assert saved["score"].notna().all()
 
 def test_agent4rec_yes_no_runner_supports_steam_traits_only(
     tmp_path: Path,
@@ -686,7 +693,7 @@ def test_agent4rec_yes_no_runner_supports_steam_taste_profiles(
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     taste_manifest = manifest["scorer"]["profile_generator"]["taste"]
     assert taste_manifest["prompt_kind"] == "playtime"
-    assert taste_manifest["prompt_version"] == "agent4rec_playtime_v1"
+    assert taste_manifest["prompt_version"] == "agent4rec_playtime_v2"
 
 
 def test_agent4rec_qwen_port_wrappers_use_port_clients(
